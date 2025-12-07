@@ -1,0 +1,8 @@
+# Core dependencies
+aiohttp>=3.8.0
+click>=8.0.0
+PyYAML>=6.0.0
+
+# HTTP client (for dataset_registrar)
+requests>=2.31.0
+urllib3>=2.0.0
