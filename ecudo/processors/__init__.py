@@ -1,19 +1,33 @@
 """
 eCUDO Processors
 
-Pipeline processors for filtering, validating, and transforming dataset records.
+Pipeline processors for fetching, filtering, validating, converting,
+and writing dataset records.
 """
 
 from ecudo.processors.base import Processor
+from ecudo.processors.converters import OnedataConverter
+from ecudo.processors.fetchers import MetadataFetcher
 from ecudo.processors.filters import DiversityFilter
 from ecudo.processors.pipeline import ProcessorPipeline
 from ecudo.processors.validators import URLValidator
-from ecudo.processors.writers import JSONLWriter
+from ecudo.processors.writers import JSONLWriter, JSONWriter, RawRecordWriter
 
 __all__ = [
+    # Base
     "Processor",
-    "URLValidator",
-    "DiversityFilter",
+    # Pipeline
     "ProcessorPipeline",
+    # Fetchers
+    "MetadataFetcher",
+    # Validators
+    "URLValidator",
+    # Filters
+    "DiversityFilter",
+    # Converters
+    "OnedataConverter",
+    # Writers
     "JSONLWriter",
+    "JSONWriter",
+    "RawRecordWriter",
 ]

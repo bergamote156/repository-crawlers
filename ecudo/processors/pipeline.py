@@ -4,12 +4,12 @@ Processor Pipeline
 Chains multiple processors into a sequential pipeline.
 """
 
-from typing import Optional, Sequence
+from typing import Sequence
 
 from ecudo.processors.base import Processor
 
 
-class ProcessorPipeline(Processor):
+class ProcessorPipeline[I, O](Processor[I, O]):
     """
     Chains multiple processors into a sequential pipeline.
 
@@ -17,8 +17,8 @@ class ProcessorPipeline(Processor):
     None, the pipeline stops for that item (filtered out).
 
     Note: For type safety, all processors should have compatible
-    input/output types. The pipeline itself is typed as Processor
-    without specific type parameters.
+    input/output types. The pipeline's I type should match the first
+    processor's input, and O should match the last processor's output.
     """
 
     def __init__(self, processors: Sequence[Processor]):
@@ -29,6 +29,8 @@ class ProcessorPipeline(Processor):
             processors: Sequence of processors to chain
         """
         self.processors = list(processors)
+        self._processed = 0
+        self._filtered = 0
 
     async def open(self) -> None:
         """Open all processors in order."""
@@ -40,7 +42,7 @@ class ProcessorPipeline(Processor):
         for processor in self.processors:
             await processor.close()
 
-    async def process(self, item):
+    async def process(self, item: I) -> O | None:
         """
         Process item through all processors in sequence.
 
@@ -54,8 +56,32 @@ class ProcessorPipeline(Processor):
         for processor in self.processors:
             current = await processor.process(current)
             if current is None:
+                self._filtered += 1
                 return None  # Stop pipeline
-        return current
+        self._processed += 1
+        return current  # type: ignore
+
+    def get_stats(self) -> dict:
+        """
+        Aggregate statistics from all processors.
+
+        Returns:
+            Dictionary with pipeline stats and per-processor stats
+        """
+        stats = {
+            "pipeline": {
+                "processed": self._processed,
+                "filtered": self._filtered,
+            },
+            "processors": {},
+        }
+
+        for processor in self.processors:
+            name = type(processor).__name__
+            if hasattr(processor, "get_stats"):
+                stats["processors"][name] = processor.get_stats()
+
+        return stats
 
     def __len__(self) -> int:
         """Return number of processors in pipeline."""
