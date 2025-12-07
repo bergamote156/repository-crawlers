@@ -1,0 +1,2 @@
+"""Tests for eCUDO crawler."""
+
