@@ -20,6 +20,9 @@ crawler:
   # Number of concurrent workers for fetching metadata
   concurrency: 128
   
+  # Queue size for backpressure control
+  queue_size: 1000
+  
   # Request timeout in seconds
   timeout: 15
   
@@ -50,15 +53,13 @@ processors:
 output:
   # Directory for output files
   dir: "./data"
-  
-  # Output format: jsonl (streaming) or json (array)
-  format: "jsonl"
 
 # Environment variables reference:
 # 
 # ECUDO_BASE_URL - Crawler base URL
 # ECUDO_PAGE_SIZE - Records per page
 # ECUDO_CONCURRENCY - Number of workers
+# ECUDO_QUEUE_SIZE - Queue size for backpressure
 # ECUDO_TIMEOUT - Request timeout
 # ECUDO_MAX_RETRIES - Max retry attempts
 # ECUDO_DIVERSITY_FILTER_ENABLED - Enable diversity filter (true/false)
@@ -66,4 +67,3 @@ output:
 # ECUDO_DIVERSITY_SIMILARITY_THRESHOLD - Similarity threshold
 # ECUDO_URL_VALIDATOR_ENABLED - Enable URL validation (true/false)
 # ECUDO_OUTPUT_DIR - Output directory
-# ECUDO_OUTPUT_FORMAT - Output format (jsonl/json)
