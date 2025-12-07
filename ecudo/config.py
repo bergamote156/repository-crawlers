@@ -19,6 +19,7 @@ class CrawlerConfig:
     base_url: str = "http://central.ecudo.pl"
     page_size: int = 200
     concurrency: int = 128
+    queue_size: int = 1000
     timeout: int = 15
     max_retries: int = 3
 
@@ -54,7 +55,6 @@ class OutputConfig:
     """Output configuration."""
 
     dir: str = "./data"
-    format: str = "jsonl"  # jsonl or json
 
 
 @dataclass
@@ -82,6 +82,8 @@ def _load_from_env() -> dict:
         config.setdefault("crawler", {})["page_size"] = int(page_size)
     if concurrency := _get_env("CONCURRENCY"):
         config.setdefault("crawler", {})["concurrency"] = int(concurrency)
+    if queue_size := _get_env("QUEUE_SIZE"):
+        config.setdefault("crawler", {})["queue_size"] = int(queue_size)
     if timeout := _get_env("TIMEOUT"):
         config.setdefault("crawler", {})["timeout"] = int(timeout)
     if max_retries := _get_env("MAX_RETRIES"):
@@ -108,8 +110,6 @@ def _load_from_env() -> dict:
     # Output settings
     if output_dir := _get_env("OUTPUT_DIR"):
         config.setdefault("output", {})["dir"] = output_dir
-    if output_format := _get_env("OUTPUT_FORMAT"):
-        config.setdefault("output", {})["format"] = output_format
 
     return config
 
@@ -199,6 +199,7 @@ def config_to_dict(config: Config) -> dict:
             "base_url": config.crawler.base_url,
             "page_size": config.crawler.page_size,
             "concurrency": config.crawler.concurrency,
+            "queue_size": config.crawler.queue_size,
             "timeout": config.crawler.timeout,
             "max_retries": config.crawler.max_retries,
         },
@@ -214,6 +215,5 @@ def config_to_dict(config: Config) -> dict:
         },
         "output": {
             "dir": config.output.dir,
-            "format": config.output.format,
         },
     }
