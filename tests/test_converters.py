@@ -2,21 +2,15 @@
 
 import pytest
 
+from ecudo.metadata import openaire
 from ecudo.models import EcudoRecord, FileInfo
 from ecudo.processors.converters import OnedataConverter
-from ecudo.serializers import OpenAIRESerializer
 
 
 @pytest.fixture
-def serializer():
-    """Create serializer instance."""
-    return OpenAIRESerializer()
-
-
-@pytest.fixture
-def converter(serializer):
+def converter():
     """Create converter instance."""
-    return OnedataConverter(serializer)
+    return OnedataConverter(openaire.generate_xml)
 
 
 @pytest.fixture

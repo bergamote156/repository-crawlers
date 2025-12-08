@@ -25,7 +25,7 @@ class FileInfo:
 
 
 @dataclass
-class EcudoRecord:
+class EcudoRecord:  # pylint: disable=too-many-instance-attributes
     """
     Parsed eCUDO dataset record.
 
@@ -66,3 +66,8 @@ class EcudoRecord:
             raise ValueError("identifier is required")
         if not self.files:
             raise ValueError("at least one file is required")
+
+    @property
+    def raw(self) -> dict:
+        """Return underlying raw JSON-LD data."""
+        return self._raw

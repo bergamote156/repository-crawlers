@@ -1,5 +1,5 @@
 """
-eCUDO HTTP Client
+eCUDO API HTTP Client
 
 Low-level HTTP client for eCUDO API. Handles only HTTP concerns:
 - Session management
@@ -10,7 +10,7 @@ Low-level HTTP client for eCUDO API. Handles only HTTP concerns:
 import asyncio
 from typing import Optional
 
-import aiohttp
+import aiohttp  # type: ignore[import-not-found]
 
 
 class EcudoClient:
@@ -91,18 +91,18 @@ class EcudoClient:
                     text = await resp.text()
                     print(f"❌ Error {resp.status} fetching {url}: {text[:100]}")
                     return {}
-            except asyncio.CancelledError:
-                raise
-            except Exception as e:
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self.max_retries:
                     wait = 2**attempt
                     print(
-                        f"⚠️ Attempt {attempt}/{self.max_retries} failed: {e}. Retrying in {wait}s..."
+                        f"⚠️ Attempt {attempt}/{self.max_retries} failed: {exc}. "
+                        f"Retrying in {wait}s..."
                     )
                     await asyncio.sleep(wait)
-                else:
-                    print(f"❌ All {self.max_retries} attempts failed for {url}: {e}")
-                    return {}
+                    continue
+
+                print(f"❌ All {self.max_retries} attempts failed for {url}: {exc}")
+                return {}
         return {}
 
     async def get_organizations(self) -> list[dict]:
@@ -161,6 +161,6 @@ class EcudoClient:
         try:
             async with self.session.head(url, allow_redirects=True) as resp:
                 return resp.status == 200
-        except Exception as e:
-            print(f"⚠️ URL validation failed for {url}: {e}")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            print(f"⚠️ URL validation failed for {url}: {exc}")
             return False

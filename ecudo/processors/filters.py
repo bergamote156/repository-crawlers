@@ -41,22 +41,22 @@ class DiversityFilter(Processor[EcudoRecord, EcudoRecord]):
         self._accepted = 0
         self._skipped = 0
 
-    async def process(self, record: EcudoRecord) -> Optional[EcudoRecord]:
+    async def process(self, item: EcudoRecord) -> Optional[EcudoRecord]:
         """
         Filter record based on title diversity.
 
         Args:
-            record: Dataset record to check
+            item: Dataset record to check
 
         Returns:
             Record if accepted, None if filtered for diversity
         """
-        title = record.title
+        title = item.title
 
         if not title:
             # No title, can't filter - accept
             self._accepted += 1
-            return record
+            return item
 
         # Find matching group
         matching_group = self._find_matching_group(title)
@@ -67,16 +67,15 @@ class DiversityFilter(Processor[EcudoRecord, EcudoRecord]):
                 # Group is full
                 self._skipped += 1
                 return None
-            else:
-                # Group has room
-                matching_group["count"] += 1
-                self._accepted += 1
-                return record
-        else:
-            # No matching group - create new one
-            self._title_groups.append({"representative": title, "count": 1})
+            # Group has room
+            matching_group["count"] += 1
             self._accepted += 1
-            return record
+            return item
+
+        # No matching group - create new one
+        self._title_groups.append({"representative": title, "count": 1})
+        self._accepted += 1
+        return item
 
     def _find_matching_group(self, title: str) -> Optional[dict]:
         """Find a group that this title belongs to."""

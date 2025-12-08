@@ -4,51 +4,49 @@ Data Conversion Processors
 Processors that convert between data formats.
 """
 
-from typing import TYPE_CHECKING
+from typing import Callable
 
 from ecudo.models.onedata import OnedataDataset, OnedataFile
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
-
-if TYPE_CHECKING:
-    from ecudo.serializers.base import MetadataSerializer
 
 
 class OnedataConverter(Processor[EcudoRecord, OnedataDataset]):
     """
     Converts EcudoRecord to OnedataDataset.
 
-    Uses a metadata serializer to generate XML metadata
+    Uses a metadata generator function to produce XML metadata
     and builds the final structure for Onedata registration.
     """
 
-    def __init__(self, serializer: "MetadataSerializer"):
+    def __init__(self, metadata_generator: Callable[[EcudoRecord], str]):
         """
         Initialize converter.
 
         Args:
-            serializer: Metadata serializer for XML generation
+            metadata_generator: Function that generates XML metadata from EcudoRecord
+                              (e.g., ecudo.metadata.openaire.generate_xml)
         """
-        self.serializer = serializer
+        self.metadata_generator = metadata_generator
         self._converted = 0
 
-    async def process(self, record: EcudoRecord) -> OnedataDataset | None:
+    async def process(self, item: EcudoRecord) -> OnedataDataset | None:
         """
         Convert EcudoRecord to OnedataDataset.
 
         Args:
-            record: Parsed eCUDO record
+            item: Parsed eCUDO record
 
         Returns:
             OnedataDataset ready for registration
         """
         dataset = OnedataDataset(
-            name=record.title,
-            location=record.title.replace("/", "-"),
-            pid=record.identifier,
-            metadata_xml=self.serializer.serialize(record),
+            name=item.title,
+            location=item.title.replace("/", "-"),
+            pid=item.identifier,
+            metadata_xml=self.metadata_generator(item),
             files=[
-                OnedataFile(name=f.name, url=f.url, path=f.name) for f in record.files
+                OnedataFile(name=f.name, url=f.url, path=f.name) for f in item.files
             ],
         )
 

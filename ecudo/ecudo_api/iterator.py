@@ -7,10 +7,10 @@ Lightweight - fetches only IDs (small payloads), not full metadata.
 
 from typing import AsyncIterator, Optional
 
-from ecudo.crawler.client import EcudoClient
+from ecudo.ecudo_api.client import EcudoClient
 
 
-class RecordIDIterator:
+class EcudoRecordIDIterator:
     """
     Async iterator yielding record IDs from an eCUDO organization.
 

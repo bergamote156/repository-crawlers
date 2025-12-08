@@ -1,5 +1,6 @@
 """Utilities for parsing eCUDO JSON-LD responses into EcudoRecord objects."""
 
+from contextlib import suppress
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -111,13 +112,12 @@ def extract_filename(url: str) -> str:
     Returns:
         Extracted filename or "data.bin" as fallback
     """
-    try:
+    with suppress(ValueError, AttributeError, TypeError):
         path = urlparse(url).path
         if path:
             filename = path.split("/")[-1]
             if filename:
                 return filename
-    except Exception:
-        pass
 
+    # Gracefully fall through to default filename
     return "data.bin"

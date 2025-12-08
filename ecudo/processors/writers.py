@@ -44,7 +44,9 @@ class JSONLWriter[T](Processor[T, T]):
         """Open file for appending."""
         # Ensure parent directory exists
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        self._file = open(self.filepath, "a", encoding="utf-8")
+        # Persistent handle is managed via close(); context manager not used intentionally
+        # pylint: disable=consider-using-with
+        self._file = self.filepath.open("a", encoding="utf-8")
         self._written = 0
 
     async def close(self) -> None:
@@ -116,7 +118,9 @@ class RawRecordWriter(Processor["EcudoRecord", "EcudoRecord"]):
     async def open(self) -> None:
         """Open file for appending."""
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        self._file = open(self.filepath, "a", encoding="utf-8")
+        # Persistent handle is managed via close(); context manager not used intentionally
+        # pylint: disable=consider-using-with
+        self._file = self.filepath.open("a", encoding="utf-8")
         self._written = 0
 
     async def close(self) -> None:
@@ -128,12 +132,12 @@ class RawRecordWriter(Processor["EcudoRecord", "EcudoRecord"]):
         if self._written > 0:
             print(f"📝 Wrote {self._written} raw records to {self.filepath}")
 
-    async def process(self, record: "EcudoRecord") -> "EcudoRecord | None":
+    async def process(self, item: "EcudoRecord") -> "EcudoRecord | None":
         """
         Write raw record data to file.
 
         Args:
-            record: EcudoRecord with _raw data
+            item: EcudoRecord with _raw data
 
         Returns:
             Same record (pass-through)
@@ -142,11 +146,11 @@ class RawRecordWriter(Processor["EcudoRecord", "EcudoRecord"]):
             raise RuntimeError("Writer not opened. Call open() first.")
 
         async with self._lock:
-            self._file.write(json.dumps(record._raw, ensure_ascii=False) + "\n")
+            self._file.write(json.dumps(item.raw, ensure_ascii=False) + "\n")
             self._file.flush()
             self._written += 1
 
-        return record
+        return item
 
     def get_stats(self) -> dict:
         """Return writer statistics."""

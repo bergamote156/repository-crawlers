@@ -10,7 +10,7 @@ from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
 
 if TYPE_CHECKING:
-    from ecudo.crawler.client import EcudoClient
+    from ecudo.ecudo_api.client import EcudoClient
 
 
 class MetadataFetcher(Processor[str, EcudoRecord]):
@@ -37,17 +37,17 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
         self._parsed = 0
         self._failed = 0
 
-    async def process(self, record_id: str) -> EcudoRecord | None:
+    async def process(self, item: str) -> EcudoRecord | None:
         """
         Fetch and parse metadata for a record.
 
         Args:
-            record_id: URN identifier of the record
+            item: URN identifier of the record
 
         Returns:
             Parsed EcudoRecord or None if fetch/parse failed
         """
-        raw = await self.client.get_record_metadata(record_id)
+        raw = await self.client.get_record_metadata(item)
 
         if not raw:
             self._failed += 1

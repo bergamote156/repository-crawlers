@@ -27,9 +27,16 @@ class ProcessingStats:
         )
 
 
-class ParallelFetcher[I, O]:
+async def run_parallel_pipeline[I, O](
+    id_source: AsyncIterable[I],
+    pipeline: Processor[I, O],
+    *,
+    concurrency: int = 128,
+    queue_size: int = 1000,
+    verbose: bool = True,
+) -> ProcessingStats:
     """
-    Generic parallel processor using producer-consumer pattern.
+    Run pipeline in parallel using producer-consumer pattern.
 
     Separates concerns:
     - ID source: Lightweight async iterator producing IDs (sequential)
@@ -38,111 +45,88 @@ class ParallelFetcher[I, O]:
     This design allows efficient parallel HTTP requests while maintaining
     backpressure through a bounded queue.
 
-    Usage:
+    Args:
+        id_source: Async iterator yielding input items (e.g., record IDs)
+        pipeline: Processor pipeline to apply to each item
+        concurrency: Number of concurrent workers (default: 128)
+        queue_size: Maximum queue size for backpressure (default: 1000)
+        verbose: Print progress messages (default: True)
+
+    Returns:
+        Processing statistics
+
+    Example:
         pipeline = ProcessorPipeline([
             MetadataFetcher(client, parser),
             URLValidator(client),
             DiversityFilter(...),
             RawRecordWriter(raw_output),
-            OnedataConverter(serializer),
+            OnedataConverter(openaire.generate_xml),
             JSONLWriter(processed_output),
         ])
 
-        fetcher = ParallelFetcher(concurrency=128)
-        stats = await fetcher.run(
+        stats = await run_parallel_pipeline(
             id_source=record_id_iterator,
             pipeline=pipeline,
+            concurrency=128,
+            queue_size=1000,
         )
     """
+    queue: asyncio.Queue[I | None] = asyncio.Queue(maxsize=queue_size)
+    stats = ProcessingStats()
 
-    def __init__(
-        self,
-        concurrency: int = 128,
-        queue_size: int = 1000,
-        verbose: bool = True,
-    ):
-        """
-        Initialize parallel fetcher.
-
-        Args:
-            concurrency: Number of concurrent workers
-            queue_size: Maximum queue size (backpressure)
-            verbose: Print progress messages
-        """
-        self.concurrency = concurrency
-        self.queue_size = queue_size
-        self.verbose = verbose
-
-    def _log(self, message: str) -> None:
+    def _log(message: str) -> None:
         """Print message if verbose mode is enabled."""
-        if self.verbose:
+        if verbose:
             print(message)
 
-    async def run(
-        self,
-        id_source: AsyncIterable[I],
-        pipeline: Processor[I, O],
-    ) -> ProcessingStats:
-        """
-        Run parallel processing pipeline.
+    async def producer():
+        """Push items from source to queue."""
+        try:
+            async for item in id_source:
+                await queue.put(item)
+                stats.queued += 1
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            _log(f"❌ Producer error: {exc}")
+        finally:
+            # Send sentinel values to signal workers to stop
+            for _ in range(concurrency):
+                await queue.put(None)
 
-        Args:
-            id_source: Async iterator yielding input items (e.g., record IDs)
-            pipeline: Processor pipeline to apply to each item
+    async def worker(worker_id: int):
+        """Process items from queue through pipeline."""
+        while True:
+            item = await queue.get()
 
-        Returns:
-            Processing statistics
-        """
-        queue: asyncio.Queue[I | None] = asyncio.Queue(maxsize=self.queue_size)
-        stats = ProcessingStats()
+            if item is None:  # Sentinel - stop
+                queue.task_done()
+                break
 
-        async def producer():
-            """Push items from source to queue."""
             try:
-                async for item in id_source:
-                    await queue.put(item)
-                    stats.queued += 1
-            except Exception as e:
-                self._log(f"❌ Producer error: {e}")
+                result = await pipeline.process(item)
+                if result is not None:
+                    stats.processed += 1
+                # If result is None, item was filtered (not a failure)
+
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                item_str = str(item)[:50] if item else "?"
+                _log(f"⚠️ Worker {worker_id} error processing {item_str}: {exc}")
+                stats.failed += 1
             finally:
-                # Send sentinel values to signal workers to stop
-                for _ in range(self.concurrency):
-                    await queue.put(None)
+                queue.task_done()
 
-        async def worker(worker_id: int):
-            """Process items from queue through pipeline."""
-            while True:
-                item = await queue.get()
+    # Start producer and workers
+    producer_task = asyncio.create_task(producer())
+    worker_tasks = [asyncio.create_task(worker(i)) for i in range(concurrency)]
 
-                if item is None:  # Sentinel - stop
-                    queue.task_done()
-                    break
+    # Wait for producer to finish
+    await producer_task
 
-                try:
-                    result = await pipeline.process(item)
-                    if result is not None:
-                        stats.processed += 1
-                    # If result is None, item was filtered (not a failure)
+    # Wait for all workers to finish
+    await asyncio.gather(*worker_tasks)
 
-                except Exception as e:
-                    item_str = str(item)[:50] if item else "?"
-                    self._log(f"⚠️ Worker {worker_id} error processing {item_str}: {e}")
-                    stats.failed += 1
-                finally:
-                    queue.task_done()
+    # Print summary
+    _log("\n✅ Parallel processing complete!")
+    _log(f"   {stats}")
 
-        # Start producer and workers
-        producer_task = asyncio.create_task(producer())
-        worker_tasks = [asyncio.create_task(worker(i)) for i in range(self.concurrency)]
-
-        # Wait for producer to finish
-        await producer_task
-
-        # Wait for all workers to finish
-        await asyncio.gather(*worker_tasks)
-
-        # Print summary
-        self._log("\n✅ Parallel processing complete!")
-        self._log(f"   {stats}")
-
-        return stats
+    return stats

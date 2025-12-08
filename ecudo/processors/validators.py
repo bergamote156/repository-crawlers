@@ -6,7 +6,7 @@ Processors that validate dataset records.
 
 from typing import Optional
 
-from ecudo.crawler.client import EcudoClient
+from ecudo.ecudo_api.client import EcudoClient
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
 
@@ -33,26 +33,26 @@ class URLValidator(Processor[EcudoRecord, EcudoRecord]):
         self._validated = 0
         self._failed = 0
 
-    async def process(self, record: EcudoRecord) -> Optional[EcudoRecord]:
+    async def process(self, item: EcudoRecord) -> Optional[EcudoRecord]:
         """
         Validate all file URLs in the record.
 
         Args:
-            record: Dataset record to validate
+            item: Dataset record to validate
 
         Returns:
             Record if all URLs valid, None if any URL is invalid
         """
-        for file_info in record.files:
+        for file_info in item.files:
             is_valid = await self.client.validate_url(file_info.url)
 
             if not is_valid:
                 self._failed += 1
-                print(f"⚠️ Invalid URL in {record.identifier[:50]}: {file_info.url}")
+                print(f"⚠️ Invalid URL in {item.identifier[:50]}: {file_info.url}")
                 return None
 
         self._validated += 1
-        return record
+        return item
 
     async def close(self) -> None:
         """Print validation statistics."""

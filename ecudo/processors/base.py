@@ -36,7 +36,7 @@ class Processor[I, O](ABC):
         Called before processing starts. Override to open files,
         create connections, etc.
         """
-        pass
+        return None
 
     async def close(self) -> None:
         """
@@ -45,7 +45,7 @@ class Processor[I, O](ABC):
         Called after processing ends. Override to close files,
         print statistics, etc.
         """
-        pass
+        return None
 
     @abstractmethod
     async def process(self, item: I) -> Optional[O]:
@@ -58,4 +58,4 @@ class Processor[I, O](ABC):
         Returns:
             Processed item of type O, or None to filter out
         """
-        pass
+        raise NotImplementedError

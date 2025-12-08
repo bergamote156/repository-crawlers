@@ -16,11 +16,12 @@ The crawler is designed with clear separation of concerns, making it easy to:
 ecudo/
 ├── __init__.py           # Package exports and version
 ├── __main__.py           # CLI entry point
-├── cli.py                # Command-line interface
+├── cli.py                # Command-line interface (CLI commands)
+├── crawler.py            # EcudoCrawler - high-level orchestration
 ├── config.py             # Configuration management
 │
-├── crawler/              # HTTP client and iterators
-│   ├── client.py         # EcudoClient - low-level HTTP
+├── ecudo_api/            # Low-level eCUDO API client
+│   ├── client.py         # EcudoClient - HTTP requests
 │   └── iterator.py       # RecordIDIterator - ID pagination
 │
 ├── models/               # Data structures
@@ -30,9 +31,8 @@ ecudo/
 ├── parsers/              # Input parsing
 │   └── ecudo.py          # JSON-LD → EcudoRecord
 │
-├── serializers/          # Output serialization
-│   ├── base.py           # MetadataSerializer ABC
-│   └── openaire.py       # OpenAIRE XML serializer
+├── metadata/             # Metadata format generators
+│   └── openaire.py       # OpenAIRE XML generator (functional)
 │
 ├── processors/           # Pipeline processors
 │   ├── base.py           # Processor[I, O] ABC
@@ -44,7 +44,7 @@ ecudo/
 │   └── writers.py        # JSONLWriter, RawRecordWriter
 │
 └── orchestration/        # Parallel processing
-    └── parallel.py       # ParallelFetcher
+    └── parallel.py       # run_parallel_pipeline() function
 ```
 
 ## Data Flow
@@ -63,7 +63,7 @@ The entire crawl is expressed as a single pipeline:
 │            │ yields IDs (str)                                                │
 │            ▼                                                                 │
 │   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                      ParallelFetcher (N workers)                      │  │
+│   │                 run_parallel_pipeline() (N workers)                   │  │
 │   │                                                                        │  │
 │   │   ┌──────────────────────────────────────────────────────────────┐   │  │
 │   │   │                    ProcessorPipeline                          │   │  │
@@ -106,7 +106,7 @@ The entire crawl is expressed as a single pipeline:
 
 ## Key Components
 
-### EcudoClient (`crawler/client.py`)
+### EcudoClient (`ecudo_api/client.py`)
 
 Low-level HTTP client for eCUDO API. Handles:
 - Session management (async context manager)
@@ -120,7 +120,7 @@ async with EcudoClient() as client:
     metadata = await client.get_record_metadata(record_id)
 ```
 
-### RecordIDIterator (`crawler/iterator.py`)
+### RecordIDIterator (`ecudo_api/iterator.py`)
 
 Async iterator that yields record IDs from an organization. Lightweight - fetches
 only IDs (small payloads), not full metadata. This allows the heavy metadata
@@ -291,7 +291,7 @@ class MyFormatSerializer(MetadataSerializer):
 
 For a completely different API (not eCUDO):
 
-1. Create new client in `crawler/`
+1. Create new client in a new package (e.g., `zenodo_api/`)
 2. Create parser that produces `EcudoRecord` (or new model)
 3. Create `MetadataFetcher` variant for new API
 4. Existing processors and serializers should work
