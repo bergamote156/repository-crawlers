@@ -1,14 +1,8 @@
-"""Tests for EcudoParser."""
+"""Tests for parser utilities."""
 
 import pytest
 
-from ecudo.parsers import EcudoParser
-
-
-@pytest.fixture
-def parser():
-    """Create parser instance."""
-    return EcudoParser()
+from ecudo.parsers.ecudo import extract_filename, parse_record
 
 
 @pytest.fixture
@@ -33,12 +27,12 @@ def valid_record():
     }
 
 
-class TestEcudoParser:
-    """Tests for EcudoParser.parse()."""
+class TestParseRecord:
+    """Tests for parse_record()."""
 
-    def test_parse_valid_record(self, parser, valid_record):
+    def test_parse_valid_record(self, valid_record):
         """Test parsing a valid record."""
-        result = parser.parse(valid_record)
+        result = parse_record(valid_record)
 
         assert result is not None
         assert result.identifier == "urn:SDN:CDI:iopan.pl:uuid:test-123"
@@ -54,45 +48,45 @@ class TestEcudoParser:
         assert result.spatial == "18.0,54.0,19.0,55.0"
         assert result.temporal == "2024-01-01/2024-01-31"
 
-    def test_parse_missing_identifier(self, parser):
+    def test_parse_missing_identifier(self):
         """Test that records without identifier are rejected."""
         record = {
             "title": "No ID Dataset",
             "distribution": [{"downloadURL": "https://example.com/data.zip"}],
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is None
 
-    def test_parse_missing_distribution(self, parser):
+    def test_parse_missing_distribution(self):
         """Test that records without distribution are rejected."""
         record = {
             "identifier": "urn:test:123",
             "title": "No Files Dataset",
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is None
 
-    def test_parse_empty_distribution(self, parser):
+    def test_parse_empty_distribution(self):
         """Test that records with empty distribution are rejected."""
         record = {
             "identifier": "urn:test:123",
             "title": "Empty Files Dataset",
             "distribution": [],
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is None
 
-    def test_parse_distribution_without_url(self, parser):
+    def test_parse_distribution_without_url(self):
         """Test that distributions without downloadURL are skipped."""
         record = {
             "identifier": "urn:test:123",
             "title": "Bad Distribution",
             "distribution": [{"format": "unknown"}],
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is None
 
-    def test_parse_publisher_as_string(self, parser):
+    def test_parse_publisher_as_string(self):
         """Test parsing publisher when it's a string."""
         record = {
             "identifier": "urn:test:123",
@@ -100,22 +94,22 @@ class TestEcudoParser:
             "publisher": "Simple Publisher Name",
             "distribution": [{"downloadURL": "https://example.com/data.zip"}],
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is not None
         assert result.publisher == "Simple Publisher Name"
 
-    def test_parse_missing_publisher(self, parser):
+    def test_parse_missing_publisher(self):
         """Test parsing record without publisher."""
         record = {
             "identifier": "urn:test:123",
             "title": "No Publisher",
             "distribution": [{"downloadURL": "https://example.com/data.zip"}],
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is not None
         assert result.publisher == "Unknown Publisher"
 
-    def test_parse_multiple_files(self, parser):
+    def test_parse_multiple_files(self):
         """Test parsing record with multiple files."""
         record = {
             "identifier": "urn:test:123",
@@ -126,25 +120,22 @@ class TestEcudoParser:
                 {"downloadURL": "https://example.com/file3.csv"},
             ],
         }
-        result = parser.parse(record)
+        result = parse_record(record)
         assert result is not None
         assert len(result.files) == 3
         assert result.files[0].name == "file1.csv"
         assert result.files[1].name == "file2.csv"
         assert result.files[2].name == "file3.csv"
 
-    def test_parse_preserves_raw(self, parser, valid_record):
+    def test_parse_preserves_raw(self, valid_record):
         """Test that _raw field preserves original data."""
-        result = parser.parse(valid_record)
+        result = parse_record(valid_record)
         assert result is not None
         assert result._raw == valid_record
 
-    def test_extract_filename_from_url(self, parser):
+    def test_extract_filename_from_url(self):
         """Test filename extraction from various URLs."""
-        assert (
-            parser._extract_filename("https://example.com/path/to/file.zip")
-            == "file.zip"
-        )
-        assert parser._extract_filename("https://example.com/file.csv") == "file.csv"
-        assert parser._extract_filename("https://example.com/") == "data.bin"
-        assert parser._extract_filename("") == "data.bin"
+        assert extract_filename("https://example.com/path/to/file.zip") == "file.zip"
+        assert extract_filename("https://example.com/file.csv") == "file.csv"
+        assert extract_filename("https://example.com/") == "data.bin"
+        assert extract_filename("") == "data.bin"

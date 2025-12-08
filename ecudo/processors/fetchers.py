@@ -4,14 +4,13 @@ Data Fetching Processors
 Processors that fetch data from external sources.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
 
 if TYPE_CHECKING:
     from ecudo.crawler.client import EcudoClient
-    from ecudo.parsers.ecudo import EcudoParser
 
 
 class MetadataFetcher(Processor[str, EcudoRecord]):
@@ -22,13 +21,15 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
     pipeline step.
     """
 
-    def __init__(self, client: "EcudoClient", parser: "EcudoParser"):
+    def __init__(
+        self, client: "EcudoClient", parser: Callable[[dict], EcudoRecord | None]
+    ):
         """
         Initialize metadata fetcher.
 
         Args:
             client: EcudoClient for HTTP requests
-            parser: EcudoParser for JSON-LD parsing
+            parser: Callable for JSON-LD parsing
         """
         self.client = client
         self.parser = parser
@@ -54,7 +55,7 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
 
         self._fetched += 1
 
-        record = self.parser.parse(raw)
+        record = self.parser(raw)
         if record:
             self._parsed += 1
         else:

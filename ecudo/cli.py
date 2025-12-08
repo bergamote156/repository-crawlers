@@ -16,7 +16,7 @@ from ecudo import __version__
 from ecudo.config import Config, config_to_dict, load_config
 from ecudo.crawler import EcudoClient, RecordIDIterator
 from ecudo.orchestration import ParallelFetcher
-from ecudo.parsers import EcudoParser
+from ecudo.parsers.ecudo import parse_record
 from ecudo.processors import DiversityFilter, Processor, ProcessorPipeline, URLValidator
 from ecudo.processors.converters import OnedataConverter
 from ecudo.processors.fetchers import MetadataFetcher
@@ -207,9 +207,8 @@ async def _crawl_organization(
         processors: list[Processor] = []
 
         # 1. Metadata fetcher (ID -> EcudoRecord)
-        parser = EcudoParser()
         log("   ✓ MetadataFetcher: fetch and parse JSON-LD")
-        processors.append(MetadataFetcher(client, parser))
+        processors.append(MetadataFetcher(client, parse_record))
 
         # 2. URL Validator (optional)
         if config.processors.url_validator.enabled:
