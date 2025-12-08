@@ -95,7 +95,9 @@ class TestOpenAIRESerializer:
         """Test that XML contains geo location."""
         result = serializer.serialize(sample_record)
         assert "<datacite:geoLocationBox>" in result
-        assert "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
+        assert (
+            "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
+        )
 
     def test_serialize_contains_temporal_coverage(self, serializer, sample_record):
         """Test that XML contains temporal coverage."""

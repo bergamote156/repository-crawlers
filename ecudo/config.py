@@ -7,7 +7,7 @@ Hierarchical configuration management: env vars < config file < CLI args.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import yaml
 
@@ -73,7 +73,7 @@ def _get_env(key: str, default: Optional[str] = None) -> Optional[str]:
 
 def _load_from_env() -> dict:
     """Load configuration from environment variables."""
-    config = {}
+    config: dict[str, dict[str, Any]] = {}
 
     # Crawler settings
     if base_url := _get_env("BASE_URL"):

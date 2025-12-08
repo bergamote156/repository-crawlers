@@ -4,7 +4,7 @@ Processor Pipeline
 Chains multiple processors into a sequential pipeline.
 """
 
-from typing import Sequence
+from typing import Any, Sequence, cast
 
 from ecudo.processors.base import Processor
 
@@ -52,14 +52,14 @@ class ProcessorPipeline[I, O](Processor[I, O]):
         Returns:
             Final processed item, or None if filtered by any processor
         """
-        current = item
+        current: Any = item
         for processor in self.processors:
-            current = await processor.process(current)
+            current = await processor.process(current)  # type: ignore[arg-type]
             if current is None:
                 self._filtered += 1
                 return None  # Stop pipeline
         self._processed += 1
-        return current  # type: ignore
+        return cast(O, current)
 
     def get_stats(self) -> dict:
         """

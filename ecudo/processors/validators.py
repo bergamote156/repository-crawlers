@@ -58,7 +58,7 @@ class URLValidator(Processor[EcudoRecord, EcudoRecord]):
         """Print validation statistics."""
         total = self._validated + self._failed
         if total > 0:
-            print(f"\n📊 URL Validator Statistics:")
+            print("\n📊 URL Validator Statistics:")
             print(f"   Validated: {self._validated}")
             print(f"   Failed: {self._failed}")
             print(f"   Pass rate: {self._validated / total:.1%}")

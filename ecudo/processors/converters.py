@@ -62,5 +62,5 @@ class OnedataConverter(Processor[EcudoRecord, OnedataDataset]):
     async def close(self) -> None:
         """Print conversion statistics."""
         if self._converted > 0:
-            print(f"\n📊 Onedata Converter Statistics:")
+            print("\n📊 Onedata Converter Statistics:")
             print(f"   Converted: {self._converted}")

@@ -87,10 +87,10 @@ class EcudoClient:
                 async with self.session.get(url, allow_redirects=True) as resp:
                     if resp.status == 200:
                         return await resp.json()
-                    else:
-                        text = await resp.text()
-                        print(f"❌ Error {resp.status} fetching {url}: {text[:100]}")
-                        return {}
+
+                    text = await resp.text()
+                    print(f"❌ Error {resp.status} fetching {url}: {text[:100]}")
+                    return {}
             except asyncio.CancelledError:
                 raise
             except Exception as e:

@@ -74,7 +74,7 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
         """Print fetch statistics."""
         total = self._fetched + self._failed
         if total > 0:
-            print(f"\n📊 Metadata Fetcher Statistics:")
+            print("\n📊 Metadata Fetcher Statistics:")
             print(f"   Fetched: {self._fetched}")
             print(f"   Parsed: {self._parsed}")
             print(f"   Failed: {self._failed}")

@@ -6,7 +6,7 @@ Separates lightweight ID iteration from heavyweight metadata fetching.
 """
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterable
 from dataclasses import dataclass
 
 from ecudo.processors.base import Processor
@@ -80,7 +80,7 @@ class ParallelFetcher[I, O]:
 
     async def run(
         self,
-        id_source: AsyncIterator[I],
+        id_source: AsyncIterable[I],
         pipeline: Processor[I, O],
     ) -> ProcessingStats:
         """
@@ -142,7 +142,7 @@ class ParallelFetcher[I, O]:
         await asyncio.gather(*worker_tasks)
 
         # Print summary
-        self._log(f"\n✅ Parallel processing complete!")
+        self._log("\n✅ Parallel processing complete!")
         self._log(f"   {stats}")
 
         return stats

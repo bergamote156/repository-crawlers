@@ -88,13 +88,13 @@ class DiversityFilter(Processor[EcudoRecord, EcudoRecord]):
 
     async def close(self) -> None:
         """Print diversity statistics."""
-        print(f"\n📊 Diversity Filter Statistics:")
+        print("\n📊 Diversity Filter Statistics:")
         print(f"   Total groups: {len(self._title_groups)}")
         print(f"   Accepted: {self._accepted}")
         print(f"   Skipped: {self._skipped}")
 
         if self._title_groups:
-            print(f"   Top groups:")
+            print("   Top groups:")
             # Sort by count descending
             sorted_groups = sorted(
                 self._title_groups, key=lambda g: g["count"], reverse=True

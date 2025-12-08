@@ -17,7 +17,7 @@ from ecudo.config import Config, config_to_dict, load_config
 from ecudo.crawler import EcudoClient, RecordIDIterator
 from ecudo.orchestration import ParallelFetcher
 from ecudo.parsers import EcudoParser
-from ecudo.processors import DiversityFilter, ProcessorPipeline, URLValidator
+from ecudo.processors import DiversityFilter, Processor, ProcessorPipeline, URLValidator
 from ecudo.processors.converters import OnedataConverter
 from ecudo.processors.fetchers import MetadataFetcher
 from ecudo.processors.writers import JSONLWriter, RawRecordWriter
@@ -204,7 +204,7 @@ async def _crawl_organization(
 
         # Build processing pipeline
         log("\n📦 Building processing pipeline...")
-        processors = []
+        processors: list[Processor] = []
 
         # 1. Metadata fetcher (ID -> EcudoRecord)
         parser = EcudoParser()
@@ -247,7 +247,7 @@ async def _crawl_organization(
         processors.append(JSONLWriter(processed_output))
 
         # Create pipeline
-        pipeline = ProcessorPipeline(processors)
+        pipeline: ProcessorPipeline = ProcessorPipeline(processors)
 
         # Open pipeline (opens all processors)
         await pipeline.open()
@@ -268,7 +268,7 @@ async def _crawl_organization(
         log(f"   Concurrency: {config.crawler.concurrency} workers")
         log(f"   Queue size: {config.crawler.queue_size}")
 
-        fetcher = ParallelFetcher(
+        fetcher: ParallelFetcher = ParallelFetcher(
             concurrency=config.crawler.concurrency,
             queue_size=config.crawler.queue_size,
             verbose=not quiet,

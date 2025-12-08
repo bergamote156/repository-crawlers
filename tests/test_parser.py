@@ -141,7 +141,10 @@ class TestEcudoParser:
 
     def test_extract_filename_from_url(self, parser):
         """Test filename extraction from various URLs."""
-        assert parser._extract_filename("https://example.com/path/to/file.zip") == "file.zip"
+        assert (
+            parser._extract_filename("https://example.com/path/to/file.zip")
+            == "file.zip"
+        )
         assert parser._extract_filename("https://example.com/file.csv") == "file.csv"
         assert parser._extract_filename("https://example.com/") == "data.bin"
         assert parser._extract_filename("") == "data.bin"
