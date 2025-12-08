@@ -11,17 +11,178 @@ from contextlib import AsyncExitStack
 from pathlib import Path
 
 import click
+import yaml
 
 from ecudo import __version__
 from ecudo.config import Config, config_to_dict, load_config
 from ecudo.crawler import EcudoClient, RecordIDIterator
-from ecudo.orchestration import ParallelFetcher
+from ecudo.orchestration import ParallelFetcher, ProcessingStats
 from ecudo.parsers.ecudo import parse_record
 from ecudo.processors import DiversityFilter, Processor, ProcessorPipeline, URLValidator
 from ecudo.processors.converters import OnedataConverter
 from ecudo.processors.fetchers import MetadataFetcher
 from ecudo.processors.writers import JSONLWriter, RawRecordWriter
 from ecudo.serializers import OpenAIRESerializer
+
+
+class EcudoCrawler:
+    """Orchestrates crawling of an eCUDO organization."""
+
+    def __init__(
+        self,
+        organization: str,
+        config: Config,
+        max_records: int | None = None,
+        quiet: bool = False,
+    ):
+        self.organization = organization
+        self.config = config
+        self.max_records = max_records
+        self.quiet = quiet
+
+        self._raw_output: Path | None = None
+        self._processed_output: Path | None = None
+
+    def log(self, message: str) -> None:
+        """Print message if not in quiet mode."""
+        if not self.quiet:
+            print(message)
+
+    async def run(self) -> None:
+        """Execute the crawl."""
+        self.log("=" * 80)
+        self.log(f"eCUDO Crawler - Organization: {self.organization.upper()}")
+        self.log("=" * 80)
+
+        self._prepare_output_paths()
+
+        async with AsyncExitStack() as stack:
+            client = await stack.enter_async_context(
+                EcudoClient(
+                    base_url=self.config.crawler.base_url,
+                    timeout=self.config.crawler.timeout,
+                    max_retries=self.config.crawler.max_retries,
+                )
+            )
+
+            await self._validate_organization(client)
+
+            processors = self._build_pipeline_processors(client)
+            pipeline = ProcessorPipeline(processors)
+            await pipeline.open()
+            stack.push_async_callback(pipeline.close)
+
+            id_iterator = RecordIDIterator(
+                client=client,
+                org_id=self.organization,
+                page_size=self.config.crawler.page_size,
+                max_records=self.max_records,
+            )
+
+            stats, pipeline_stats = await self._run_fetcher(id_iterator, pipeline)
+            self._print_summary(stats, pipeline_stats)
+
+    def _prepare_output_paths(self) -> None:
+        """Ensure output directory exists and set output file paths."""
+        output_dir = Path(self.config.output.dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self._raw_output = output_dir / f"{self.organization}_raw.jsonl"
+        self._processed_output = output_dir / f"{self.organization}_processed.jsonl"
+
+    async def _validate_organization(self, client: EcudoClient) -> None:
+        """Ensure the requested organization exists."""
+        self.log("📡 Validating organization...")
+        orgs = await client.get_organizations()
+        if not any(o["id"] == self.organization for o in orgs):
+            print(f"❌ Organization '{self.organization}' not found.")
+            print(f"   Available: {', '.join(o['id'] for o in orgs)}")
+            sys.exit(1)
+        self.log(f"✅ Found organization: {self.organization}")
+
+    def _build_pipeline_processors(self, client: EcudoClient) -> list[Processor]:
+        """Assemble the processing pipeline based on configuration."""
+        self.log("\n📦 Building processing pipeline...")
+        processors: list[Processor] = []
+
+        self.log("   ✓ MetadataFetcher: fetch and parse JSON-LD")
+        processors.append(MetadataFetcher(client, parse_record))
+
+        if self.config.processors.url_validator.enabled:
+            self.log("   ✓ URLValidator: check URL accessibility")
+            processors.append(URLValidator(client))
+        else:
+            self.log("   ⊘ URLValidator: disabled")
+
+        if self.config.processors.diversity_filter.enabled:
+            df_cfg = self.config.processors.diversity_filter
+            self.log(
+                f"   ✓ DiversityFilter: max {df_cfg.max_similar} similar "
+                f"({df_cfg.similarity_threshold:.0%} threshold)"
+            )
+            processors.append(
+                DiversityFilter(
+                    max_similar=df_cfg.max_similar,
+                    similarity_threshold=df_cfg.similarity_threshold,
+                )
+            )
+        else:
+            self.log("   ⊘ DiversityFilter: disabled")
+
+        self.log(f"   ✓ RawRecordWriter: {self._raw_output}")
+        processors.append(RawRecordWriter(self._raw_output))
+
+        serializer = OpenAIRESerializer()
+        self.log("   ✓ OnedataConverter: build Onedata dataset with OpenAIRE XML")
+        processors.append(OnedataConverter(serializer))
+
+        self.log(f"   ✓ JSONLWriter: {self._processed_output}")
+        processors.append(JSONLWriter(self._processed_output))
+
+        return processors
+
+    async def _run_fetcher(
+        self,
+        id_iterator: RecordIDIterator,
+        pipeline: ProcessorPipeline,
+    ) -> tuple[ProcessingStats, dict]:
+        """Execute the parallel fetcher and return run statistics."""
+        self.log(f"\n🚀 Starting parallel crawl of {self.organization}...")
+        if self.max_records:
+            self.log(f"   Limit: {self.max_records} records")
+        self.log(f"   Concurrency: {self.config.crawler.concurrency} workers")
+        self.log(f"   Queue size: {self.config.crawler.queue_size}")
+
+        fetcher = ParallelFetcher(
+            concurrency=self.config.crawler.concurrency,
+            queue_size=self.config.crawler.queue_size,
+            verbose=not self.quiet,
+        )
+
+        stats = await fetcher.run(id_source=id_iterator, pipeline=pipeline)
+        pipeline_stats = pipeline.get_stats()
+        return stats, pipeline_stats
+
+    def _print_summary(self, stats: ProcessingStats, pipeline_stats: dict) -> None:
+        """Print final crawl summary."""
+        print("\n" + "=" * 80)
+        print("Crawl Complete!")
+        print("=" * 80)
+        print(f"Raw datasets saved to:       {self._raw_output}")
+        print(f"Processed datasets saved to: {self._processed_output}")
+        print(f"\nStatistics: {stats}")
+
+        if pipeline_stats.get("processors"):
+            print("\nProcessor statistics:")
+            for name, proc_stats in pipeline_stats["processors"].items():
+                stats_str = ", ".join(f"{k}: {v}" for k, v in proc_stats.items())
+                print(f"   {name}: {stats_str}")
+
+        print("\nNext steps:")
+        print(
+            f"  1. Convert JSONL to JSON: python -m ecudo convert {self._processed_output}"
+        )
+        print("  2. Run dataset_registrar.py with the converted file")
+        print("=" * 80)
 
 
 @click.group()
@@ -101,7 +262,7 @@ def cli(ctx: click.Context, config_file: Path | None, quiet: bool):
     help="Queue size for backpressure control",
 )
 @click.pass_context
-def crawl(
+def crawl(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     ctx: click.Context,
     organization: str,
     max_records: int | None,
@@ -144,162 +305,19 @@ def crawl(
     if queue_size is not None:
         cli_overrides.setdefault("crawler", {})["queue_size"] = queue_size
 
-    # Load config
     config = load_config(
         config_file=ctx.obj.get("config_file"),
         cli_overrides=cli_overrides if cli_overrides else None,
     )
 
-    quiet = ctx.obj.get("quiet", False)
+    crawler = EcudoCrawler(
+        organization=organization,
+        config=config,
+        max_records=max_records,
+        quiet=ctx.obj.get("quiet", False),
+    )
 
-    # Run crawl
-    asyncio.run(_crawl_organization(organization, max_records, config, quiet))
-
-
-async def _crawl_organization(
-    organization: str,
-    max_records: int | None,
-    config: Config,
-    quiet: bool = False,
-):
-    """Async implementation of crawl command."""
-
-    def log(message: str) -> None:
-        """Print message if not in quiet mode."""
-        if not quiet:
-            print(message)
-
-    log("=" * 80)
-    log(f"eCUDO Crawler - Organization: {organization.upper()}")
-    log("=" * 80)
-
-    # Ensure output directory exists
-    output_dir = Path(config.output.dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Output file paths
-    raw_output = output_dir / f"{organization}_raw.jsonl"
-    processed_output = output_dir / f"{organization}_processed.jsonl"
-
-    # Use AsyncExitStack for safe cleanup
-    async with AsyncExitStack() as stack:
-        # Enter client context
-        client = await stack.enter_async_context(
-            EcudoClient(
-                base_url=config.crawler.base_url,
-                timeout=config.crawler.timeout,
-                max_retries=config.crawler.max_retries,
-            )
-        )
-
-        # Validate organization exists
-        log("📡 Validating organization...")
-        orgs = await client.get_organizations()
-        if not any(o["id"] == organization for o in orgs):
-            print(f"❌ Organization '{organization}' not found.")
-            print(f"   Available: {', '.join(o['id'] for o in orgs)}")
-            sys.exit(1)
-
-        log(f"✅ Found organization: {organization}")
-
-        # Build processing pipeline
-        log("\n📦 Building processing pipeline...")
-        processors: list[Processor] = []
-
-        # 1. Metadata fetcher (ID -> EcudoRecord)
-        log("   ✓ MetadataFetcher: fetch and parse JSON-LD")
-        processors.append(MetadataFetcher(client, parse_record))
-
-        # 2. URL Validator (optional)
-        if config.processors.url_validator.enabled:
-            log("   ✓ URLValidator: check URL accessibility")
-            processors.append(URLValidator(client))
-        else:
-            log("   ⊘ URLValidator: disabled")
-
-        # 3. Diversity Filter (optional)
-        if config.processors.diversity_filter.enabled:
-            log(
-                f"   ✓ DiversityFilter: max {config.processors.diversity_filter.max_similar} similar "
-                f"({config.processors.diversity_filter.similarity_threshold:.0%} threshold)"
-            )
-            processors.append(
-                DiversityFilter(
-                    max_similar=config.processors.diversity_filter.max_similar,
-                    similarity_threshold=config.processors.diversity_filter.similarity_threshold,
-                )
-            )
-        else:
-            log("   ⊘ DiversityFilter: disabled")
-
-        # 4. Raw record writer (saves _raw to JSONL, pass-through)
-        log(f"   ✓ RawRecordWriter: {raw_output}")
-        processors.append(RawRecordWriter(raw_output))
-
-        # 5. Onedata converter (EcudoRecord -> OnedataDataset)
-        serializer = OpenAIRESerializer()
-        log("   ✓ OnedataConverter: build Onedata dataset with OpenAIRE XML")
-        processors.append(OnedataConverter(serializer))
-
-        # 6. Processed writer (saves OnedataDataset to JSONL)
-        log(f"   ✓ JSONLWriter: {processed_output}")
-        processors.append(JSONLWriter(processed_output))
-
-        # Create pipeline
-        pipeline: ProcessorPipeline = ProcessorPipeline(processors)
-
-        # Open pipeline (opens all processors)
-        await pipeline.open()
-        stack.push_async_callback(pipeline.close)
-
-        # Create ID iterator
-        id_iterator = RecordIDIterator(
-            client=client,
-            org_id=organization,
-            page_size=config.crawler.page_size,
-            max_records=max_records,
-        )
-
-        # Run parallel fetcher
-        log(f"\n🚀 Starting parallel crawl of {organization}...")
-        if max_records:
-            log(f"   Limit: {max_records} records")
-        log(f"   Concurrency: {config.crawler.concurrency} workers")
-        log(f"   Queue size: {config.crawler.queue_size}")
-
-        fetcher: ParallelFetcher = ParallelFetcher(
-            concurrency=config.crawler.concurrency,
-            queue_size=config.crawler.queue_size,
-            verbose=not quiet,
-        )
-
-        stats = await fetcher.run(
-            id_source=id_iterator,
-            pipeline=pipeline,
-        )
-
-        # Get detailed stats from pipeline
-        pipeline_stats = pipeline.get_stats()
-
-        # Summary (always printed)
-        print("\n" + "=" * 80)
-        print("Crawl Complete!")
-        print("=" * 80)
-        print(f"Raw datasets saved to:       {raw_output}")
-        print(f"Processed datasets saved to: {processed_output}")
-        print(f"\nStatistics: {stats}")
-
-        # Print processor stats if available
-        if pipeline_stats.get("processors"):
-            print("\nProcessor statistics:")
-            for name, proc_stats in pipeline_stats["processors"].items():
-                stats_str = ", ".join(f"{k}: {v}" for k, v in proc_stats.items())
-                print(f"   {name}: {stats_str}")
-
-        print("\nNext steps:")
-        print(f"  1. Convert JSONL to JSON: python -m ecudo convert {processed_output}")
-        print("  2. Run dataset_registrar.py with the converted file")
-        print("=" * 80)
+    asyncio.run(crawler.run())
 
 
 @cli.command("list-orgs")
@@ -382,15 +400,12 @@ def show_config(ctx: click.Context):
     config_dict = config_to_dict(config)
 
     print("Current configuration:\n")
-
-    import yaml
-
     print(yaml.dump(config_dict, default_flow_style=False, sort_keys=False))
 
 
 def main():
     """Main entry point."""
-    cli(obj={})
+    cli()  # pylint: disable=no-value-for-parameter
 
 
 if __name__ == "__main__":

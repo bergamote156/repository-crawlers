@@ -4,7 +4,7 @@ SRC_FILES := ecudo tests
 UID := $(shell id -u)
 GID := $(shell id -g)
 
-.PHONY: format black-check static-analysis type-check lint
+.PHONY: format black-check static-analysis type-check lint test
 
 define docker_run
 	docker run --rm -i -v $(CURDIR):$(CURDIR) -w $(CURDIR) -u $(UID):$(GID) $(STATIC_ANALYSER_IMAGE) $1
@@ -50,3 +50,11 @@ type-check:
 
 lint: black-check static-analysis type-check
 	@:
+
+##
+## Tests
+##
+
+test:
+	$(call print_target)
+	$(call docker_run, sh -c "pip install -qq --break-system-packages -r requirements.txt && pytest tests")
