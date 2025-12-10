@@ -5,6 +5,7 @@ Centralized output handling with log levels.
 Provides consistent logging interface across all modules.
 """
 
+import os
 from enum import IntEnum
 
 
@@ -20,6 +21,22 @@ class LogLevel(IntEnum):
 
 # Global state
 _level: LogLevel = LogLevel.INFO
+_color_enabled = os.getenv("NO_COLOR") is None
+
+_RESET = "\033[0m"
+_COLORS = {
+    LogLevel.DEBUG: "\033[36m",  # cyan
+    LogLevel.INFO: "\033[34m",  # blue
+    LogLevel.WARNING: "\033[33m",  # yellow
+    LogLevel.ERROR: "\033[31m",  # red
+}
+_STATS_COLOR = "\033[35m"  # magenta
+_PREFIXES = {
+    LogLevel.DEBUG: "[debug]",
+    LogLevel.INFO: "[info ]",
+    LogLevel.WARNING: "[warn ]",
+    LogLevel.ERROR: "[error]",
+}
 
 
 def set_level(level: LogLevel | str) -> None:
@@ -43,44 +60,61 @@ def get_level() -> LogLevel:
 
 def debug(message: str) -> None:
     """Print debug message (most verbose)."""
-    if _level <= LogLevel.DEBUG:
-        print(message)
+    _emit(LogLevel.DEBUG, message)
 
 
 def info(message: str) -> None:
     """Print info message (normal verbosity)."""
-    if _level <= LogLevel.INFO:
-        print(message)
+    _emit(LogLevel.INFO, message)
 
 
 def warning(message: str) -> None:
     """Print warning message (reduced verbosity)."""
-    if _level <= LogLevel.WARNING:
-        print(message)
+    _emit(LogLevel.WARNING, message)
 
 
 def error(message: str) -> None:
     """Print error message (always shown unless SILENT)."""
-    if _level <= LogLevel.ERROR:
-        print(message)
+    _emit(LogLevel.ERROR, message)
 
 
 def always(message: str) -> None:
     """Print message regardless of log level (for summaries)."""
-    print(message)
-
-
-# Convenience aliases matching current emoji conventions
-def progress(message: str) -> None:
-    """Print progress info (📄, 📦, 🚀, 📡)."""
-    info(message)
-
-
-def success(message: str) -> None:
-    """Print success message (✅)."""
-    info(message)
+    _emit(LogLevel.INFO, message, prefix="[info ]", force=True)
 
 
 def stats(message: str) -> None:
     """Print statistics (📊, 📝)."""
-    info(message)
+    _emit(LogLevel.INFO, message, prefix="[stats]", color=_STATS_COLOR)
+
+
+def _emit(
+    level: LogLevel,
+    message: str,
+    *,
+    prefix: str | None = None,
+    color: str | None = None,
+    force: bool = False,
+) -> None:
+    """Emit a (potentially multi-line) message with prefix and optional color."""
+    if not force and _level > level:
+        return
+
+    prefix = prefix or _PREFIXES.get(level, "[log]")
+    if _color_enabled:
+        color = color or _COLORS.get(level)
+        if color:
+            prefix = f"{color}{prefix}{_RESET}"
+
+    lines = message.splitlines()
+
+    # Preserve leading/trailing blank lines without a prefix
+    if not lines:
+        print("")
+        return
+
+    for line in lines:
+        if line.strip() == "":
+            print("")
+        else:
+            print(f"{prefix} {line}")
