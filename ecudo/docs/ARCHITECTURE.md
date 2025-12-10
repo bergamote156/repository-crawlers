@@ -19,6 +19,7 @@ ecudo/
 ├── cli.py                # Command-line interface (CLI commands)
 ├── crawler.py            # EcudoCrawler - high-level orchestration
 ├── config.py             # Configuration management
+├── output.py             # Logging utilities
 │
 ├── ecudo_api/            # Low-level eCUDO API client
 │   ├── client.py         # EcudoClient - HTTP requests
@@ -41,7 +42,7 @@ ecudo/
 │   ├── filters.py        # DiversityFilter
 │   ├── converters.py     # OnedataConverter
 │   ├── pipeline.py       # ProcessorPipeline
-│   └── writers.py        # JSONLWriter, RawRecordWriter
+│   └── writers.py        # JSONLWriter
 │
 └── orchestration/        # Parallel processing
     └── parallel.py       # run_parallel_pipeline() function
@@ -84,7 +85,7 @@ The entire crawl is expressed as a single pipeline:
 │   │   │           │ EcudoRecord                                       │   │  │
 │   │   │           ▼                                                    │   │  │
 │   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │RawRecordWriter │  Saves _raw JSON to JSONL (pass-through) │   │  │
+│   │   │   │  JSONLWriter   │  Saves _raw JSON to JSONL (pass-through) │   │  │
 │   │   │   └───────┬────────┘                                          │   │  │
 │   │   │           │ EcudoRecord                                       │   │  │
 │   │   │           ▼                                                    │   │  │
@@ -120,7 +121,7 @@ async with EcudoClient() as client:
     metadata = await client.get_record_metadata(record_id)
 ```
 
-### RecordIDIterator (`ecudo_api/iterator.py`)
+### EcudoRecordIDIterator (`ecudo_api/iterator.py`)
 
 Async iterator that yields record IDs from an organization. Lightweight - fetches
 only IDs (small payloads), not full metadata. This allows the heavy metadata
@@ -128,7 +129,7 @@ fetching to be parallelized by workers.
 
 ```python
 async with EcudoClient() as client:
-    iterator = RecordIDIterator(client, "iopan", max_records=100)
+    iterator = EcudoRecordIDIterator(client, "iopan", max_records=100)
     async for record_id in iterator:
         # record_id is fed to the pipeline
         pass
@@ -142,17 +143,7 @@ to be easily extended when other data sources are added.
 ```python
 @dataclass
 class EcudoRecord:
-    identifier: str
-    title: str
-    description: str
-    publisher: str
-    issued: str
-    language: str
-    keywords: list[str]
-    files: list[FileInfo]
-    spatial: str | None
-    temporal: str | None
-    _raw: dict  # Original JSON-LD for debugging
+    ...
 ```
 
 ### OnedataDataset (`models/onedata.py`)
@@ -162,11 +153,7 @@ Output structure ready for Onedata registration:
 ```python
 @dataclass
 class OnedataDataset:
-    name: str
-    location: str
-    pid: str
-    metadata_xml: str
-    files: list[OnedataFile]
+    ...
 ```
 
 ### Processor[I, O] (`processors/base.py`)
@@ -210,15 +197,25 @@ await pipeline.close()
 stats = pipeline.get_stats()
 ```
 
-### ParallelFetcher (`orchestration/parallel.py`)
+## Parallel fetcher (`orchestration/parallel.py`)
 
-Producer-consumer orchestrator for parallel processing:
+`run_parallel_pipeline` implements the producer-consumer loop used by the CLI.
+It separates lightweight ID iteration from heavy metadata processing and applies
+backpressure via a bounded queue.
 
+Key behaviors:
+- Configurable `concurrency` and `queue_size` for workers and backpressure.
+- `ProcessingStats` tracks queued, processed, and failed items.
+- Errors per item are logged as warnings; processing continues for other items.
+- Uses `None` sentinels to stop workers cleanly once the producer finishes.
+
+Example:
 ```python
-fetcher = ParallelFetcher(concurrency=128, queue_size=1000)
-stats = await fetcher.run(
+stats = await run_parallel_pipeline(
     id_source=record_id_iterator,
     pipeline=pipeline,
+    concurrency=128,
+    queue_size=1000,
 )
 ```
 
@@ -229,7 +226,6 @@ stats = await fetcher.run(
 | `MetadataFetcher` | `str` (ID) | `EcudoRecord` | Fetches JSON-LD and parses |
 | `URLValidator` | `EcudoRecord` | `EcudoRecord` | Validates file URLs |
 | `DiversityFilter` | `EcudoRecord` | `EcudoRecord` | Limits similar titles |
-| `RawRecordWriter` | `EcudoRecord` | `EcudoRecord` | Saves `_raw` to JSONL |
 | `OnedataConverter` | `EcudoRecord` | `OnedataDataset` | Builds Onedata output |
 | `JSONLWriter` | `T` | `T` | Writes to JSONL file |
 
@@ -267,34 +263,6 @@ class MyFilter(Processor[EcudoRecord, EcudoRecord]):
 ```
 
 2. Add to pipeline in `cli.py`
-
-### Adding a New Metadata Format
-
-1. Create `serializers/myformat.py`:
-```python
-from ecudo.serializers.base import MetadataSerializer
-from ecudo.models import EcudoRecord
-
-class MyFormatSerializer(MetadataSerializer):
-    @property
-    def format_name(self) -> str:
-        return "My Format"
-    
-    def serialize(self, record: EcudoRecord) -> str:
-        return "..."
-```
-
-2. Add to `serializers/__init__.py`
-3. Use in `OnedataConverter` (or create new converter)
-
-### Adding a New Data Source
-
-For a completely different API (not eCUDO):
-
-1. Create new client in a new package (e.g., `zenodo_api/`)
-2. Create parser that produces `EcudoRecord` (or new model)
-3. Create `MetadataFetcher` variant for new API
-4. Existing processors and serializers should work
 
 ## Performance Considerations
 

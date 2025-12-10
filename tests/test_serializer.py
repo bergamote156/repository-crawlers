@@ -42,8 +42,8 @@ class TestOpenAIREMetadata:
         result = openaire.generate_xml(sample_record)
 
         assert result.startswith('<?xml version="1.0" encoding="UTF-8"?>')
-        assert "<resource" in result
-        assert "</resource>" in result
+        assert "<oaire:resource" in result
+        assert "</oaire:resource>" in result
 
     def test_generate_xml_contains_title(self, sample_record):
         """Test that XML contains title."""
@@ -140,4 +140,4 @@ class TestOpenAIREMetadata:
         # Should still produce valid XML
         assert '<?xml version="1.0"' in result
         assert "Minimal Dataset" in result
-        assert "</resource>" in result
+        assert "</oaire:resource>" in result

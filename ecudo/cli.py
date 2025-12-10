@@ -211,27 +211,27 @@ async def _list_organizations(config: Config):
 
 
 @cli.command("convert")
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--output",
     "-o",
-    "output_file",
+    "output_file_path",
     type=click.Path(path_type=Path),
     default=None,
     help="Output JSON file (default: input with .json extension)",
 )
-def convert(input_file: Path, output_file_arg: Path | None):
+def convert(input_file_path: Path, output_file_path: Path | None):
     """
     Convert JSONL file to JSON array.
 
     INPUT_FILE is the path to the JSONL file to convert.
     """
-    out_file = output_file_arg if output_file_arg else input_file.with_suffix(".json")
+    out_file = output_file_path if output_file_path else input_file_path.with_suffix(".json")
 
-    output.info(f"📄 Converting {input_file} -> {out_file}")
+    output.info(f"📄 Converting {input_file_path} -> {out_file}")
 
     datasets = []
-    with open(input_file, "r", encoding="utf-8") as f:
+    with open(input_file_path, "r", encoding="utf-8") as f:
         for line_num, line in enumerate(f, 1):
             line = line.strip()
             if not line:

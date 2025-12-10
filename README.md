@@ -59,19 +59,7 @@ See `ecudo/config.example.yaml` for all available options.
 
 ## Architecture
 
-The eCUDO crawler uses a modular architecture:
-
-```
-ecudo/
-├── crawler/        # HTTP client and ID iterators
-├── models/         # Data structures (EcudoRecord)
-├── parsers/        # JSON-LD to model conversion
-├── serializers/    # Model to metadata formats (OpenAIRE)
-├── processors/     # Pipeline (validation, filtering)
-└── orchestration/  # Parallel processing
-```
-
-See [ecudo/ARCHITECTURE.md](ecudo/ARCHITECTURE.md) for detailed documentation.
+See [ARCHITECTURE.md](ecudo/docs/ARCHITECTURE.md) for detailed documentation.
 
 ## License
 

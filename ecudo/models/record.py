@@ -43,6 +43,10 @@ class EcudoRecord:  # pylint: disable=too-many-instance-attributes
         files: List of downloadable files
         spatial: Optional spatial coverage (bounding box)
         temporal: Optional temporal coverage
+        access_level: Access level (e.g., "public", "restricted")
+        contact_name: Contact person/organization name (from contactPoint.fn)
+        contact_email: Contact email (from contactPoint.hasEmail)
+        modified: Last modification date (ISO format)
         _raw: Original raw JSON-LD data (for debugging/extensions)
     """
 
@@ -56,6 +60,10 @@ class EcudoRecord:  # pylint: disable=too-many-instance-attributes
     files: List[FileInfo]
     spatial: Optional[str] = None
     temporal: Optional[str] = None
+    access_level: str = "public"
+    contact_name: Optional[str] = None
+    contact_email: Optional[str] = None
+    modified: Optional[str] = None
 
     # Raw data preserved for debugging and future extensions
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
