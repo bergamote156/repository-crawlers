@@ -67,7 +67,6 @@ class EcudoRecord:  # pylint: disable=too-many-instance-attributes
         if not self.files:
             raise ValueError("at least one file is required")
 
-    @property
-    def raw(self) -> dict:
+    def to_json(self) -> dict:
         """Return underlying raw JSON-LD data."""
         return self._raw

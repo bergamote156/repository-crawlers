@@ -9,6 +9,7 @@ import asyncio
 from collections.abc import AsyncIterable
 from dataclasses import dataclass
 
+from ecudo import output
 from ecudo.processors.base import Processor
 
 
@@ -33,7 +34,6 @@ async def run_parallel_pipeline[I, O](
     *,
     concurrency: int = 128,
     queue_size: int = 1000,
-    verbose: bool = True,
 ) -> ProcessingStats:
     """
     Run pipeline in parallel using producer-consumer pattern.
@@ -50,7 +50,6 @@ async def run_parallel_pipeline[I, O](
         pipeline: Processor pipeline to apply to each item
         concurrency: Number of concurrent workers (default: 128)
         queue_size: Maximum queue size for backpressure (default: 1000)
-        verbose: Print progress messages (default: True)
 
     Returns:
         Processing statistics
@@ -75,11 +74,6 @@ async def run_parallel_pipeline[I, O](
     queue: asyncio.Queue[I | None] = asyncio.Queue(maxsize=queue_size)
     stats = ProcessingStats()
 
-    def _log(message: str) -> None:
-        """Print message if verbose mode is enabled."""
-        if verbose:
-            print(message)
-
     async def producer():
         """Push items from source to queue."""
         try:
@@ -87,7 +81,7 @@ async def run_parallel_pipeline[I, O](
                 await queue.put(item)
                 stats.queued += 1
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            _log(f"❌ Producer error: {exc}")
+            output.error(f"❌ Producer error: {exc}")
         finally:
             # Send sentinel values to signal workers to stop
             for _ in range(concurrency):
@@ -110,7 +104,9 @@ async def run_parallel_pipeline[I, O](
 
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 item_str = str(item)[:50] if item else "?"
-                _log(f"⚠️ Worker {worker_id} error processing {item_str}: {exc}")
+                output.warning(
+                    f"⚠️ Worker {worker_id} error processing {item_str}: {exc}"
+                )
                 stats.failed += 1
             finally:
                 queue.task_done()
@@ -126,7 +122,7 @@ async def run_parallel_pipeline[I, O](
     await asyncio.gather(*worker_tasks)
 
     # Print summary
-    _log("\n✅ Parallel processing complete!")
-    _log(f"   {stats}")
+    output.info("\n✅ Parallel processing complete!")
+    output.info(f"   {stats}")
 
     return stats

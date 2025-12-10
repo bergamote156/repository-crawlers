@@ -54,6 +54,16 @@ output:
   # Directory for output files
   dir: "./data"
 
+# Logging settings
+logging:
+  # Log level: debug, info, warning, error, silent
+  # - debug: Show all messages (most verbose)
+  # - info: Show progress and statistics (default)
+  # - warning: Show only warnings and errors (quiet mode)
+  # - error: Show only errors
+  # - silent: Suppress all output except summary
+  level: "info"
+
 # Environment variables reference:
 # 
 # ECUDO_BASE_URL - Crawler base URL
@@ -67,3 +77,4 @@ output:
 # ECUDO_DIVERSITY_SIMILARITY_THRESHOLD - Similarity threshold
 # ECUDO_URL_VALIDATOR_ENABLED - Enable URL validation (true/false)
 # ECUDO_OUTPUT_DIR - Output directory
+# ECUDO_LOG_LEVEL - Log level (debug/info/warning/error/silent)

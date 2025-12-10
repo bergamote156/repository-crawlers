@@ -58,12 +58,20 @@ class OutputConfig:
 
 
 @dataclass
+class LoggingConfig:
+    """Logging configuration."""
+
+    level: str = "info"  # debug, info, warning, error, silent
+
+
+@dataclass
 class Config:
     """Main configuration."""
 
     crawler: CrawlerConfig = field(default_factory=CrawlerConfig)
     processors: ProcessorsConfig = field(default_factory=ProcessorsConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
+    logging: LoggingConfig = field(default_factory=LoggingConfig)
 
 
 def _get_env(key: str, default: Optional[str] = None) -> Optional[str]:
@@ -111,6 +119,10 @@ def _load_from_env() -> dict:
     if output_dir := _get_env("OUTPUT_DIR"):
         config.setdefault("output", {})["dir"] = output_dir
 
+    # Logging settings
+    if log_level := _get_env("LOG_LEVEL"):
+        config.setdefault("logging", {})["level"] = log_level.lower()
+
     return config
 
 
@@ -139,6 +151,7 @@ def _dict_to_config(data: dict) -> Config:
     crawler_data = data.get("crawler", {})
     processors_data = data.get("processors", {})
     output_data = data.get("output", {})
+    logging_data = data.get("logging", {})
 
     crawler = CrawlerConfig(**crawler_data) if crawler_data else CrawlerConfig()
 
@@ -159,8 +172,11 @@ def _dict_to_config(data: dict) -> Config:
     )
 
     output = OutputConfig(**output_data) if output_data else OutputConfig()
+    logging = LoggingConfig(**logging_data) if logging_data else LoggingConfig()
 
-    return Config(crawler=crawler, processors=processors, output=output)
+    return Config(
+        crawler=crawler, processors=processors, output=output, logging=logging
+    )
 
 
 def load_config(
@@ -215,5 +231,8 @@ def config_to_dict(config: Config) -> dict:
         },
         "output": {
             "dir": config.output.dir,
+        },
+        "logging": {
+            "level": config.logging.level,
         },
     }

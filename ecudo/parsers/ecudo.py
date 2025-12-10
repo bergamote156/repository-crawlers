@@ -4,6 +4,7 @@ from contextlib import suppress
 from typing import Optional
 from urllib.parse import urlparse
 
+from ecudo import output
 from ecudo.models.record import EcudoRecord, FileInfo
 
 
@@ -19,17 +20,17 @@ def parse_record(raw: dict) -> Optional[EcudoRecord]:
     """
     identifier = raw.get("identifier")
     if not identifier:
-        print("⚠️ Skipping record: missing identifier")
+        output.debug("⚠️ Skipping record: missing identifier")
         return None
 
     distributions = raw.get("distribution", [])
     if not distributions:
-        print(f"⚠️ Skipping {identifier}: no distribution URLs")
+        output.debug(f"⚠️ Skipping {identifier}: no distribution URLs")
         return None
 
     files = parse_files(distributions)
     if not files:
-        print(f"⚠️ Skipping {identifier}: no valid download URLs")
+        output.debug(f"⚠️ Skipping {identifier}: no valid download URLs")
         return None
 
     publisher = parse_publisher(raw.get("publisher"))
@@ -49,7 +50,7 @@ def parse_record(raw: dict) -> Optional[EcudoRecord]:
             _raw=raw,
         )
     except ValueError as e:
-        print(f"⚠️ Skipping {identifier}: {e}")
+        output.debug(f"⚠️ Skipping {identifier}: {e}")
         return None
 
 

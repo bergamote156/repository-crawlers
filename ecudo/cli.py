@@ -12,7 +12,7 @@ from pathlib import Path
 import click
 import yaml
 
-from ecudo import __version__
+from ecudo import __version__, output
 from ecudo.config import Config, config_to_dict, load_config
 from ecudo.crawler import EcudoCrawler
 from ecudo.ecudo_api import EcudoClient
@@ -32,14 +32,28 @@ from ecudo.ecudo_api import EcudoClient
     "-q",
     is_flag=True,
     default=False,
-    help="Suppress progress messages (only errors and summary)",
+    help="Suppress progress messages (only warnings, errors and summary)",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Show detailed debug output",
 )
 @click.pass_context
-def cli(ctx: click.Context, config_file: Path | None, quiet: bool):
+def cli(ctx: click.Context, config_file: Path | None, quiet: bool, verbose: bool):
     """eCUDO Crawler - Discover and process public scientific datasets."""
     ctx.ensure_object(dict)
     ctx.obj["config_file"] = config_file
-    ctx.obj["quiet"] = quiet
+
+    # Determine log level from flags (verbose takes precedence)
+    if verbose:
+        ctx.obj["log_level"] = "debug"
+    elif quiet:
+        ctx.obj["log_level"] = "warning"
+    else:
+        ctx.obj["log_level"] = None  # Use config/env default
 
 
 @cli.command()
@@ -138,19 +152,29 @@ def crawl(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     if queue_size is not None:
         cli_overrides.setdefault("crawler", {})["queue_size"] = queue_size
 
+    # Apply log level from CLI flags
+    if log_level := ctx.obj.get("log_level"):
+        cli_overrides.setdefault("logging", {})["level"] = log_level
+
     config = load_config(
         config_file=ctx.obj.get("config_file"),
         cli_overrides=cli_overrides if cli_overrides else None,
     )
 
+    # Initialize output module with configured level
+    output.set_level(config.logging.level)
+
     crawler = EcudoCrawler(
         organization=organization,
         config=config,
         max_records=max_records,
-        quiet=ctx.obj.get("quiet", False),
     )
 
-    asyncio.run(crawler.run())
+    try:
+        asyncio.run(crawler.run())
+    except KeyboardInterrupt:
+        # Graceful shutdown handled in crawler.run()
+        pass
 
 
 @cli.command("list-orgs")
@@ -164,16 +188,16 @@ def list_orgs(ctx: click.Context):
 async def _list_organizations(config: Config):
     """Async implementation of list-orgs command."""
     async with EcudoClient(base_url=config.crawler.base_url) as client:
-        print("📡 Fetching list of organizations...")
+        output.info("📡 Fetching list of organizations...")
         organizations = await client.get_organizations()
 
         if not organizations:
-            print("❌ Failed to fetch organizations.")
+            output.error("❌ Failed to fetch organizations.")
             sys.exit(1)
 
-        print(f"\n✅ Found {len(organizations)} organizations:\n")
-        print(f"{'ID':<10} {'Name':<60} {'Link'}")
-        print("-" * 100)
+        output.always(f"\n✅ Found {len(organizations)} organizations:\n")
+        output.always(f"{'ID':<10} {'Name':<60} {'Link'}")
+        output.always("-" * 100)
 
         for org in organizations:
             org_id = org.get("id", "?")
@@ -183,7 +207,7 @@ async def _list_organizations(config: Config):
                 if isinstance(org.get("link"), list)
                 else org.get("link", "")
             )
-            print(f"{org_id:<10} {name:<60} {link}")
+            output.always(f"{org_id:<10} {name:<60} {link}")
 
 
 @cli.command("convert")
@@ -196,16 +220,15 @@ async def _list_organizations(config: Config):
     default=None,
     help="Output JSON file (default: input with .json extension)",
 )
-def convert(input_file: Path, output_file: Path | None):
+def convert(input_file: Path, output_file_arg: Path | None):
     """
     Convert JSONL file to JSON array.
 
     INPUT_FILE is the path to the JSONL file to convert.
     """
-    if output_file is None:
-        output_file = input_file.with_suffix(".json")
+    out_file = output_file_arg if output_file_arg else input_file.with_suffix(".json")
 
-    print(f"📄 Converting {input_file} -> {output_file}")
+    output.info(f"📄 Converting {input_file} -> {out_file}")
 
     datasets = []
     with open(input_file, "r", encoding="utf-8") as f:
@@ -216,13 +239,13 @@ def convert(input_file: Path, output_file: Path | None):
             try:
                 datasets.append(json.loads(line))
             except json.JSONDecodeError as e:
-                print(f"⚠️ Skipping invalid JSON on line {line_num}: {e}")
+                output.warning(f"⚠️ Skipping invalid JSON on line {line_num}: {e}")
 
-    with open(output_file, "w", encoding="utf-8") as f:
+    with open(out_file, "w", encoding="utf-8") as f:
         json.dump(datasets, f, ensure_ascii=False, indent=2)
 
-    print(f"✅ Converted {len(datasets)} records")
-    print(f"   Output: {output_file}")
+    output.always(f"✅ Converted {len(datasets)} records")
+    output.always(f"   Output: {out_file}")
 
 
 @cli.command("show-config")
@@ -232,8 +255,8 @@ def show_config(ctx: click.Context):
     config = load_config(config_file=ctx.obj.get("config_file"))
     config_dict = config_to_dict(config)
 
-    print("Current configuration:\n")
-    print(yaml.dump(config_dict, default_flow_style=False, sort_keys=False))
+    output.always("Current configuration:\n")
+    output.always(yaml.dump(config_dict, default_flow_style=False, sort_keys=False))
 
 
 def main():

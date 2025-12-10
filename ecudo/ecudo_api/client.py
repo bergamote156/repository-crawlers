@@ -12,6 +12,8 @@ from typing import Optional
 
 import aiohttp  # type: ignore[import-not-found]
 
+from ecudo import output
+
 
 class EcudoClient:
     """
@@ -89,19 +91,21 @@ class EcudoClient:
                         return await resp.json()
 
                     text = await resp.text()
-                    print(f"❌ Error {resp.status} fetching {url}: {text[:100]}")
+                    output.error(f"❌ Error {resp.status} fetching {url}: {text[:100]}")
                     return {}
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self.max_retries:
                     wait = 2**attempt
-                    print(
+                    output.debug(
                         f"⚠️ Attempt {attempt}/{self.max_retries} failed: {exc}. "
                         f"Retrying in {wait}s..."
                     )
                     await asyncio.sleep(wait)
                     continue
 
-                print(f"❌ All {self.max_retries} attempts failed for {url}: {exc}")
+                output.error(
+                    f"❌ All {self.max_retries} attempts failed for {url}: {exc}"
+                )
                 return {}
         return {}
 
@@ -162,5 +166,5 @@ class EcudoClient:
             async with self.session.head(url, allow_redirects=True) as resp:
                 return resp.status == 200
         except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            print(f"⚠️ URL validation failed for {url}: {exc}")
+            output.debug(f"⚠️ URL validation failed for {url}: {exc}")
             return False

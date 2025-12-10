@@ -6,6 +6,7 @@ Processors that validate dataset records.
 
 from typing import Optional
 
+from ecudo import output
 from ecudo.ecudo_api.client import EcudoClient
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
@@ -48,7 +49,9 @@ class URLValidator(Processor[EcudoRecord, EcudoRecord]):
 
             if not is_valid:
                 self._failed += 1
-                print(f"⚠️ Invalid URL in {item.identifier[:50]}: {file_info.url}")
+                output.debug(
+                    f"⚠️ Invalid URL in {item.identifier[:50]}: {file_info.url}"
+                )
                 return None
 
         self._validated += 1
@@ -58,7 +61,7 @@ class URLValidator(Processor[EcudoRecord, EcudoRecord]):
         """Print validation statistics."""
         total = self._validated + self._failed
         if total > 0:
-            print("\n📊 URL Validator Statistics:")
-            print(f"   Validated: {self._validated}")
-            print(f"   Failed: {self._failed}")
-            print(f"   Pass rate: {self._validated / total:.1%}")
+            output.stats("\n📊 URL Validator Statistics:")
+            output.stats(f"   Validated: {self._validated}")
+            output.stats(f"   Failed: {self._failed}")
+            output.stats(f"   Pass rate: {self._validated / total:.1%}")

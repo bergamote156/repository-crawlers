@@ -34,7 +34,7 @@ class OnedataDataset:
     metadata_xml: str
     files: list[OnedataFile] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_json(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
             "name": self.name,

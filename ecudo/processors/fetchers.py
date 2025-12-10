@@ -6,6 +6,7 @@ Processors that fetch data from external sources.
 
 from typing import TYPE_CHECKING, Callable
 
+from ecudo import output
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
 
@@ -75,7 +76,7 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
         """Print fetch statistics."""
         total = self._fetched + self._failed
         if total > 0:
-            print("\n📊 Metadata Fetcher Statistics:")
-            print(f"   Fetched: {self._fetched}")
-            print(f"   Parsed: {self._parsed}")
-            print(f"   Failed: {self._failed}")
+            output.stats("\n📊 Metadata Fetcher Statistics:")
+            output.stats(f"   Fetched: {self._fetched}")
+            output.stats(f"   Parsed: {self._parsed}")
+            output.stats(f"   Failed: {self._failed}")

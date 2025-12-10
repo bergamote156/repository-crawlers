@@ -11,7 +11,7 @@ from ecudo.processors.fetchers import MetadataFetcher
 from ecudo.processors.filters import DiversityFilter
 from ecudo.processors.pipeline import ProcessorPipeline
 from ecudo.processors.validators import URLValidator
-from ecudo.processors.writers import JSONLWriter, JSONWriter, RawRecordWriter
+from ecudo.processors.writers import JSONLWriter
 
 __all__ = [
     # Base
@@ -28,6 +28,4 @@ __all__ = [
     "OnedataConverter",
     # Writers
     "JSONLWriter",
-    "JSONWriter",
-    "RawRecordWriter",
 ]

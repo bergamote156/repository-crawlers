@@ -7,6 +7,7 @@ Processors that filter dataset records based on various criteria.
 from difflib import SequenceMatcher
 from typing import Optional
 
+from ecudo import output
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
 
@@ -87,23 +88,25 @@ class DiversityFilter(Processor[EcudoRecord, EcudoRecord]):
 
     async def close(self) -> None:
         """Print diversity statistics."""
-        print("\n📊 Diversity Filter Statistics:")
-        print(f"   Total groups: {len(self._title_groups)}")
-        print(f"   Accepted: {self._accepted}")
-        print(f"   Skipped: {self._skipped}")
+        output.stats("\n📊 Diversity Filter Statistics:")
+        output.stats(f"   Total groups: {len(self._title_groups)}")
+        output.stats(f"   Accepted: {self._accepted}")
+        output.stats(f"   Skipped: {self._skipped}")
 
         if self._title_groups:
-            print("   Top groups:")
+            output.stats("   Top groups:")
             # Sort by count descending
             sorted_groups = sorted(
                 self._title_groups, key=lambda g: g["count"], reverse=True
             )
             for i, group in enumerate(sorted_groups[:10], 1):
                 title_preview = group["representative"][:50]
-                print(f"     {i}. '{title_preview}...' ({group['count']} records)")
+                output.stats(
+                    f"     {i}. '{title_preview}...' ({group['count']} records)"
+                )
 
             if len(self._title_groups) > 10:
-                print(f"     ... and {len(self._title_groups) - 10} more groups")
+                output.stats(f"     ... and {len(self._title_groups) - 10} more groups")
 
 
 def _calculate_similarity(text1: str, text2: str) -> float:

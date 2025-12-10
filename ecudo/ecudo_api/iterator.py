@@ -7,6 +7,7 @@ Lightweight - fetches only IDs (small payloads), not full metadata.
 
 from typing import AsyncIterator, Optional
 
+from ecudo import output
 from ecudo.ecudo_api.client import EcudoClient
 
 
@@ -79,13 +80,13 @@ class EcudoRecordIDIterator:
                 self._yielded += 1
 
                 if self.max_records and self._yielded >= self.max_records:
-                    print(f"📄 Reached max_records limit: {self.max_records}")
+                    output.debug(f"📄 Reached max_records limit: {self.max_records}")
                     return
 
             self._page += 1
-            print(f"📄 Page {self._page} | {self._yielded} IDs fetched")
+            output.debug(f"📄 Page {self._page} | {self._yielded} IDs fetched")
 
-        print(f"📦 ID iteration complete. Total: {self._yielded}")
+        output.info(f"📦 ID iteration complete. Total: {self._yielded}")
 
     @property
     def yielded_count(self) -> int:

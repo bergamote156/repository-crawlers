@@ -5,10 +5,12 @@ High-level orchestration for crawling eCUDO organizations.
 Integrates all components: API client, parsers, processors, and parallel execution.
 """
 
+import asyncio
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
 
+from ecudo import output
 from ecudo.config import Config
 from ecudo.ecudo_api import EcudoClient, EcudoRecordIDIterator
 from ecudo.metadata import openaire
@@ -17,10 +19,10 @@ from ecudo.parsers.ecudo import parse_record
 from ecudo.processors import DiversityFilter, Processor, ProcessorPipeline, URLValidator
 from ecudo.processors.converters import OnedataConverter
 from ecudo.processors.fetchers import MetadataFetcher
-from ecudo.processors.writers import JSONLWriter, RawRecordWriter
+from ecudo.processors.writers import JSONLWriter
 
 
-class EcudoCrawler:
+class EcudoCrawler:  # pylint: disable=too-few-public-methods
     """Orchestrates crawling of an eCUDO organization."""
 
     def __init__(
@@ -28,82 +30,87 @@ class EcudoCrawler:
         organization: str,
         config: Config,
         max_records: int | None = None,
-        quiet: bool = False,
     ):
         self.organization = organization
         self.config = config
         self.max_records = max_records
-        self.quiet = quiet
 
-        output_dir = Path(self.config.output.dir)
+        output_dir = Path(config.output.dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-        self._raw_output = output_dir / f"{self.organization}_raw.jsonl"
-        self._processed_output = output_dir / f"{self.organization}_processed.jsonl"
+        self.raw_output_file = output_dir / f"{self.organization}_raw.jsonl"
+        self.processed_output_file = output_dir / f"{self.organization}_processed.jsonl"
 
-    def log(self, message: str) -> None:
-        """Print message if not in quiet mode."""
-        if not self.quiet:
-            print(message)
+        self.interrupted = False
 
     async def run(self) -> None:
         """Execute the crawl."""
-        self.log("=" * 80)
-        self.log(f"eCUDO Crawler - Organization: {self.organization.upper()}")
-        self.log("=" * 80)
+        output.info("=" * 80)
+        output.info(f"eCUDO Crawler - Organization: {self.organization.upper()}")
+        output.info("=" * 80)
 
-        async with AsyncExitStack() as stack:
-            client = await stack.enter_async_context(
-                EcudoClient(
-                    base_url=self.config.crawler.base_url,
-                    timeout=self.config.crawler.timeout,
-                    max_retries=self.config.crawler.max_retries,
+        try:
+            async with AsyncExitStack() as stack:
+                client = await stack.enter_async_context(
+                    EcudoClient(
+                        base_url=self.config.crawler.base_url,
+                        timeout=self.config.crawler.timeout,
+                        max_retries=self.config.crawler.max_retries,
+                    )
                 )
-            )
 
-            await self._validate_organization(client)
+                await self._validate_organization(client)
 
-            processors = self._build_pipeline_processors(client)
-            pipeline: ProcessorPipeline = ProcessorPipeline(processors)
-            await pipeline.open()
-            stack.push_async_callback(pipeline.close)
+                record_id_iterator = self._build_record_iterator(client)
 
-            id_iterator = EcudoRecordIDIterator(
-                client=client,
-                org_id=self.organization,
-                page_size=self.config.crawler.page_size,
-                max_records=self.max_records,
-            )
+                pipeline = self._build_pipeline(client)
+                await pipeline.open()
+                stack.push_async_callback(pipeline.close)
 
-            stats, pipeline_stats = await self._run_fetcher(id_iterator, pipeline)
-            self._print_summary(stats, pipeline_stats)
+                crawler_stats = await self._crawl(record_id_iterator, pipeline)
+                pipeline_stats = pipeline.get_stats()
+
+                self._print_summary(crawler_stats, pipeline_stats)
+
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            self.interrupted = True
+            output.warning("\n⚠️ Interrupted by user (Ctrl+C)")
+            self._print_summary(None, None)
 
     async def _validate_organization(self, client: EcudoClient) -> None:
         """Ensure the requested organization exists."""
-        self.log("📡 Validating organization...")
+        output.info("📡 Validating organization...")
         orgs = await client.get_organizations()
         if not any(o["id"] == self.organization for o in orgs):
-            print(f"❌ Organization '{self.organization}' not found.")
-            print(f"   Available: {', '.join(o['id'] for o in orgs)}")
+            output.error(f"❌ Organization '{self.organization}' not found.")
+            output.error(f"   Available: {', '.join(o['id'] for o in orgs)}")
             sys.exit(1)
-        self.log(f"✅ Found organization: {self.organization}")
+        output.info(f"✅ Found organization: {self.organization}")
 
-    def _build_pipeline_processors(self, client: EcudoClient) -> list[Processor]:
+    def _build_record_iterator(self, client: EcudoClient) -> EcudoRecordIDIterator:
+        return EcudoRecordIDIterator(
+            client=client,
+            org_id=self.organization,
+            page_size=self.config.crawler.page_size,
+            max_records=self.max_records,
+        )
+
+    def _build_pipeline(self, client: EcudoClient) -> ProcessorPipeline:
         """Assemble the processing pipeline based on configuration."""
-        self.log("\n📦 Building processing pipeline...")
+        output.info("\n📦 Building processing pipeline...")
         processors: list[Processor] = []
 
-        self.log("   ✓ MetadataFetcher: fetch and parse JSON-LD")
+        output.info("   ✓ MetadataFetcher: fetch and parse JSON-LD")
         processors.append(MetadataFetcher(client, parse_record))
 
         if self.config.processors.url_validator.enabled:
-            self.log("   ✓ URLValidator: check URL accessibility")
+            output.info("   ✓ URLValidator: check URL accessibility")
             processors.append(URLValidator(client))
         else:
-            self.log("   ⊘ URLValidator: disabled")
+            output.info("   ⊘ URLValidator: disabled")
 
         if self.config.processors.diversity_filter.enabled:
             df_cfg = self.config.processors.diversity_filter
-            self.log(
+            output.info(
                 f"   ✓ DiversityFilter: max {df_cfg.max_similar} similar "
                 f"({df_cfg.similarity_threshold:.0%} threshold)"
             )
@@ -114,59 +121,62 @@ class EcudoCrawler:
                 )
             )
         else:
-            self.log("   ⊘ DiversityFilter: disabled")
+            output.info("   ⊘ DiversityFilter: disabled")
 
-        self.log(f"   ✓ RawRecordWriter: {self._raw_output}")
-        processors.append(RawRecordWriter(self._raw_output))
+        output.info(f"   ✓ RawRecordWriter: {self.raw_output_file}")
+        processors.append(JSONLWriter(self.raw_output_file))
 
-        self.log("   ✓ OnedataConverter: build Onedata dataset with OpenAIRE XML")
+        output.info("   ✓ OnedataConverter: build Onedata dataset with OpenAIRE XML")
         processors.append(OnedataConverter(openaire.generate_xml))
 
-        self.log(f"   ✓ JSONLWriter: {self._processed_output}")
-        processors.append(JSONLWriter(self._processed_output))
+        output.info(f"   ✓ JSONLWriter: {self.processed_output_file}")
+        processors.append(JSONLWriter(self.processed_output_file))
 
-        return processors
+        return ProcessorPipeline(processors)
 
-    async def _run_fetcher(
-        self,
-        id_iterator: EcudoRecordIDIterator,
-        pipeline: ProcessorPipeline,
-    ) -> tuple[ProcessingStats, dict]:
+    async def _crawl(
+        self, record_id_iterator: EcudoRecordIDIterator, pipeline: ProcessorPipeline
+    ) -> ProcessingStats:
         """Execute the parallel fetcher and return run statistics."""
-        self.log(f"\n🚀 Starting parallel crawl of {self.organization}...")
+        output.info(f"\n🚀 Starting parallel crawl of {self.organization}...")
         if self.max_records:
-            self.log(f"   Limit: {self.max_records} records")
-        self.log(f"   Concurrency: {self.config.crawler.concurrency} workers")
-        self.log(f"   Queue size: {self.config.crawler.queue_size}")
+            output.info(f"   Limit: {self.max_records} records")
+        output.info(f"   Concurrency: {self.config.crawler.concurrency} workers")
+        output.info(f"   Queue size: {self.config.crawler.queue_size}")
 
         stats = await run_parallel_pipeline(
-            id_source=id_iterator,
+            id_source=record_id_iterator,
             pipeline=pipeline,
             concurrency=self.config.crawler.concurrency,
             queue_size=self.config.crawler.queue_size,
-            verbose=not self.quiet,
         )
-        pipeline_stats = pipeline.get_stats()
-        return stats, pipeline_stats
+        return stats
 
-    def _print_summary(self, stats: ProcessingStats, pipeline_stats: dict) -> None:
-        """Print final crawl summary."""
-        print("\n" + "=" * 80)
-        print("Crawl Complete!")
-        print("=" * 80)
-        print(f"Raw datasets saved to:       {self._raw_output}")
-        print(f"Processed datasets saved to: {self._processed_output}")
-        print(f"\nStatistics: {stats}")
+    def _print_summary(
+        self, crawler_stats: ProcessingStats | None, pipeline_stats: dict | None
+    ) -> None:
+        """Print final crawl summary (always shown, even on interrupt)."""
+        output.always("\n" + "=" * 80)
+        if self.interrupted:
+            output.always("Crawl Interrupted!")
+        else:
+            output.always("Crawl Complete!")
+        output.always("=" * 80)
+        output.always(f"Raw datasets saved to:       {self.raw_output_file}")
+        output.always(f"Processed datasets saved to: {self.processed_output_file}")
 
-        if pipeline_stats.get("processors"):
-            print("\nProcessor statistics:")
+        if crawler_stats:
+            output.always(f"\nStatistics: {crawler_stats}")
+
+        if pipeline_stats and pipeline_stats.get("processors"):
+            output.always("\nProcessor statistics:")
             for name, proc_stats in pipeline_stats["processors"].items():
                 stats_str = ", ".join(f"{k}: {v}" for k, v in proc_stats.items())
-                print(f"   {name}: {stats_str}")
+                output.always(f"   {name}: {stats_str}")
 
-        print("\nNext steps:")
-        print(
-            f"  1. Convert JSONL to JSON: python -m ecudo convert {self._processed_output}"
+        output.always("\nNext steps:")
+        output.always(
+            f"  1. Convert JSONL to JSON: python -m ecudo convert {self.processed_output_file}"
         )
-        print("  2. Run dataset_registrar.py with the converted file")
-        print("=" * 80)
+        output.always("  2. Run dataset_registrar.py with the converted file")
+        output.always("=" * 80)

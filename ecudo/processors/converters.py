@@ -6,6 +6,7 @@ Processors that convert between data formats.
 
 from typing import Callable
 
+from ecudo import output
 from ecudo.models.onedata import OnedataDataset, OnedataFile
 from ecudo.models.record import EcudoRecord
 from ecudo.processors.base import Processor
@@ -46,7 +47,9 @@ class OnedataConverter(Processor[EcudoRecord, OnedataDataset]):
             pid=item.identifier,
             metadata_xml=self.metadata_generator(item),
             files=[
-                OnedataFile(name=f.name, url=f.url, path=f.name) for f in item.files
+                # TODO more sophisticated path than name?
+                OnedataFile(name=f.name, url=f.url, path=f.name)
+                for f in item.files
             ],
         )
 
@@ -60,5 +63,5 @@ class OnedataConverter(Processor[EcudoRecord, OnedataDataset]):
     async def close(self) -> None:
         """Print conversion statistics."""
         if self._converted > 0:
-            print("\n📊 Onedata Converter Statistics:")
-            print(f"   Converted: {self._converted}")
+            output.stats("\n📊 Onedata Converter Statistics:")
+            output.stats(f"   Converted: {self._converted}")
