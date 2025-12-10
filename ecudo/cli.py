@@ -226,7 +226,9 @@ def convert(input_file_path: Path, output_file_path: Path | None):
 
     INPUT_FILE is the path to the JSONL file to convert.
     """
-    out_file = output_file_path if output_file_path else input_file_path.with_suffix(".json")
+    out_file = (
+        output_file_path if output_file_path else input_file_path.with_suffix(".json")
+    )
 
     output.info(f"📄 Converting {input_file_path} -> {out_file}")
 

@@ -67,7 +67,9 @@ def parse_record(raw: dict) -> Optional[EcudoRecord]:
         return None
 
     publisher = parse_publisher(raw.get("publisher"), identifier)
-    contact_name, contact_email = parse_contact_point(raw.get("contactPoint"), identifier)
+    contact_name, contact_email = parse_contact_point(
+        raw.get("contactPoint"), identifier
+    )
 
     try:
         return EcudoRecord(
@@ -106,28 +108,24 @@ def _validate_structure(raw: dict, identifier: str) -> None:
     root_type = raw.get("@type")
     if root_type and root_type != EXPECTED_TYPES["root"]:
         output.warning(
-            "Unexpected root @type '%s' (expected '%s') in record %s",
-            root_type,
-            EXPECTED_TYPES["root"],
-            identifier,
+            f"Unexpected root @type '{root_type}' (expected '{EXPECTED_TYPES['root']}')"
+            f" in record {identifier}"
         )
 
     # Check for unknown root fields
     unknown_fields = set(raw.keys()) - KNOWN_ROOT_FIELDS
     if unknown_fields:
         output.warning(
-            "Unknown fields %s in record %s - consider updating parser",
-            unknown_fields,
-            identifier,
+            f"Unknown fields {sorted(unknown_fields)} in record {identifier} - consider"
+            " updating parser"
         )
 
     # Check accessLevel
     access_level = raw.get("accessLevel")
     if access_level and access_level not in KNOWN_ACCESS_LEVELS:
         output.warning(
-            "Unknown accessLevel '%s' in record %s - verify COAR mapping",
-            access_level,
-            identifier,
+            f"Unknown accessLevel '{access_level}' in record {identifier} - verify COAR"
+            " mapping"
         )
 
     # Check publisher @type if present
@@ -136,10 +134,8 @@ def _validate_structure(raw: dict, identifier: str) -> None:
         pub_type = publisher.get("@type")
         if pub_type and pub_type != EXPECTED_TYPES["publisher"]:
             output.warning(
-                "Unexpected publisher @type '%s' (expected '%s') in record %s",
-                pub_type,
-                EXPECTED_TYPES["publisher"],
-                identifier,
+                f"Unexpected publisher @type '{pub_type}' (expected"
+                f" '{EXPECTED_TYPES['publisher']}') in record {identifier}"
             )
 
     # Check contactPoint @type if present
@@ -148,10 +144,8 @@ def _validate_structure(raw: dict, identifier: str) -> None:
         contact_type = contact.get("@type")
         if contact_type and contact_type != EXPECTED_TYPES["contactPoint"]:
             output.warning(
-                "Unexpected contactPoint @type '%s' (expected '%s') in record %s",
-                contact_type,
-                EXPECTED_TYPES["contactPoint"],
-                identifier,
+                f"Unexpected contactPoint @type '{contact_type}' (expected"
+                f" '{EXPECTED_TYPES['contactPoint']}') in record {identifier}"
             )
 
 
@@ -172,10 +166,8 @@ def parse_files(distributions: list, identifier: str = "") -> list[FileInfo]:
         dist_type = dist.get("@type")
         if dist_type and dist_type != EXPECTED_TYPES["distribution"]:
             output.warning(
-                "Unexpected distribution @type '%s' (expected '%s') in record %s",
-                dist_type,
-                EXPECTED_TYPES["distribution"],
-                identifier,
+                f"Unexpected distribution @type '{dist_type}' (expected"
+                f" '{EXPECTED_TYPES['distribution']}') in record {identifier}"
             )
 
         url = dist.get("downloadURL")
@@ -214,14 +206,15 @@ def parse_publisher(publisher_data, identifier: str = "") -> str:
         return publisher_data
 
     output.warning(
-        "Unexpected publisher type %s in record %s",
-        type(publisher_data).__name__,
-        identifier,
+        f"Unexpected publisher type {type(publisher_data).__name__} in record"
+        f" {identifier}"
     )
     return "Unknown Publisher"
 
 
-def parse_contact_point(contact_data, identifier: str = "") -> Tuple[Optional[str], Optional[str]]:
+def parse_contact_point(
+    contact_data, identifier: str = ""
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Parse contactPoint field to extract contact name and email.
 
@@ -237,9 +230,8 @@ def parse_contact_point(contact_data, identifier: str = "") -> Tuple[Optional[st
 
     if not isinstance(contact_data, dict):
         output.warning(
-            "Unexpected contactPoint type %s in record %s",
-            type(contact_data).__name__,
-            identifier,
+            f"Unexpected contactPoint type {type(contact_data).__name__} in record"
+            f" {identifier}"
         )
         return None, None
 
