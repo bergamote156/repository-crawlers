@@ -61,28 +61,6 @@ class ProcessorPipeline[I, O](Processor[I, O]):
         self._processed += 1
         return cast(O, current)
 
-    def get_stats(self) -> dict:
-        """
-        Aggregate statistics from all processors.
-
-        Returns:
-            Dictionary with pipeline stats and per-processor stats
-        """
-        stats = {
-            "pipeline": {
-                "processed": self._processed,
-                "filtered": self._filtered,
-            },
-            "processors": {},
-        }
-
-        for processor in self.processors:
-            name = type(processor).__name__
-            if hasattr(processor, "get_stats"):
-                stats["processors"][name] = processor.get_stats()
-
-        return stats
-
     def __len__(self) -> int:
         """Return number of processors in pipeline."""
         return len(self.processors)

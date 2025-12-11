@@ -1,11 +1,11 @@
-"""Utilities for parsing eCUDO JSON-LD responses into EcudoRecord objects."""
+"""Utilities for parsing eCUDO JSON-LD responses into EcudoDataset objects."""
 
 from contextlib import suppress
-from typing import Optional, Tuple
+from typing import Optional
 from urllib.parse import urlparse
 
 from ecudo import output
-from ecudo.models.record import EcudoRecord, FileInfo
+from ecudo.models.ecudo import EcudoDataset, EcudoFile
 
 # Expected @type values for structure validation
 EXPECTED_TYPES = {
@@ -19,34 +19,35 @@ EXPECTED_TYPES = {
 KNOWN_ROOT_FIELDS = {
     "@context",
     "@type",
-    "identifier",
-    "title",
-    "description",
-    "publisher",
-    "issued",
-    "modified",
-    "language",
     "accessLevel",
+    "contactPoint",
+    "description",
+    "distribution",
+    "identifier",
+    "issued",
     "keywords",
+    "language",
+    "license",
+    "modified",
+    "publisher",
     "spatial",
     "temporal",
-    "contactPoint",
-    "distribution",
+    "title",
 }
 
 # Known accessLevel values
 KNOWN_ACCESS_LEVELS = {"public"}
 
 
-def parse_record(raw: dict) -> Optional[EcudoRecord]:
+def parse_record(raw: dict) -> Optional[EcudoDataset]:
     """
-    Parse raw eCUDO JSON-LD to structured EcudoRecord.
+    Parse raw eCUDO JSON-LD to structured EcudoDataset.
 
     Args:
         raw: Raw JSON-LD dict from eCUDO API
 
     Returns:
-        EcudoRecord if valid, None if record is invalid/incomplete
+        EcudoDataset if valid, None if record is invalid/incomplete
     """
     identifier = raw.get("identifier")
     if not identifier:
@@ -67,26 +68,21 @@ def parse_record(raw: dict) -> Optional[EcudoRecord]:
         return None
 
     publisher = parse_publisher(raw.get("publisher"), identifier)
-    contact_name, contact_email = parse_contact_point(
-        raw.get("contactPoint"), identifier
-    )
 
     try:
-        return EcudoRecord(
+        return EcudoDataset(
             identifier=identifier,
             title=raw.get("title", "Untitled Dataset"),
             description=raw.get("description", ""),
             publisher=publisher,
-            issued=raw.get("issued", raw.get("modified", "")),
             language=raw.get("language", "en"),
             keywords=raw.get("keywords", []),
             files=files,
+            issued=raw.get("issued", raw.get("modified", "")),
+            modified=raw.get("modified"),
             spatial=raw.get("spatial"),
             temporal=raw.get("temporal"),
             access_level=raw.get("accessLevel", "public"),
-            contact_name=contact_name,
-            contact_email=contact_email,
-            modified=raw.get("modified"),
             _raw=raw,
         )
     except ValueError as e:
@@ -149,7 +145,7 @@ def _validate_structure(raw: dict, identifier: str) -> None:
             )
 
 
-def parse_files(distributions: list, identifier: str = "") -> list[FileInfo]:
+def parse_files(distributions: list, identifier: str = "") -> list[EcudoFile]:
     """
     Parse distribution array into FileInfo list.
 
@@ -175,7 +171,7 @@ def parse_files(distributions: list, identifier: str = "") -> list[FileInfo]:
             continue
 
         files.append(
-            FileInfo(
+            EcudoFile(
                 name=extract_filename(url),
                 url=url,
                 format=dist.get("format"),
@@ -210,35 +206,6 @@ def parse_publisher(publisher_data, identifier: str = "") -> str:
         f" {identifier}"
     )
     return "Unknown Publisher"
-
-
-def parse_contact_point(
-    contact_data, identifier: str = ""
-) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Parse contactPoint field to extract contact name and email.
-
-    Args:
-        contact_data: ContactPoint field from JSON-LD (dict or None)
-        identifier: Record identifier for logging context
-
-    Returns:
-        Tuple of (contact_name, contact_email), both may be None
-    """
-    if not contact_data:
-        return None, None
-
-    if not isinstance(contact_data, dict):
-        output.warning(
-            f"Unexpected contactPoint type {type(contact_data).__name__} in record"
-            f" {identifier}"
-        )
-        return None, None
-
-    contact_name = contact_data.get("fn")
-    contact_email = contact_data.get("hasEmail")
-
-    return contact_name, contact_email
 
 
 def extract_filename(url: str) -> str:

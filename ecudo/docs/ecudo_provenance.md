@@ -76,8 +76,8 @@ via OAI-PMH.
 | Element | Description | Source | Example |
 |---------|-------------|--------|---------|
 | `baseURL` | URL of the originating repository | Constant for ECUDO | `https://odis.ecudo.pl/` |
-| `identifier` | Original identifier in source repository | `EcudoRecord.identifier` | `urn:SDN:CDI:iopan.pl:uuid:...` |
-| `datestamp` | Last modification date in source | `EcudoRecord.modified` | `2022-10-08` |
+| `identifier` | Original identifier in source repository | `EcudoDataset.identifier` | `urn:SDN:CDI:iopan.pl:uuid:...` |
+| `datestamp` | Last modification date in source | `EcudoDataset.modified` | `2022-10-08` |
 | `metadataNamespace` | Namespace/schema of original format | Constant for ECUDO | `http://www.w3.org/ns/json-ld#` |
 
 ## Important Clarifications
@@ -119,11 +119,11 @@ The `altered` attribute must be `true` because:
 2. Schema transforms from DCAT to DataCite/OpenAIRE
 3. Field mappings are applied (e.g., `publisher.name` → `datacite:creator`)
 
-## Data Availability in EcudoRecord
+## Data Availability in EcudoDataset
 
-Most provenance data is already available in `EcudoRecord`:
+Most provenance data is already available in `EcudoDataset`:
 
-| Provenance Field | Available in EcudoRecord | Notes |
+| Provenance Field | Available in EcudoDataset | Notes |
 |------------------|--------------------------|-------|
 | `identifier` | ✅ `record.identifier` | Directly available |
 | `datestamp` | ✅ `record.modified` | Directly available |
@@ -143,7 +143,7 @@ When implementing provenance generation:
    ```
 
 2. **Harvest timestamp** - Must be captured when crawling and passed through
-   the processing pipeline (not currently stored in `EcudoRecord`).
+   the processing pipeline (not currently stored in `EcudoDataset`).
 
 3. **XML generation** - Can be added as a new function in `openaire.py` or
    a separate module for OAI-PMH record wrapping.

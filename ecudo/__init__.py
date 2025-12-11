@@ -9,7 +9,7 @@ Architecture Overview
 The crawler is organized into several modules with clear responsibilities:
 
 - **ecudo_api/**: Low-level HTTP client and ID iterators for eCUDO API
-- **models/**: Data structures (EcudoRecord, FileInfo, OnedataDataset)
+- **models/**: Data structures (EcudoDataset, EcudoFile, OnedataDataset, OnedataFile)
 - **parsers/**: JSON-LD to model conversion
 - **metadata/**: Metadata format generators (OpenAIRE, etc.)
 - **processors/**: Pipeline processors (fetching, validation, filtering, writing)

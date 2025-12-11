@@ -7,23 +7,23 @@ Processors that fetch data from external sources.
 from typing import TYPE_CHECKING, Callable
 
 from ecudo import output
-from ecudo.models.record import EcudoRecord
+from ecudo.models.ecudo import EcudoDataset
 from ecudo.processors.base import Processor
 
 if TYPE_CHECKING:
     from ecudo.ecudo_api.client import EcudoClient
 
 
-class MetadataFetcher(Processor[str, EcudoRecord]):
+class DatasetFetcher(Processor[str, EcudoDataset]):
     """
-    Fetches and parses metadata for a record ID.
+    Fetches and parses metadata for a dataset ID.
 
     Combines HTTP fetching with JSON-LD parsing into a single
     pipeline step.
     """
 
     def __init__(
-        self, client: "EcudoClient", parser: Callable[[dict], EcudoRecord | None]
+        self, client: "EcudoClient", parser: Callable[[dict], EcudoDataset | None]
     ):
         """
         Initialize metadata fetcher.
@@ -38,17 +38,17 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
         self._parsed = 0
         self._failed = 0
 
-    async def process(self, item: str) -> EcudoRecord | None:
+    async def process(self, item: str) -> EcudoDataset | None:
         """
-        Fetch and parse metadata for a record.
+        Fetch and parse metadata for a dataset.
 
         Args:
-            item: URN identifier of the record
+            item: URN identifier of the dataset
 
         Returns:
-            Parsed EcudoRecord or None if fetch/parse failed
+            Parsed EcudoDataset or None if fetch/parse failed
         """
-        raw = await self.client.get_record_metadata(item)
+        raw = await self.client.get_dataset_metadata(item)
 
         if not raw:
             self._failed += 1
@@ -56,21 +56,13 @@ class MetadataFetcher(Processor[str, EcudoRecord]):
 
         self._fetched += 1
 
-        record = self.parser(raw)
-        if record:
+        dataset = self.parser(raw)
+        if dataset:
             self._parsed += 1
         else:
             self._failed += 1
 
-        return record
-
-    def get_stats(self) -> dict:
-        """Return fetcher statistics."""
-        return {
-            "fetched": self._fetched,
-            "parsed": self._parsed,
-            "failed": self._failed,
-        }
+        return dataset
 
     async def close(self) -> None:
         """Print fetch statistics."""

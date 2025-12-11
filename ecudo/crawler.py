@@ -12,13 +12,13 @@ from pathlib import Path
 
 from ecudo import output
 from ecudo.config import Config
-from ecudo.ecudo_api import EcudoClient, EcudoRecordIDIterator
+from ecudo.ecudo_api import EcudoClient, EcudoDatasetIDIterator
 from ecudo.metadata import openaire
-from ecudo.orchestration import ProcessingStats, run_parallel_pipeline
+from ecudo.orchestration import run_parallel_pipeline
 from ecudo.parsers.ecudo import parse_record
 from ecudo.processors import DiversityFilter, Processor, ProcessorPipeline, URLValidator
 from ecudo.processors.converters import OnedataConverter
-from ecudo.processors.fetchers import MetadataFetcher
+from ecudo.processors.fetchers import DatasetFetcher
 from ecudo.processors.writers import JSONLWriter
 
 
@@ -29,11 +29,11 @@ class EcudoCrawler:  # pylint: disable=too-few-public-methods
         self,
         organization: str,
         config: Config,
-        max_records: int | None = None,
+        max_datasets: int | None = None,
     ):
         self.organization = organization
         self.config = config
-        self.max_records = max_records
+        self.max_datasets = max_datasets
 
         output_dir = Path(config.output.dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -60,38 +60,37 @@ class EcudoCrawler:  # pylint: disable=too-few-public-methods
 
                 await self._validate_organization(client)
 
-                record_id_iterator = self._build_record_iterator(client)
+                dataset_id_iterator = self._build_dataset_iterator(client)
 
                 pipeline = self._build_pipeline(client)
                 await pipeline.open()
                 stack.push_async_callback(pipeline.close)
 
-                crawler_stats = await self._crawl(record_id_iterator, pipeline)
-                pipeline_stats = pipeline.get_stats()
+                await self._crawl(dataset_id_iterator, pipeline)
 
-                self._print_summary(crawler_stats, pipeline_stats)
+                self._print_summary()
 
         except (KeyboardInterrupt, asyncio.CancelledError):
             self.interrupted = True
-            output.warning("\n⚠️ Interrupted by user (Ctrl+C)")
-            self._print_summary(None, None)
+            output.warning("\nInterrupted by user (Ctrl+C)")
+            self._print_summary()
 
     async def _validate_organization(self, client: EcudoClient) -> None:
         """Ensure the requested organization exists."""
         output.info("📡 Validating organization...")
         orgs = await client.get_organizations()
         if not any(o["id"] == self.organization for o in orgs):
-            output.error(f"❌ Organization '{self.organization}' not found.")
+            output.error(f"Organization '{self.organization}' not found.")
             output.error(f"   Available: {', '.join(o['id'] for o in orgs)}")
             sys.exit(1)
         output.info(f"✅ Found organization: {self.organization}")
 
-    def _build_record_iterator(self, client: EcudoClient) -> EcudoRecordIDIterator:
-        return EcudoRecordIDIterator(
+    def _build_dataset_iterator(self, client: EcudoClient) -> EcudoDatasetIDIterator:
+        return EcudoDatasetIDIterator(
             client=client,
             org_id=self.organization,
             page_size=self.config.crawler.page_size,
-            max_records=self.max_records,
+            max_datasets=self.max_datasets,
         )
 
     def _build_pipeline(self, client: EcudoClient) -> ProcessorPipeline:
@@ -100,11 +99,13 @@ class EcudoCrawler:  # pylint: disable=too-few-public-methods
         processors: list[Processor] = []
 
         output.info("   ✓ MetadataFetcher: fetch and parse JSON-LD")
-        processors.append(MetadataFetcher(client, parse_record))
+        processors.append(DatasetFetcher(client, parse_record))
 
         if self.config.processors.url_validator.enabled:
-            output.info("   ✓ URLValidator: check URL accessibility")
-            processors.append(URLValidator(client))
+            log_path = self.config.processors.url_validator.invalid_url_log
+            log_note = f" (log: {log_path})" if log_path else ""
+            output.info(f"   ✓ URLValidator: check URL accessibility{log_note}")
+            processors.append(URLValidator(client, invalid_url_log=log_path))
         else:
             output.info("   ⊘ URLValidator: disabled")
 
@@ -135,26 +136,23 @@ class EcudoCrawler:  # pylint: disable=too-few-public-methods
         return ProcessorPipeline(processors)
 
     async def _crawl(
-        self, record_id_iterator: EcudoRecordIDIterator, pipeline: ProcessorPipeline
-    ) -> ProcessingStats:
+        self, dataset_id_iterator: EcudoDatasetIDIterator, pipeline: ProcessorPipeline
+    ) -> None:
         """Execute the parallel fetcher and return run statistics."""
         output.info(f"\n🚀 Starting parallel crawl of {self.organization}...")
-        if self.max_records:
-            output.info(f"   Limit: {self.max_records} records")
+        if self.max_datasets:
+            output.info(f"   Limit: {self.max_datasets} datasets")
         output.info(f"   Concurrency: {self.config.crawler.concurrency} workers")
         output.info(f"   Queue size: {self.config.crawler.queue_size}")
 
-        stats = await run_parallel_pipeline(
-            id_source=record_id_iterator,
-            pipeline=pipeline,
+        await run_parallel_pipeline(
+            dataset_id_source=dataset_id_iterator,
+            dataset_pipeline=pipeline,
             concurrency=self.config.crawler.concurrency,
             queue_size=self.config.crawler.queue_size,
         )
-        return stats
 
-    def _print_summary(
-        self, crawler_stats: ProcessingStats | None, pipeline_stats: dict | None
-    ) -> None:
+    def _print_summary(self) -> None:
         """Print final crawl summary (always shown, even on interrupt)."""
         output.always("\n" + "=" * 80)
         if self.interrupted:
@@ -164,15 +162,6 @@ class EcudoCrawler:  # pylint: disable=too-few-public-methods
         output.always("=" * 80)
         output.always(f"Raw datasets saved to:       {self.raw_output_file}")
         output.always(f"Processed datasets saved to: {self.processed_output_file}")
-
-        if crawler_stats:
-            output.always(f"\nStatistics: {crawler_stats}")
-
-        if pipeline_stats and pipeline_stats.get("processors"):
-            output.always("\nProcessor statistics:")
-            for name, proc_stats in pipeline_stats["processors"].items():
-                stats_str = ", ".join(f"{k}: {v}" for k, v in proc_stats.items())
-                output.always(f"   {name}: {stats_str}")
 
         output.always("\nNext steps:")
         output.always(

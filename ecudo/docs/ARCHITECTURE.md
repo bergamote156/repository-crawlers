@@ -26,11 +26,11 @@ ecudo/
 │   └── iterator.py       # RecordIDIterator - ID pagination
 │
 ├── models/               # Data structures
-│   ├── record.py         # EcudoRecord, FileInfo
+│   ├── ecudo.py         # EcudoDataset, FileInfo
 │   └── onedata.py        # OnedataDataset, OnedataFile
 │
 ├── parsers/              # Input parsing
-│   └── ecudo.py          # JSON-LD → EcudoRecord
+│   └── ecudo.py          # JSON-LD → EcudoDataset
 │
 ├── metadata/             # Metadata format generators
 │   └── openaire.py       # OpenAIRE XML generator (functional)
@@ -53,56 +53,56 @@ ecudo/
 The entire crawl is expressed as a single pipeline:
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Processing Pipeline                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│   ┌──────────────────┐                                                       │
-│   │  RecordIDIterator │  Lightweight: fetches only record IDs               │
-│   │  (sequential)     │                                                      │
-│   └────────┬─────────┘                                                       │
-│            │ yields IDs (str)                                                │
-│            ▼                                                                 │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │                 run_parallel_pipeline() (N workers)                   │  │
-│   │                                                                        │  │
-│   │   ┌──────────────────────────────────────────────────────────────┐   │  │
-│   │   │                    ProcessorPipeline                          │   │  │
-│   │   │                                                                │   │  │
-│   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │MetadataFetcher │  ID → fetch JSON-LD → parse → EcudoRecord│   │  │
-│   │   │   └───────┬────────┘                                          │   │  │
-│   │   │           │ EcudoRecord                                       │   │  │
-│   │   │           ▼                                                    │   │  │
-│   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │  URLValidator  │  Validates all file URLs (optional)      │   │  │
-│   │   │   └───────┬────────┘                                          │   │  │
-│   │   │           │ EcudoRecord                                       │   │  │
-│   │   │           ▼                                                    │   │  │
-│   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │DiversityFilter │  Limits similar datasets (optional)      │   │  │
-│   │   │   └───────┬────────┘                                          │   │  │
-│   │   │           │ EcudoRecord                                       │   │  │
-│   │   │           ▼                                                    │   │  │
-│   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │  JSONLWriter   │  Saves _raw JSON to JSONL (pass-through) │   │  │
-│   │   │   └───────┬────────┘                                          │   │  │
-│   │   │           │ EcudoRecord                                       │   │  │
-│   │   │           ▼                                                    │   │  │
-│   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │OnedataConverter│  EcudoRecord → OnedataDataset + XML      │   │  │
-│   │   │   └───────┬────────┘                                          │   │  │
-│   │   │           │ OnedataDataset                                    │   │  │
-│   │   │           ▼                                                    │   │  │
-│   │   │   ┌────────────────┐                                          │   │  │
-│   │   │   │  JSONLWriter   │  Saves final output                      │   │  │
-│   │   │   └────────────────┘                                          │   │  │
-│   │   │                                                                │   │  │
-│   │   └──────────────────────────────────────────────────────────────┘   │  │
-│   │                                                                        │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           Processing Pipeline                                   │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│   ┌───────────────────┐                                                         │
+│   │  RecordIDIterator │  Lightweight: fetches only record IDs                   │
+│   │  (sequential)     │                                                         │
+│   └────────┬──────────┘                                                         │
+│            │ yields IDs (str)                                                   │
+│            ▼                                                                    │
+│   ┌──────────────────────────────────────────────────────────────────────────┐  │
+│   │                 run_parallel_pipeline() (N workers)                      │  │
+│   │                                                                          │  │
+│   │   ┌──────────────────────────────────────────────────────────────────┐   │  │
+│   │   │                    ProcessorPipeline                             │   │  │
+│   │   │                                                                  │   │  │
+│   │   │   ┌────────────────┐                                             │   │  │
+│   │   │   │ DatasetFetcher │  ID → fetch JSON-LD → parse → EcudoDataset  │   │  │
+│   │   │   └───────┬────────┘                                             │   │  │
+│   │   │           │ EcudoDataset                                         │   │  │
+│   │   │           ▼                                                      │   │  │
+│   │   │   ┌────────────────┐                                             │   │  │
+│   │   │   │  URLValidator  │  Validates all file URLs (optional)         │   │  │
+│   │   │   └───────┬────────┘                                             │   │  │
+│   │   │           │ EcudoDataset                                         │   │  │
+│   │   │           ▼                                                      │   │  │
+│   │   │   ┌────────────────┐                                             │   │  │
+│   │   │   │DiversityFilter │  Limits similar datasets (optional)         │   │  │
+│   │   │   └───────┬────────┘                                             │   │  │
+│   │   │           │ EcudoDataset                                         │   │  │
+│   │   │           ▼                                                      │   │  │
+│   │   │   ┌────────────────┐                                             │   │  │
+│   │   │   │  JSONLWriter   │  Saves _raw JSON to JSONL (pass-through)    │   │  │
+│   │   │   └───────┬────────┘                                             │   │  │
+│   │   │           │ EcudoDataset                                         │   │  │
+│   │   │           ▼                                                      │   │  │
+│   │   │   ┌────────────────┐                                             │   │  │
+│   │   │   │OnedataConverter│  EcudoDataset → OnedataDataset + XML        │   │  │
+│   │   │   └───────┬────────┘                                             │   │  │
+│   │   │           │ OnedataDataset                                       │   │  │
+│   │   │           ▼                                                      │   │  │
+│   │   │   ┌────────────────┐                                             │   │  │
+│   │   │   │  JSONLWriter   │  Saves final output                         │   │  │
+│   │   │   └────────────────┘                                             │   │  │
+│   │   │                                                                  │   │  │
+│   │   └──────────────────────────────────────────────────────────────────┘   │  │
+│   │                                                                          │  │
+│   └──────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Key Components
@@ -118,10 +118,10 @@ Low-level HTTP client for eCUDO API. Handles:
 ```python
 async with EcudoClient() as client:
     orgs = await client.get_organizations()
-    metadata = await client.get_record_metadata(record_id)
+    metadata = await client.get_dataset_metadata(record_id)
 ```
 
-### EcudoRecordIDIterator (`ecudo_api/iterator.py`)
+### EcudoDatasetIDIterator (`ecudo_api/iterator.py`)
 
 Async iterator that yields record IDs from an organization. Lightweight - fetches
 only IDs (small payloads), not full metadata. This allows the heavy metadata
@@ -129,32 +129,20 @@ fetching to be parallelized by workers.
 
 ```python
 async with EcudoClient() as client:
-    iterator = EcudoRecordIDIterator(client, "iopan", max_records=100)
+    iterator = EcudoDatasetIDIterator(client, "iopan", max_records=100)
     async for record_id in iterator:
         # record_id is fed to the pipeline
         pass
 ```
 
-### EcudoRecord (`models/record.py`)
+### EcudoDataset (`models/ecudo.py`)
 
 Structured representation of a dataset. eCUDO-specific for now, but designed
 to be easily extended when other data sources are added.
 
-```python
-@dataclass
-class EcudoRecord:
-    ...
-```
-
 ### OnedataDataset (`models/onedata.py`)
 
 Output structure ready for Onedata registration:
-
-```python
-@dataclass
-class OnedataDataset:
-    ...
-```
 
 ### Processor[I, O] (`processors/base.py`)
 
@@ -165,8 +153,8 @@ Generic typed processor base class. Processors can:
 - Report statistics (`get_stats()`)
 
 ```python
-class MyProcessor(Processor[EcudoRecord, EcudoRecord]):
-    async def process(self, record: EcudoRecord) -> EcudoRecord | None:
+class MyProcessor(Processor[EcudoDataset, EcudoDataset]):
+    async def process(self, record: EcudoDataset) -> EcudoDataset | None:
         if not self.is_valid(record):
             return None  # Filter out
         return record  # Pass through
@@ -181,10 +169,9 @@ Chains multiple processors into a sequential pipeline:
 
 ```python
 pipeline = ProcessorPipeline([
-    MetadataFetcher(client, parser),
-    URLValidator(client),
-    DiversityFilter(max_similar=10),
-    RawRecordWriter(raw_output),
+    DatasetFetcher(...),
+    URLValidator(...),
+    DiversityFilter(...),
     OnedataConverter(serializer),
     JSONLWriter(processed_output),
 ])
@@ -212,8 +199,8 @@ Key behaviors:
 Example:
 ```python
 stats = await run_parallel_pipeline(
-    id_source=record_id_iterator,
-    pipeline=pipeline,
+    dataset_id_source=record_id_iterator,
+    dataset_pipeline=pipeline,
     concurrency=128,
     queue_size=1000,
 )
@@ -221,13 +208,13 @@ stats = await run_parallel_pipeline(
 
 ### Built-in Processors
 
-| Processor | Input | Output | Description |
-|-----------|-------|--------|-------------|
-| `MetadataFetcher` | `str` (ID) | `EcudoRecord` | Fetches JSON-LD and parses |
-| `URLValidator` | `EcudoRecord` | `EcudoRecord` | Validates file URLs |
-| `DiversityFilter` | `EcudoRecord` | `EcudoRecord` | Limits similar titles |
-| `OnedataConverter` | `EcudoRecord` | `OnedataDataset` | Builds Onedata output |
-| `JSONLWriter` | `T` | `T` | Writes to JSONL file |
+| Processor          | Input | Output | Description |
+|--------------------|-------|--------|-------------|
+| `DatasetFetcher`   | `str` (ID) | `EcudoDataset` | Fetches JSON-LD and parses |
+| `URLValidator`     | `EcudoDataset` | `EcudoDataset` | Validates file URLs |
+| `DiversityFilter`  | `EcudoDataset` | `EcudoDataset` | Limits similar titles |
+| `OnedataConverter` | `EcudoDataset` | `OnedataDataset` | Builds Onedata output |
+| `JSONLWriter`      | `T` | `T` | Writes to JSONL file |
 
 ## Configuration
 
@@ -243,26 +230,28 @@ See `config.example.yaml` for all options.
 ### Adding a New Processor
 
 1. Create processor class:
+
 ```python
 from ecudo.processors.base import Processor
-from ecudo.models import EcudoRecord
+from ecudo.models import EcudoDataset
 
-class MyFilter(Processor[EcudoRecord, EcudoRecord]):
+
+class MyFilter(Processor[EcudoDataset, EcudoDataset]):
     def __init__(self, threshold: float):
         self.threshold = threshold
         self._filtered = 0
-    
-    async def process(self, record: EcudoRecord) -> EcudoRecord | None:
+
+    async def process(self, record: EcudoDataset) -> EcudoDataset | None:
         if self.should_skip(record):
             self._filtered += 1
             return None
         return record
-    
+
     def get_stats(self) -> dict:
         return {"filtered": self._filtered}
 ```
 
-2. Add to pipeline in `cli.py`
+2. Add to pipeline in `crawler.py`
 
 ## Performance Considerations
 

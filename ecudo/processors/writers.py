@@ -9,20 +9,17 @@ import json
 from pathlib import Path
 
 # Import for type hints
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ecudo import output
 from ecudo.processors.base import Processor
 
-if TYPE_CHECKING:
-    from ecudo.models.record import EcudoRecord
-
 
 class JSONLWriter[T](Processor[T, T]):
     """
-    Writes records to a JSONL (JSON Lines) file.
+    Writes items to a JSONL (JSON Lines) file.
 
-    Each record is written as a single JSON line. Thread-safe
+    Each item is written as a single JSON line. Thread-safe
     for concurrent writes using asyncio.Lock.
 
     Generic over input type T - will call to_json() if available,
@@ -57,11 +54,11 @@ class JSONLWriter[T](Processor[T, T]):
             self._file = None
 
         if self._written > 0:
-            output.stats(f"📝 Wrote {self._written} records to {self.filepath}")
+            output.stats(f"📝 Wrote {self._written} items to {self.filepath}")
 
     async def process(self, item: T) -> T | None:
         """
-        Write record to file.
+        Write item to file.
 
         Args:
             item: Object to write as JSON line (dict or object with to_json())
@@ -84,12 +81,3 @@ class JSONLWriter[T](Processor[T, T]):
             self._written += 1
 
         return item
-
-    def get_stats(self) -> dict:
-        """Return writer statistics."""
-        return {"written": self._written}
-
-    @property
-    def written_count(self) -> int:
-        """Number of records written."""
-        return self._written

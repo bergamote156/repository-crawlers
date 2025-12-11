@@ -22,8 +22,8 @@ class Processor[I, O](ABC):
     filtered out (not passed to the next processor).
 
     Example:
-        class MyProcessor(Processor[EcudoRecord, EcudoRecord]):
-            async def process(self, item: EcudoRecord) -> Optional[EcudoRecord]:
+        class MyProcessor(Processor[EcudoDataset, EcudoDataset]):
+            async def process(self, item: EcudoDataset) -> Optional[EcudoDataset]:
                 if item.title.startswith("Test"):
                     return None  # Filter out
                 return item  # Pass through

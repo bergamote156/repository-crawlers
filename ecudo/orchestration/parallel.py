@@ -29,12 +29,12 @@ class ProcessingStats:
 
 
 async def run_parallel_pipeline[I, O](
-    id_source: AsyncIterable[I],
-    pipeline: Processor[I, O],
+    dataset_id_source: AsyncIterable[I],
+    dataset_pipeline: Processor[I, O],
     *,
     concurrency: int = 128,
     queue_size: int = 1000,
-) -> ProcessingStats:
+) -> None:
     """
     Run pipeline in parallel using producer-consumer pattern.
 
@@ -46,8 +46,8 @@ async def run_parallel_pipeline[I, O](
     backpressure through a bounded queue.
 
     Args:
-        id_source: Async iterator yielding input items (e.g., record IDs)
-        pipeline: Processor pipeline to apply to each item
+        dataset_id_source: Async iterator yielding input items (e.g., dataset IDs)
+        dataset_pipeline: Processor pipeline to apply to each item
         concurrency: Number of concurrent workers (default: 128)
         queue_size: Maximum queue size for backpressure (default: 1000)
 
@@ -56,17 +56,15 @@ async def run_parallel_pipeline[I, O](
 
     Example:
         pipeline = ProcessorPipeline([
-            MetadataFetcher(client, parser),
-            URLValidator(client),
+            DatasetFetcher(...),
             DiversityFilter(...),
-            RawRecordWriter(raw_output),
-            OnedataConverter(openaire.generate_xml),
-            JSONLWriter(processed_output),
+            OnedataConverter(...),
+            JSONLWriter(...),
         ])
 
         stats = await run_parallel_pipeline(
-            id_source=record_id_iterator,
-            pipeline=pipeline,
+            dataset_id_source=id_iterator,
+            dataset_pipeline=pipeline,
             concurrency=128,
             queue_size=1000,
         )
@@ -77,11 +75,11 @@ async def run_parallel_pipeline[I, O](
     async def producer():
         """Push items from source to queue."""
         try:
-            async for item in id_source:
+            async for item in dataset_id_source:
                 await queue.put(item)
                 stats.queued += 1
         except Exception as exc:  # pylint: disable=broad-exception-caught
-            output.error(f"❌ Producer error: {exc}")
+            output.error(f"Producer error: {exc}")
         finally:
             # Send sentinel values to signal workers to stop
             for _ in range(concurrency):
@@ -97,21 +95,18 @@ async def run_parallel_pipeline[I, O](
                 break
 
             try:
-                result = await pipeline.process(item)
+                result = await dataset_pipeline.process(item)
                 if result is not None:
                     stats.processed += 1
                 # If result is None, item was filtered (not a failure)
 
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 item_str = str(item)[:50] if item else "?"
-                output.warning(
-                    f"⚠️ Worker {worker_id} error processing {item_str}: {exc}"
-                )
+                output.warning(f"Worker {worker_id} error processing {item_str}: {exc}")
                 stats.failed += 1
             finally:
                 queue.task_done()
 
-    # Start producer and workers
     producer_task = asyncio.create_task(producer())
     worker_tasks = [asyncio.create_task(worker(i)) for i in range(concurrency)]
 
@@ -124,5 +119,3 @@ async def run_parallel_pipeline[I, O](
     # Print summary
     output.info("\n✅ Parallel processing complete!")
     output.info(f"   {stats}")
-
-    return stats

@@ -91,21 +91,19 @@ class EcudoClient:
                         return await resp.json()
 
                     text = await resp.text()
-                    output.error(f"❌ Error {resp.status} fetching {url}: {text[:100]}")
+                    output.error(f"Error {resp.status} fetching {url}: {text[:100]}")
                     return {}
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self.max_retries:
                     wait = 2**attempt
                     output.debug(
-                        f"⚠️ Attempt {attempt}/{self.max_retries} failed: {exc}. "
+                        f"Attempt {attempt}/{self.max_retries} failed for {url}: {exc}. "
                         f"Retrying in {wait}s..."
                     )
                     await asyncio.sleep(wait)
                     continue
 
-                output.error(
-                    f"❌ All {self.max_retries} attempts failed for {url}: {exc}"
-                )
+                output.error(f"All {self.max_retries} attempts failed for {url}: {exc}")
                 return {}
         return {}
 
@@ -119,19 +117,17 @@ class EcudoClient:
         data = await self.fetch_json(f"{self.base_url}/organizations")
         return data.get("organizations", [])
 
-    async def get_record_ids_page(
-        self, org_id: str, offset: int, limit: int
-    ) -> list[str]:
+    async def list_dataset_ids(self, org_id: str, offset: int, limit: int) -> list[str]:
         """
-        Fetch one page of record IDs for an organization.
+        Fetch one page of dataset IDs for an organization.
 
         Args:
             org_id: Organization ID
             offset: Starting offset (1-based)
-            limit: Number of records per page
+            limit: Number of datasets per page
 
         Returns:
-            List of record IDs (URN format)
+            List of dataset IDs (URN format)
         """
         url = (
             f"{self.base_url}/organizations/{org_id}/data?offset={offset}&limit={limit}"
@@ -139,17 +135,17 @@ class EcudoClient:
         data = await self.fetch_json(url)
         return data.get("metadata", [])
 
-    async def get_record_metadata(self, record_id: str) -> dict:
+    async def get_dataset_metadata(self, dataset_id: str) -> dict:
         """
-        Fetch JSON-LD metadata for a single record.
+        Fetch JSON-LD metadata for a single dataset.
 
         Args:
-            record_id: Record identifier (URN format)
+            dataset_id: Record identifier (URN format)
 
         Returns:
             Raw JSON-LD metadata dict, or empty dict on failure
         """
-        url = f"{self.base_url}/metadata/{record_id}/json-ld"
+        url = f"{self.base_url}/metadata/{dataset_id}/json-ld"
         return await self.fetch_json(url)
 
     async def validate_url(self, url: str) -> bool:
@@ -165,6 +161,5 @@ class EcudoClient:
         try:
             async with self.session.head(url, allow_redirects=True) as resp:
                 return resp.status == 200
-        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-            output.debug(f"⚠️ URL validation failed for {url}: {exc}")
+        except (aiohttp.ClientError, asyncio.TimeoutError):
             return False

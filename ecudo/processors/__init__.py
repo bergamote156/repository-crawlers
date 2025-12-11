@@ -7,7 +7,7 @@ and writing dataset records.
 
 from ecudo.processors.base import Processor
 from ecudo.processors.converters import OnedataConverter
-from ecudo.processors.fetchers import MetadataFetcher
+from ecudo.processors.fetchers import DatasetFetcher
 from ecudo.processors.filters import DiversityFilter
 from ecudo.processors.pipeline import ProcessorPipeline
 from ecudo.processors.validators import URLValidator
@@ -19,7 +19,7 @@ __all__ = [
     # Pipeline
     "ProcessorPipeline",
     # Fetchers
-    "MetadataFetcher",
+    "DatasetFetcher",
     # Validators
     "URLValidator",
     # Filters

@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Tuple
 
 from ecudo import output
-from ecudo.models.record import EcudoRecord
+from ecudo.models.ecudo import EcudoDataset
 
 # Metadata format constants
 FORMAT_NAME = "OpenAIRE v4.0"
@@ -63,15 +63,15 @@ XML_NAMESPACES = (
 
 @dataclass
 class _OpenAIREContext:
-    record: EcudoRecord
+    dataset: EcudoDataset
     language_code: str
     rights_uri: str
     rights_label: str
 
 
-def generate_xml(record: EcudoRecord) -> str:
+def generate_xml(dataset: EcudoDataset) -> str:
     """
-    Generate OpenAIRE-compliant XML metadata from EcudoRecord.
+    Generate OpenAIRE-compliant XML metadata from EcudoDataset.
 
     OpenAIRE Guidelines v4.0 Mandatory properties:
         - datacite:title (M)
@@ -89,36 +89,36 @@ def generate_xml(record: EcudoRecord) -> str:
         - oaire:file - File Location
 
     Args:
-        record: Structured dataset record
+        dataset: Structured dataset
 
     Returns:
         OpenAIRE-compliant XML string
     """
-    ctx = _build_context(record)
+    ctx = _build_context(dataset)
 
     xml_lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         f"<oaire:resource {XML_NAMESPACES}>",
     ]
 
-    sections = [
-        _build_section_title,
-        _build_section_creator,
-        _build_section_language,
-        _build_section_publisher,
-        _build_section_publication_date,
-        _build_section_resource_type,
-        _build_section_description,
-        _build_section_identifier,
-        _build_section_access_rights,
-        _build_section_subjects,
-        _build_section_temporal_coverage,
-        _build_section_geo_location,
-        _build_section_files,
+    sections_builders = [
+        _build_title_section,
+        _build_creator_section,
+        _build_language_section,
+        _build_publisher_section,
+        _build_publication_date_section,
+        _build_resource_type_section,
+        _build_description_section,
+        _build_identifier_section,
+        _build_access_rights_section,
+        _build_subjects_section,
+        _build_temporal_coverage_section,
+        _build_geo_location_section,
+        _build_files_section,
     ]
 
-    for section in sections:
-        _append_section(xml_lines, section(ctx))
+    for section_builder in sections_builders:
+        _append_section(xml_lines, section_builder(ctx))
 
     xml_lines.append("")
     xml_lines.append("</oaire:resource>")
@@ -126,12 +126,12 @@ def generate_xml(record: EcudoRecord) -> str:
     return "\n".join(xml_lines)
 
 
-def _build_context(record: EcudoRecord) -> _OpenAIREContext:
-    language_code = _normalize_language_code(record.language)
-    rights_uri, rights_label = _get_access_rights(record.access_level)
+def _build_context(dataset: EcudoDataset) -> _OpenAIREContext:
+    language_code = _normalize_language_code(dataset.language)
+    rights_uri, rights_label = _get_access_rights(dataset.access_level)
 
     return _OpenAIREContext(
-        record=record,
+        dataset=dataset,
         language_code=language_code,
         rights_uri=rights_uri,
         rights_label=rights_label,
@@ -190,7 +190,7 @@ def _get_access_rights(access_level: str) -> Tuple[str, str]:
     Map access level to COAR Access Rights vocabulary.
 
     Args:
-        access_level: Access level from ECUDO record (e.g., "public", "restricted")
+        access_level: Access level from ECUDO dataset (e.g., "public", "restricted")
 
     Returns:
         Tuple of (rights_uri, rights_label)
@@ -217,46 +217,46 @@ def _append_section(xml_lines: list[str], section_lines: list[str]) -> None:
     xml_lines.extend(section_lines)
 
 
-def _build_section_title(ctx: _OpenAIREContext) -> list[str]:
+def _build_title_section(ctx: _OpenAIREContext) -> list[str]:
     return [
         "  <!-- 1. Title (M) -->",
         "  <datacite:titles>",
         f'    <datacite:title xml:lang="{ctx.language_code}">',
-        f"      {_escape_xml(ctx.record.title)}",
+        f"      {_escape_xml(ctx.dataset.title)}",
         "    </datacite:title>",
         "  </datacite:titles>",
     ]
 
 
-def _build_section_creator(ctx: _OpenAIREContext) -> list[str]:
+def _build_creator_section(ctx: _OpenAIREContext) -> list[str]:
     return [
         "  <!-- 2. Creator (M) -->",
         "  <datacite:creators>",
         "    <datacite:creator>",
         '      <datacite:creatorName nameType="Organizational">',
-        f"        {_escape_xml(ctx.record.publisher)}",
+        f"        {_escape_xml(ctx.dataset.publisher)}",
         "      </datacite:creatorName>",
         "    </datacite:creator>",
         "  </datacite:creators>",
     ]
 
 
-def _build_section_language(ctx: _OpenAIREContext) -> list[str]:
+def _build_language_section(ctx: _OpenAIREContext) -> list[str]:
     return [
         "  <!-- 8. Language (MA) -->",
         f"  <dc:language>{ctx.language_code}</dc:language>",
     ]
 
 
-def _build_section_publisher(ctx: _OpenAIREContext) -> list[str]:
+def _build_publisher_section(ctx: _OpenAIREContext) -> list[str]:
     return [
         "  <!-- 9. Publisher (MA) -->",
-        f"  <dc:publisher>{_escape_xml(ctx.record.publisher)}</dc:publisher>",
+        f"  <dc:publisher>{_escape_xml(ctx.dataset.publisher)}</dc:publisher>",
     ]
 
 
-def _build_section_publication_date(ctx: _OpenAIREContext) -> list[str]:
-    publication_date = ctx.record.issued or datetime.now().strftime("%Y-%m-%d")
+def _build_publication_date_section(ctx: _OpenAIREContext) -> list[str]:
+    publication_date = ctx.dataset.issued or datetime.now().strftime("%Y-%m-%d")
 
     return [
         "  <!-- 10. Publication Date (M) -->",
@@ -266,8 +266,8 @@ def _build_section_publication_date(ctx: _OpenAIREContext) -> list[str]:
     ]
 
 
-def _build_section_resource_type(ctx: _OpenAIREContext) -> list[str]:
-    resource_type_uri = _infer_coar_resource_type(ctx.record)
+def _build_resource_type_section(ctx: _OpenAIREContext) -> list[str]:
+    resource_type_uri = _infer_coar_resource_type(ctx.dataset)
 
     return [
         "  <!-- 11. Resource Type (M) - COAR Resource Type Vocabulary -->",
@@ -277,19 +277,19 @@ def _build_section_resource_type(ctx: _OpenAIREContext) -> list[str]:
     ]
 
 
-def _infer_coar_resource_type(record: EcudoRecord) -> str:
+def _infer_coar_resource_type(dataset: EcudoDataset) -> str:
     """
-    Infer COAR Resource Type URI from record.
+    Infer COAR Resource Type URI from dataset.
 
     Args:
-        record: Dataset record
+        dataset: Dataset
 
     Returns:
         COAR Resource Type URI
     """
     # Check first file URL for extension hints
-    if record.files:
-        url_lower = record.files[0].url.lower()
+    if dataset.files:
+        url_lower = dataset.files[0].url.lower()
 
         if url_lower.endswith(".pdf"):
             return "http://purl.org/coar/resource_type/c_18cf"  # text
@@ -301,28 +301,28 @@ def _infer_coar_resource_type(record: EcudoRecord) -> str:
     return "http://purl.org/coar/resource_type/c_ddb1"
 
 
-def _build_section_description(ctx: _OpenAIREContext) -> list[str]:
-    if not ctx.record.description:
+def _build_description_section(ctx: _OpenAIREContext) -> list[str]:
+    if not ctx.dataset.description:
         return []
 
     return [
         "  <!-- 12. Description (MA) -->",
         f'  <dc:description xml:lang="{ctx.language_code}">',
-        f"    {_escape_xml(ctx.record.description)}",
+        f"    {_escape_xml(ctx.dataset.description)}",
         "  </dc:description>",
     ]
 
 
-def _build_section_identifier(ctx: _OpenAIREContext) -> list[str]:
+def _build_identifier_section(ctx: _OpenAIREContext) -> list[str]:
     return [
         "  <!-- 14. Resource Identifier (M) -->",
         '  <datacite:identifier identifierType="URN">',
-        f"    {_escape_xml(ctx.record.identifier)}",
+        f"    {_escape_xml(ctx.dataset.identifier)}",
         "  </datacite:identifier>",
     ]
 
 
-def _build_section_access_rights(ctx: _OpenAIREContext) -> list[str]:
+def _build_access_rights_section(ctx: _OpenAIREContext) -> list[str]:
     return [
         "  <!-- 15. Access Rights (M) - COAR Access Rights Vocabulary -->",
         f'  <datacite:rights rightsURI="{ctx.rights_uri}">',
@@ -331,8 +331,8 @@ def _build_section_access_rights(ctx: _OpenAIREContext) -> list[str]:
     ]
 
 
-def _build_section_subjects(ctx: _OpenAIREContext) -> list[str]:
-    if not ctx.record.keywords:
+def _build_subjects_section(ctx: _OpenAIREContext) -> list[str]:
+    if not ctx.dataset.keywords:
         return []
 
     lines = [
@@ -340,28 +340,28 @@ def _build_section_subjects(ctx: _OpenAIREContext) -> list[str]:
         "  <datacite:subjects>",
     ]
 
-    for keyword in ctx.record.keywords[:20]:
+    for keyword in ctx.dataset.keywords[:20]:
         lines.append(f"    <datacite:subject>{_escape_xml(keyword)}</datacite:subject>")
 
     lines.append("  </datacite:subjects>")
     return lines
 
 
-def _build_section_temporal_coverage(ctx: _OpenAIREContext) -> list[str]:
-    if not ctx.record.temporal:
+def _build_temporal_coverage_section(ctx: _OpenAIREContext) -> list[str]:
+    if not ctx.dataset.temporal:
         return []
 
     return [
         "  <!-- 19. Coverage (R) - Temporal -->",
-        f"  <dc:coverage>{_escape_xml(ctx.record.temporal)}</dc:coverage>",
+        f"  <dc:coverage>{_escape_xml(ctx.dataset.temporal)}</dc:coverage>",
     ]
 
 
-def _build_section_geo_location(ctx: _OpenAIREContext) -> list[str]:
-    if not ctx.record.spatial:
+def _build_geo_location_section(ctx: _OpenAIREContext) -> list[str]:
+    if not ctx.dataset.spatial:
         return []
 
-    return _build_geo_location_xml(ctx.record.spatial)
+    return _build_geo_location_xml(ctx.dataset.spatial)
 
 
 def _build_geo_location_xml(spatial: str) -> list[str]:
@@ -397,20 +397,22 @@ def _build_geo_location_xml(spatial: str) -> list[str]:
     return []
 
 
-def _build_section_files(ctx: _OpenAIREContext) -> list[str]:
-    if not ctx.record.files:
+def _build_files_section(ctx: _OpenAIREContext) -> list[str]:
+    if not ctx.dataset.files:
         return []
 
     lines = ["  <!-- 23. File Location (MA) -->"]
 
-    for file_info in ctx.record.files:
+    for file_info in ctx.dataset.files:
         mime_type = _infer_mime_type(file_info.url)
         mime_attr = f' mimeType="{mime_type}"' if mime_type else ""
-        lines.extend([
-            f'  <oaire:file accessRightsURI="{ctx.rights_uri}"{mime_attr}>',
-            f"    {_escape_xml(file_info.url)}",
-            "  </oaire:file>",
-        ])
+        lines.extend(
+            [
+                f'  <oaire:file accessRightsURI="{ctx.rights_uri}"{mime_attr}>',
+                f"    {_escape_xml(file_info.url)}",
+                "  </oaire:file>",
+            ]
+        )
 
     return lines
 

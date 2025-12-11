@@ -1,7 +1,7 @@
 """
-eCUDO Dataset Record Model
+eCUDO Dataset Metadata Model
 
-Structured representation of an eCUDO dataset record.
+Structured representation of an eCUDO dataset metadata.
 """
 
 from dataclasses import dataclass, field
@@ -9,7 +9,7 @@ from typing import List, Optional
 
 
 @dataclass
-class FileInfo:
+class EcudoFile:
     """
     Information about a downloadable file in a dataset.
 
@@ -25,7 +25,7 @@ class FileInfo:
 
 
 @dataclass
-class EcudoRecord:  # pylint: disable=too-many-instance-attributes
+class EcudoDataset:  # pylint: disable=too-many-instance-attributes
     """
     Parsed eCUDO dataset record.
 
@@ -37,16 +37,14 @@ class EcudoRecord:  # pylint: disable=too-many-instance-attributes
         title: Dataset title
         description: Dataset description
         publisher: Publishing organization name
-        issued: Publication date (ISO format)
         language: Language code or name
         keywords: List of keywords/subjects
         files: List of downloadable files
+        issued: Publication date (ISO format)
+        modified: Last modification date (ISO format)
         spatial: Optional spatial coverage (bounding box)
         temporal: Optional temporal coverage
         access_level: Access level (e.g., "public", "restricted")
-        contact_name: Contact person/organization name (from contactPoint.fn)
-        contact_email: Contact email (from contactPoint.hasEmail)
-        modified: Last modification date (ISO format)
         _raw: Original raw JSON-LD data (for debugging/extensions)
     """
 
@@ -54,26 +52,17 @@ class EcudoRecord:  # pylint: disable=too-many-instance-attributes
     title: str
     description: str
     publisher: str
-    issued: str
     language: str
     keywords: List[str]
-    files: List[FileInfo]
+    files: List[EcudoFile]
+    issued: str
+    modified: Optional[str] = None
     spatial: Optional[str] = None
     temporal: Optional[str] = None
     access_level: str = "public"
-    contact_name: Optional[str] = None
-    contact_email: Optional[str] = None
-    modified: Optional[str] = None
 
     # Raw data preserved for debugging and future extensions
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
-
-    def __post_init__(self):
-        """Validate required fields."""
-        if not self.identifier:
-            raise ValueError("identifier is required")
-        if not self.files:
-            raise ValueError("at least one file is required")
 
     def to_json(self) -> dict:
         """Return underlying raw JSON-LD data."""

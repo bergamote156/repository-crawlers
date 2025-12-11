@@ -8,11 +8,11 @@ from difflib import SequenceMatcher
 from typing import Optional
 
 from ecudo import output
-from ecudo.models.record import EcudoRecord
+from ecudo.models.ecudo import EcudoDataset
 from ecudo.processors.base import Processor
 
 
-class DiversityFilter(Processor[EcudoRecord, EcudoRecord]):
+class DiversityFilter(Processor[EcudoDataset, EcudoDataset]):
     """
     Filters records to ensure diversity by limiting similar titles.
 
@@ -42,7 +42,7 @@ class DiversityFilter(Processor[EcudoRecord, EcudoRecord]):
         self._accepted = 0
         self._skipped = 0
 
-    async def process(self, item: EcudoRecord) -> Optional[EcudoRecord]:
+    async def process(self, item: EcudoDataset) -> Optional[EcudoDataset]:
         """
         Filter record based on title diversity.
 
