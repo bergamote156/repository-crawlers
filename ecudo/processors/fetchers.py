@@ -4,6 +4,10 @@ Data Fetching Processors
 Processors that fetch data from external sources.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 from typing import TYPE_CHECKING, Callable
 
 from ecudo import output

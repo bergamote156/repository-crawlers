@@ -4,6 +4,10 @@ eCUDO Dataset Metadata Model
 Structured representation of an eCUDO dataset metadata.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 from dataclasses import dataclass, field
 from typing import List, Optional
 

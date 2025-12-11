@@ -6,6 +6,10 @@ OpenAIRE Guidelines for Literature Repository Managers v4.0.0
 https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Tuple

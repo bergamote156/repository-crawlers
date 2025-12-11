@@ -5,6 +5,10 @@ Producer-consumer pattern for parallel fetching and processing.
 Separates lightweight ID iteration from heavyweight metadata fetching.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 import asyncio
 from collections.abc import AsyncIterable
 from dataclasses import dataclass

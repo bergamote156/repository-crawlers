@@ -4,6 +4,10 @@ Onedata Dataset Model
 Data structure for datasets ready for registration in Onedata.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 from dataclasses import dataclass, field
 
 

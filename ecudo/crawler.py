@@ -5,6 +5,10 @@ High-level orchestration for crawling eCUDO organizations.
 Integrates all components: API client, parsers, processors, and parallel execution.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 import asyncio
 import sys
 from contextlib import AsyncExitStack

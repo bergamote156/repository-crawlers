@@ -4,6 +4,10 @@ eCUDO CLI
 Command-line interface for crawling eCUDO.pl datasets.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 import asyncio
 import json
 import sys
@@ -239,7 +243,9 @@ async def _list_organizations(config: Config):
     default=None,
     help="Maximum number of JSONL records to read (default: all)",
 )
-def convert(input_file_path: Path, output_file_path: Path | None, record_limit: int | None):
+def convert(
+    input_file_path: Path, output_file_path: Path | None, record_limit: int | None
+):
     """
     Convert JSONL file to JSON array.
 

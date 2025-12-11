@@ -4,6 +4,10 @@ Data Conversion Processors
 Processors that convert between data formats.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 from collections import Counter
 from typing import Callable
 from urllib.parse import urlparse

@@ -4,6 +4,10 @@ eCUDO Configuration
 Hierarchical configuration management: env vars < config file < CLI args.
 """
 
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
+
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
