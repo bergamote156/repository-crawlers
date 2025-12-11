@@ -26,17 +26,19 @@ class JSONLWriter[T](Processor[T, T]):
     otherwise treats input as dict.
     """
 
-    def __init__(self, filepath: str | Path):
+    def __init__(self, filepath: str | Path, *, show_stats: bool = True):
         """
         Initialize JSONL writer.
 
         Args:
             filepath: Path to output JSONL file
+            show_stats: Whether to print stats on close
         """
         self.filepath = Path(filepath)
         self._file: Any | None = None
         self._lock = asyncio.Lock()
         self._written = 0
+        self._show_stats = show_stats
 
     async def open(self) -> None:
         """Open file for appending."""
@@ -53,7 +55,7 @@ class JSONLWriter[T](Processor[T, T]):
             self._file.close()
             self._file = None
 
-        if self._written > 0:
+        if self._written > 0 and self._show_stats:
             output.stats(f"📝 Wrote {self._written} items to {self.filepath}")
 
     async def process(self, item: T) -> T | None:

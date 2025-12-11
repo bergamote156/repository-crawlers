@@ -48,6 +48,9 @@ processors:
     # Enable/disable URL validation
     # Disabling speeds up crawling but may include broken links
     enabled: true
+    # Optional path to JSONL file with invalid URLs (relative paths
+    # are resolved against output.dir). Leave empty to disable logging.
+    invalid_url_log: null
 
 # Output settings
 output:
@@ -76,5 +79,6 @@ logging:
 # ECUDO_DIVERSITY_MAX_SIMILAR - Max similar datasets
 # ECUDO_DIVERSITY_SIMILARITY_THRESHOLD - Similarity threshold
 # ECUDO_URL_VALIDATOR_ENABLED - Enable URL validation (true/false)
+# ECUDO_INVALID_URL_LOG - Path to JSONL file for invalid URLs
 # ECUDO_OUTPUT_DIR - Output directory
 # ECUDO_LOG_LEVEL - Log level (debug/info/warning/error/silent)

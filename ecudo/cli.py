@@ -91,6 +91,12 @@ def cli(ctx: click.Context, config_file: Path | None, quiet: bool, verbose: bool
     help="Disable URL validation (faster but may include broken links)",
 )
 @click.option(
+    "--invalid-url-log",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to JSONL file where invalid URLs will be appended",
+)
+@click.option(
     "--no-diversity-filter",
     is_flag=True,
     default=False,
@@ -117,6 +123,7 @@ def crawl(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     max_similar: int | None,
     similarity_threshold: float | None,
     no_url_validation: bool,
+    invalid_url_log: Path | None,
     no_diversity_filter: bool,
     concurrency: int | None,
     queue_size: int | None,
@@ -143,6 +150,10 @@ def crawl(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         cli_overrides.setdefault("processors", {}).setdefault("url_validator", {})[
             "enabled"
         ] = False
+    if invalid_url_log is not None:
+        cli_overrides.setdefault("processors", {}).setdefault("url_validator", {})[
+            "invalid_url_log"
+        ] = str(invalid_url_log)
     if no_diversity_filter:
         cli_overrides.setdefault("processors", {}).setdefault("diversity_filter", {})[
             "enabled"
@@ -167,7 +178,7 @@ def crawl(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     crawler = EcudoCrawler(
         organization=organization,
         config=config,
-        max_records=max_records,
+        max_datasets=max_records,
     )
 
     try:
@@ -192,7 +203,7 @@ async def _list_organizations(config: Config):
         organizations = await client.get_organizations()
 
         if not organizations:
-            output.error("❌ Failed to fetch organizations.")
+            output.error("Failed to fetch organizations.")
             sys.exit(1)
 
         output.always(f"\n✅ Found {len(organizations)} organizations:\n")
@@ -241,7 +252,7 @@ def convert(input_file_path: Path, output_file_path: Path | None):
             try:
                 datasets.append(json.loads(line))
             except json.JSONDecodeError as e:
-                output.warning(f"⚠️ Skipping invalid JSON on line {line_num}: {e}")
+                output.warning(f"Skipping invalid JSON on line {line_num}: {e}")
 
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(datasets, f, ensure_ascii=False, indent=2)
