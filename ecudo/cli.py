@@ -231,7 +231,15 @@ async def _list_organizations(config: Config):
     default=None,
     help="Output JSON file (default: input with .json extension)",
 )
-def convert(input_file_path: Path, output_file_path: Path | None):
+@click.option(
+    "--limit",
+    "-n",
+    "record_limit",
+    type=int,
+    default=None,
+    help="Maximum number of JSONL records to read (default: all)",
+)
+def convert(input_file_path: Path, output_file_path: Path | None, record_limit: int | None):
     """
     Convert JSONL file to JSON array.
 
@@ -242,6 +250,11 @@ def convert(input_file_path: Path, output_file_path: Path | None):
     )
 
     output.info(f"📄 Converting {input_file_path} -> {out_file}")
+    if record_limit is not None:
+        if record_limit < 0:
+            output.error("Limit must be non-negative.")
+            sys.exit(1)
+        output.info(f"   Limit: {record_limit} records")
 
     datasets = []
     with open(input_file_path, "r", encoding="utf-8") as f:
@@ -253,6 +266,10 @@ def convert(input_file_path: Path, output_file_path: Path | None):
                 datasets.append(json.loads(line))
             except json.JSONDecodeError as e:
                 output.warning(f"Skipping invalid JSON on line {line_num}: {e}")
+                continue
+
+            if record_limit is not None and len(datasets) >= record_limit:
+                break
 
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump(datasets, f, ensure_ascii=False, indent=2)

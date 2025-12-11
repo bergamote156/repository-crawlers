@@ -155,24 +155,8 @@ def _normalize_language_code(language: str) -> str:
 
     # Common language name mappings
     language_map = {
-        "english": "en",
-        "polish": "pl",
-        "german": "de",
-        "french": "fr",
-        "spanish": "es",
-        "italian": "it",
-        "portuguese": "pt",
-        "dutch": "nl",
-        "czech": "cs",
-        "slovak": "sk",
-        "hungarian": "hu",
-        "romanian": "ro",
-        "bulgarian": "bg",
-        "greek": "el",
-        "swedish": "sv",
-        "finnish": "fi",
-        "danish": "da",
-        "norwegian": "no",
+        "english": "eng",
+        "polish": "pol",
     }
 
     if language_lower in language_map:
@@ -182,6 +166,10 @@ def _normalize_language_code(language: str) -> str:
     if len(language_lower) in (2, 3) and language_lower.isalpha():
         return language_lower
 
+    output.warning(
+        "Unknown language"
+        f" '{language}', defaulting to 'en'. Consider extending language_map."
+    )
     return "en"
 
 
