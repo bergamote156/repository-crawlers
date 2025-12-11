@@ -2,13 +2,13 @@
 
 import pytest
 
-from ecudo.models import EcudoRecord, FileInfo
+from ecudo.models import EcudoDataset, EcudoFile
 from ecudo.processors import DiversityFilter
 
 
-def make_record(identifier: str, title: str) -> EcudoRecord:
+def make_record(identifier: str, title: str) -> EcudoDataset:
     """Helper to create a test record."""
-    return EcudoRecord(
+    return EcudoDataset(
         identifier=identifier,
         title=title,
         description="",
@@ -16,7 +16,7 @@ def make_record(identifier: str, title: str) -> EcudoRecord:
         issued="2024-01-01",
         language="en",
         keywords=[],
-        files=[FileInfo(name="data.zip", url="https://example.com/data.zip")],
+        files=[EcudoFile(name="data.zip", url="https://example.com/data.zip")],
     )
 
 

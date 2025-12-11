@@ -1,10 +1,10 @@
-"""Tests for OnedataConverter."""
+"""Tests for OnedataConverter and path collision resolution."""
 
 import pytest
 
 from ecudo.metadata import openaire
-from ecudo.models import EcudoRecord, FileInfo
-from ecudo.processors.converters import OnedataConverter
+from ecudo.models import EcudoDataset, EcudoFile
+from ecudo.processors.converters import OnedataConverter, resolve_path_collisions
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def converter():
 @pytest.fixture
 def sample_record():
     """Create a sample EcudoRecord."""
-    return EcudoRecord(
+    return EcudoDataset(
         identifier="urn:SDN:CDI:iopan.pl:uuid:test-123",
         title="Test Dataset / With Slash",
         description="Test description",
@@ -25,8 +25,8 @@ def sample_record():
         language="en",
         keywords=["test"],
         files=[
-            FileInfo(name="data.csv", url="https://example.com/data.csv"),
-            FileInfo(name="readme.txt", url="https://example.com/readme.txt"),
+            EcudoFile(name="data.csv", url="https://example.com/data.csv"),
+            EcudoFile(name="readme.txt", url="https://example.com/readme.txt"),
         ],
     )
 
@@ -65,12 +65,12 @@ class TestOnedataConverter:
         assert result.files[0].path == "data.csv"
 
     @pytest.mark.asyncio
-    async def test_to_dict(self, converter, sample_record):
-        """Test to_dict method."""
+    async def test_to_json(self, converter, sample_record):
+        """Test to_json method."""
         result = await converter.process(sample_record)
 
         assert result is not None
-        d = result.to_dict()
+        d = result.to_json()
 
         assert d["name"] == "Test Dataset / With Slash"
         assert d["location"] == "Test Dataset - With Slash"
@@ -80,10 +80,131 @@ class TestOnedataConverter:
         assert d["files"][0]["name"] == "data.csv"
 
     @pytest.mark.asyncio
-    async def test_stats(self, converter, sample_record):
-        """Test statistics tracking."""
-        await converter.process(sample_record)
-        await converter.process(sample_record)
+    async def test_resolves_path_collisions(self, converter):
+        """Test that duplicate filenames get unique paths."""
+        record = EcudoDataset(
+            identifier="urn:test:collision",
+            title="Collision Test",
+            description="Testing path collision resolution",
+            publisher="Test",
+            issued="2024-01-01",
+            language="en",
+            keywords=[],
+            files=[
+                EcudoFile(
+                    name="23",
+                    url="https://example.com/api/stats/hl/station/26015/2013/2/23",
+                ),
+                EcudoFile(
+                    name="23",
+                    url="https://example.com/api/data/tabular/hl/station/26015/2013/2/23",
+                ),
+            ],
+        )
 
-        stats = converter.get_stats()
-        assert stats["converted"] == 2
+        result = await converter.process(record)
+
+        assert result is not None
+        assert len(result.files) == 2
+        # Paths should be different due to collision resolution
+        paths = [f.path for f in result.files]
+        assert len(set(paths)) == 2  # All paths unique
+
+
+class TestResolvePathCollisions:
+    """Tests for resolve_path_collisions function."""
+
+    def test_no_collisions(self):
+        """Files with unique names keep simple paths."""
+        files = [
+            EcudoFile(name="data.csv", url="https://example.com/a/data.csv"),
+            EcudoFile(name="readme.txt", url="https://example.com/b/readme.txt"),
+        ]
+
+        paths = resolve_path_collisions(files)
+
+        assert paths == ["data.csv", "readme.txt"]
+
+    def test_simple_collision(self):
+        """Two files with same name get disambiguated."""
+        files = [
+            EcudoFile(name="data.csv", url="https://example.com/raw/data.csv"),
+            EcudoFile(name="data.csv", url="https://example.com/processed/data.csv"),
+        ]
+
+        paths = resolve_path_collisions(files)
+
+        assert len(paths) == 2
+        assert len(set(paths)) == 2  # Both unique
+        assert "raw" in paths[0] or "processed" in paths[0]
+
+    def test_deep_collision(self):
+        """Collisions requiring multiple path segments to resolve."""
+        files = [
+            EcudoFile(name="23", url="https://example.com/api/stats/hl/2013/2/23"),
+            EcudoFile(name="23", url="https://example.com/api/data/hl/2013/2/23"),
+        ]
+
+        paths = resolve_path_collisions(files)
+
+        assert len(set(paths)) == 2
+        # Should include distinguishing path segment
+        assert "stats" in paths[0] or "data" in paths[0]
+
+    def test_multiple_collisions(self):
+        """Multiple files with same name all get unique paths."""
+        files = [
+            EcudoFile(name="data.bin", url="https://example.com/a/data.bin"),
+            EcudoFile(name="data.bin", url="https://example.com/b/data.bin"),
+            EcudoFile(name="data.bin", url="https://example.com/c/data.bin"),
+        ]
+
+        paths = resolve_path_collisions(files)
+
+        assert len(set(paths)) == 3
+
+    def test_mixed_collisions(self):
+        """Some files collide, others don't."""
+        files = [
+            EcudoFile(name="data.csv", url="https://example.com/raw/data.csv"),
+            EcudoFile(name="data.csv", url="https://example.com/processed/data.csv"),
+            EcudoFile(name="readme.txt", url="https://example.com/readme.txt"),
+        ]
+
+        paths = resolve_path_collisions(files)
+
+        assert len(set(paths)) == 3
+        # readme.txt should stay simple
+        assert "readme.txt" in paths
+
+    def test_empty_list(self):
+        """Empty file list returns empty path list."""
+        assert resolve_path_collisions([]) == []
+
+    def test_single_file(self):
+        """Single file gets simple path."""
+        files = [EcudoFile(name="data.csv", url="https://example.com/data.csv")]
+
+        paths = resolve_path_collisions(files)
+
+        assert paths == ["data.csv"]
+
+    def test_real_world_example(self):
+        """Test with real MIR data pattern."""
+        files = [
+            EcudoFile(
+                name="23",
+                url="https://mirdata.mir.gdynia.pl/api/datras/stats/hl/station/26015/2013/2/23",
+            ),
+            EcudoFile(
+                name="23",
+                url="https://mirdata.mir.gdynia.pl/api/datras/data/tabular/stats/hl/station/26015/2013/2/23",
+            ),
+        ]
+
+        paths = resolve_path_collisions(files)
+
+        assert len(set(paths)) == 2
+        # Both paths should end with the original filename pattern
+        for path in paths:
+            assert path.endswith("23")

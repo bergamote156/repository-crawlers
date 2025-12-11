@@ -3,13 +3,13 @@
 import pytest
 
 from ecudo.metadata import openaire
-from ecudo.models import EcudoRecord, FileInfo
+from ecudo.models import EcudoDataset, EcudoFile
 
 
 @pytest.fixture
 def sample_record():
     """Create a sample EcudoRecord for testing."""
-    return EcudoRecord(
+    return EcudoDataset(
         identifier="urn:SDN:CDI:iopan.pl:uuid:test-123",
         title="Test Ocean Dataset",
         description="Oceanographic data from research vessel",
@@ -18,7 +18,7 @@ def sample_record():
         language="English",
         keywords=["ocean", "temperature", "salinity"],
         files=[
-            FileInfo(
+            EcudoFile(
                 name="data.zip",
                 url="https://example.com/data.zip",
                 format="WWW:DOWNLOAD",
@@ -107,7 +107,7 @@ class TestOpenAIREMetadata:
 
     def test_generate_xml_escapes_xml_characters(self):
         """Test that special XML characters are escaped."""
-        record = EcudoRecord(
+        record = EcudoDataset(
             identifier="urn:test:123",
             title="Dataset with <special> & 'characters'",
             description="",
@@ -115,7 +115,7 @@ class TestOpenAIREMetadata:
             issued="2024-01-01",
             language="en",
             keywords=[],
-            files=[FileInfo(name="data.zip", url="https://example.com/data.zip")],
+            files=[EcudoFile(name="data.zip", url="https://example.com/data.zip")],
         )
         result = openaire.generate_xml(record)
 
@@ -125,7 +125,7 @@ class TestOpenAIREMetadata:
 
     def test_generate_xml_minimal_record(self):
         """Test generating XML for a record with minimal fields."""
-        record = EcudoRecord(
+        record = EcudoDataset(
             identifier="urn:test:minimal",
             title="Minimal Dataset",
             description="",
@@ -133,7 +133,7 @@ class TestOpenAIREMetadata:
             issued="",
             language="en",
             keywords=[],
-            files=[FileInfo(name="data.bin", url="https://example.com/data")],
+            files=[EcudoFile(name="data.bin", url="https://example.com/data")],
         )
         result = openaire.generate_xml(record)
 
