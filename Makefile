@@ -1,5 +1,5 @@
 STATIC_ANALYSER_IMAGE := "docker.onedata.org/python_static_analyser:v10"
-SRC_FILES := ecudo
+SRC_FILES := ecudo registrar
 
 UID := $(shell id -u)
 GID := $(shell id -g)

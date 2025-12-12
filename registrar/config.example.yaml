@@ -1,0 +1,49 @@
+# Dataset Registrar Configuration
+#
+# Configuration hierarchy (higher overrides lower):
+# 1. Environment variables (REGISTRAR_* prefix)
+# 2. Config file (this file)
+# 3. CLI arguments
+#
+# Copy this file to registrar.yaml and customize as needed.
+
+# Onedata connection settings
+onedata:
+  onezone_domain: demo.onedata.org
+  oneprovider_domain: provider.demo.onedata.org
+  panel_port: 9443
+  verify_ssl: false
+
+# Authentication tokens
+# These can also be set via environment variables:
+#   REGISTRAR_ADMIN_TOKEN
+#   REGISTRAR_SPACE_OWNER_TOKEN
+#   REGISTRAR_HANDLE_SERVICE_ID
+tokens:
+  # Onepanel admin token (for storage/space support operations)
+  admin_token: ""
+  
+  # Onezone/Oneprovider user token (for space creation, file registration)
+  space_owner_token: ""
+  
+  # Handle service ID (optional, for DOI registration)
+  # Leave empty to skip handle registration
+  handle_service_id: ""
+
+# Storage defaults
+storage:
+  # Default space support size in bytes (1TB)
+  default_size: 1099511627776
+
+# Output settings
+output:
+  # Directory for output files (logs, reports)
+  dir: ./data
+  
+  # Log file name (relative to output dir)
+  log_file: registration.log
+
+# Logging settings
+logging:
+  # Log level: debug, info, warning, error, silent
+  level: info

@@ -10,11 +10,12 @@ The goal of this project is to create tools that enable:
 - Extracting metadata from available datasets
 - Automatic registration of datasets in the Onedata ecosystem
 
-## Supported Data Sources
+## Components
 
-| Source | Description | Status |
-|--------|-------------|--------|
-| [eCUDO](http://central.ecudo.pl/) | Aggregator of datasets from Polish universities | ✅ Available |
+| Component | Description | Status |
+|-----------|-------------|--------|
+| [eCUDO Crawler](ecudo/) | Crawler for Polish university datasets | ✅ Available |
+| [Dataset Registrar](registrar/) | Register crawled datasets in Onedata | ✅ Available |
 
 ## Installation
 
@@ -48,18 +49,57 @@ python -m ecudo convert data/iopan_processed.jsonl
 python -m ecudo show-config
 ```
 
+### Dataset Registrar
+
+The registrar takes crawled datasets and registers them in Onedata.
+
+```bash
+# Register datasets from JSON file
+python -m registrar register datasets.json
+
+# Register with limit (useful for testing)
+python -m registrar register datasets.json --limit 10
+
+# Dry run (validate without registering)
+python -m registrar register datasets.json --dry-run
+
+# List HTTP readonly spaces on provider
+python -m registrar list-spaces
+
+# List HTTP readonly storages on provider
+python -m registrar list-storages
+
+# Show current configuration
+python -m registrar show-config
+```
+
+#### Required Environment Variables
+
+```bash
+export REGISTRAR_ADMIN_TOKEN="your-onepanel-admin-token"
+export REGISTRAR_SPACE_OWNER_TOKEN="your-onezone-user-token"
+export REGISTRAR_ONEZONE_DOMAIN="demo.onedata.org"
+export REGISTRAR_ONEPROVIDER_DOMAIN="provider.demo.onedata.org"
+
+# Optional: for DOI handle registration
+export REGISTRAR_HANDLE_SERVICE_ID="your-handle-service-id"
+```
+
 ### Configuration
 
-Configuration can be set via (in order of priority):
+Both tools support hierarchical configuration (in order of priority):
 1. CLI arguments
-2. Config file (`ecudo.yaml`)
-3. Environment variables (`ECUDO_*` prefix)
+2. Config file (YAML)
+3. Environment variables
 
-See `ecudo/config.example.yaml` for all available options.
+See configuration examples:
+- `ecudo/config.example.yaml` - eCUDO crawler options
+- `registrar/config.example.yaml` - Dataset registrar options
 
 ## Architecture
 
-See [ARCHITECTURE.md](ecudo/docs/ARCHITECTURE.md) for detailed documentation.
+- [eCUDO Architecture](ecudo/docs/ARCHITECTURE.md)
+- [Registrar Architecture](registrar/docs/ARCHITECTURE.md)
 
 ## License
 
