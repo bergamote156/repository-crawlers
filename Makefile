@@ -1,5 +1,5 @@
 STATIC_ANALYSER_IMAGE := "docker.onedata.org/python_static_analyser:v10"
-SRC_FILES := ecudo registrar
+SRC_FILES := ecudo registrar tests
 
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -7,7 +7,7 @@ GID := $(shell id -g)
 .PHONY: format black-check static-analysis type-check lint test
 
 define docker_run
-	docker run --rm -i -v $(CURDIR):$(CURDIR) -w $(CURDIR) -u $(UID):$(GID) $(STATIC_ANALYSER_IMAGE) $1
+	docker run --rm -i -v $(CURDIR):$(CURDIR) -w $(CURDIR) -u $(UID):$(GID) -e HOME=$(CURDIR) $(STATIC_ANALYSER_IMAGE) $1
 endef
 
 bold := $(shell tput bold)

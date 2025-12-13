@@ -1,5 +1,7 @@
 """Tests for OpenAIRE metadata generator."""
 
+# pylint: disable=redefined-outer-name,protected-access,missing-function-docstring
+
 import pytest
 
 from ecudo.metadata import openaire
@@ -98,10 +100,14 @@ class TestOpenAIREMetadata:
 
     def test_normalize_language_code(self):
         """Test language code normalization."""
-        assert openaire._normalize_language_code("English") == "en"
-        assert openaire._normalize_language_code("Polish") == "pl"
+        # Language names are mapped to ISO 639-3 codes
+        assert openaire._normalize_language_code("English") == "eng"
+        assert openaire._normalize_language_code("Polish") == "pol"
+        # Short codes are passed through as-is
         assert openaire._normalize_language_code("en") == "en"
         assert openaire._normalize_language_code("pl") == "pl"
+        assert openaire._normalize_language_code("eng") == "eng"
+        # Empty/unknown defaults to "en"
         assert openaire._normalize_language_code("") == "en"
         assert openaire._normalize_language_code("unknown") == "en"
 

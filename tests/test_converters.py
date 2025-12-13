@@ -1,5 +1,7 @@
 """Tests for OnedataConverter and path collision resolution."""
 
+# pylint: disable=redefined-outer-name,protected-access,missing-function-docstring
+
 import pytest
 
 from ecudo.metadata import openaire
@@ -22,7 +24,7 @@ def sample_record():
         description="Test description",
         publisher="Test Institute",
         issued="2024-01-15",
-        language="en",
+        language="English",
         keywords=["test"],
         files=[
             EcudoFile(name="data.csv", url="https://example.com/data.csv"),
@@ -106,13 +108,25 @@ class TestOnedataConverter:
 
         assert result is not None
         assert len(result.files) == 2
-        # Paths should be different due to collision resolution
-        paths = [f.path for f in result.files]
-        assert len(set(paths)) == 2  # All paths unique
+        # Paths should be resolved with enough segments to be unique
+        assert result.files[0].path == "stats/hl/station/26015/2013/2/23"
+        assert result.files[1].path == "tabular/hl/station/26015/2013/2/23"
 
 
 class TestResolvePathCollisions:
     """Tests for resolve_path_collisions function."""
+
+    def test_empty_list(self):
+        """Empty file list returns empty path list."""
+        assert resolve_path_collisions([]) == []
+
+    def test_single_file(self):
+        """Single file gets simple path."""
+        files = [EcudoFile(name="data.csv", url="https://example.com/data.csv")]
+
+        paths = resolve_path_collisions(files)
+
+        assert paths == ["data.csv"]
 
     def test_no_collisions(self):
         """Files with unique names keep simple paths."""
@@ -134,9 +148,7 @@ class TestResolvePathCollisions:
 
         paths = resolve_path_collisions(files)
 
-        assert len(paths) == 2
-        assert len(set(paths)) == 2  # Both unique
-        assert "raw" in paths[0] or "processed" in paths[0]
+        assert paths == ["raw/data.csv", "processed/data.csv"]
 
     def test_deep_collision(self):
         """Collisions requiring multiple path segments to resolve."""
@@ -147,9 +159,7 @@ class TestResolvePathCollisions:
 
         paths = resolve_path_collisions(files)
 
-        assert len(set(paths)) == 2
-        # Should include distinguishing path segment
-        assert "stats" in paths[0] or "data" in paths[0]
+        assert paths == ["stats/hl/2013/2/23", "data/hl/2013/2/23"]
 
     def test_multiple_collisions(self):
         """Multiple files with same name all get unique paths."""
@@ -161,7 +171,7 @@ class TestResolvePathCollisions:
 
         paths = resolve_path_collisions(files)
 
-        assert len(set(paths)) == 3
+        assert paths == ["a/data.bin", "b/data.bin", "c/data.bin"]
 
     def test_mixed_collisions(self):
         """Some files collide, others don't."""
@@ -173,38 +183,4 @@ class TestResolvePathCollisions:
 
         paths = resolve_path_collisions(files)
 
-        assert len(set(paths)) == 3
-        # readme.txt should stay simple
-        assert "readme.txt" in paths
-
-    def test_empty_list(self):
-        """Empty file list returns empty path list."""
-        assert resolve_path_collisions([]) == []
-
-    def test_single_file(self):
-        """Single file gets simple path."""
-        files = [EcudoFile(name="data.csv", url="https://example.com/data.csv")]
-
-        paths = resolve_path_collisions(files)
-
-        assert paths == ["data.csv"]
-
-    def test_real_world_example(self):
-        """Test with real MIR data pattern."""
-        files = [
-            EcudoFile(
-                name="23",
-                url="https://mirdata.mir.gdynia.pl/api/datras/stats/hl/station/26015/2013/2/23",
-            ),
-            EcudoFile(
-                name="23",
-                url="https://mirdata.mir.gdynia.pl/api/datras/data/tabular/stats/hl/station/26015/2013/2/23",
-            ),
-        ]
-
-        paths = resolve_path_collisions(files)
-
-        assert len(set(paths)) == 2
-        # Both paths should end with the original filename pattern
-        for path in paths:
-            assert path.endswith("23")
+        assert paths == ["raw/data.csv", "processed/data.csv", "readme.txt"]

@@ -1,8 +1,15 @@
 """Tests for parser utilities."""
 
+# pylint: disable=redefined-outer-name,protected-access,missing-function-docstring
+
 import pytest
 
-from ecudo.parsers.ecudo import extract_filename, parse_record
+from ecudo.parsers.ecudo import (
+    extract_filename,
+    parse_files,
+    parse_publisher,
+    parse_record,
+)
 
 
 @pytest.fixture
@@ -139,3 +146,131 @@ class TestParseRecord:
         assert extract_filename("https://example.com/file.csv") == "file.csv"
         assert extract_filename("https://example.com/") == "data.bin"
         assert extract_filename("") == "data.bin"
+
+
+class TestParseFiles:
+    """Tests for parse_files() function."""
+
+    def test_parse_single_distribution(self):
+        """Test parsing a single distribution."""
+        distributions = [
+            {"downloadURL": "https://example.com/data.zip", "format": "WWW:DOWNLOAD"}
+        ]
+        files = parse_files(distributions)
+
+        assert len(files) == 1
+        assert files[0].name == "data.zip"
+        assert files[0].url == "https://example.com/data.zip"
+        assert files[0].format == "WWW:DOWNLOAD"
+
+    def test_parse_multiple_distributions(self):
+        """Test parsing multiple distributions."""
+        distributions = [
+            {"downloadURL": "https://example.com/file1.csv"},
+            {"downloadURL": "https://example.com/file2.csv"},
+            {"downloadURL": "https://example.com/file3.csv"},
+        ]
+        files = parse_files(distributions)
+
+        assert len(files) == 3
+        assert files[0].name == "file1.csv"
+        assert files[1].name == "file2.csv"
+        assert files[2].name == "file3.csv"
+
+    def test_skip_distributions_without_url(self):
+        """Test that distributions without downloadURL are skipped."""
+        distributions = [
+            {"downloadURL": "https://example.com/valid.zip"},
+            {"format": "unknown"},  # No URL
+            {"downloadURL": "https://example.com/another.zip"},
+        ]
+        files = parse_files(distributions)
+
+        assert len(files) == 2
+        assert files[0].name == "valid.zip"
+        assert files[1].name == "another.zip"
+
+    def test_empty_distributions(self):
+        """Test parsing empty distribution list."""
+        files = parse_files([])
+        assert not files
+
+    def test_format_is_optional(self):
+        """Test that format field is optional."""
+        distributions = [{"downloadURL": "https://example.com/data.bin"}]
+        files = parse_files(distributions)
+
+        assert len(files) == 1
+        assert files[0].format is None
+
+
+class TestParsePublisher:
+    """Tests for parse_publisher() function."""
+
+    def test_publisher_as_dict(self):
+        """Test parsing publisher when it's a dict with name."""
+        publisher_data = {
+            "name": "Institute of Oceanology",
+            "@type": "org:Organization",
+        }
+        result = parse_publisher(publisher_data)
+        assert result == "Institute of Oceanology"
+
+    def test_publisher_as_string(self):
+        """Test parsing publisher when it's a plain string."""
+        publisher_data = "Simple Publisher Name"
+        result = parse_publisher(publisher_data)
+        assert result == "Simple Publisher Name"
+
+    def test_publisher_none(self):
+        """Test parsing when publisher is None."""
+        result = parse_publisher(None)
+        assert result == "Unknown Publisher"
+
+    def test_publisher_empty_string(self):
+        """Test parsing when publisher is empty string."""
+        result = parse_publisher("")
+        assert result == "Unknown Publisher"
+
+    def test_publisher_dict_without_name(self):
+        """Test parsing publisher dict without name field."""
+        publisher_data = {"@type": "org:Organization"}
+        result = parse_publisher(publisher_data)
+        assert result == "Unknown Publisher"
+
+
+class TestExtractFilename:
+    """Extended tests for extract_filename() function."""
+
+    def test_simple_url(self):
+        """Test extracting filename from simple URL."""
+        assert extract_filename("https://example.com/data.csv") == "data.csv"
+
+    def test_deep_path(self):
+        """Test extracting filename from deep URL path."""
+        url = "https://databank.iopan.pl/data/raw/vdr/vdr_201307_201312_nmea-08895.zip"
+        assert extract_filename(url) == "vdr_201307_201312_nmea-08895.zip"
+
+    def test_url_with_query_string(self):
+        """Test extracting filename ignores query string."""
+        url = "https://example.com/path/file.zip?token=abc123"
+        result = extract_filename(url)
+        # The current implementation includes query string in filename
+        assert result == "file.zip"
+
+    def test_url_without_extension(self):
+        """Test extracting filename without extension."""
+        url = "https://example.com/api/data/23"
+        assert extract_filename(url) == "23"
+
+    def test_empty_url(self):
+        """Test fallback for empty URL."""
+        assert extract_filename("") == "data.bin"
+
+    def test_root_url(self):
+        """Test fallback for URL with just root path."""
+        assert extract_filename("https://example.com/") == "data.bin"
+
+    def test_url_ending_with_slash(self):
+        """Test URL ending with slash."""
+        assert extract_filename("https://example.com/path/") == "data.bin"
