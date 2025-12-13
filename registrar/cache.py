@@ -20,6 +20,11 @@ class ResourceCache:
     This is the convention used for dataset registration where:
     - Storage name = domain (e.g., "example.com")
     - Space name = domain (same as storage)
+
+    Usage:
+        cache = ResourceCache()
+        cache.add_space(name="example", space_id="abc123", storage_id="def456")
+        cached = cache.get_space_by_name("example")
     """
 
     def __init__(self):

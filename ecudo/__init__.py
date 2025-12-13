@@ -4,20 +4,6 @@ eCUDO Crawler
 A modular crawler for discovering and processing public scientific datasets
 from eCUDO.pl for registration in Onedata.
 
-Architecture Overview
----------------------
-The crawler is organized into several modules with clear responsibilities:
-
-- **ecudo_api/**: Low-level HTTP client and ID iterators for eCUDO API
-- **models/**: Data structures (EcudoDataset, EcudoFile, OnedataDataset, OnedataFile)
-- **parsers/**: JSON-LD to model conversion
-- **metadata/**: Metadata format generators (OpenAIRE, etc.)
-- **processors/**: Pipeline processors (fetching, validation, filtering, writing)
-- **orchestration/**: Parallel processing infrastructure
-- **crawler.py**: High-level crawl orchestration (EcudoCrawler)
-
-See ARCHITECTURE.md for detailed documentation.
-
 Quick Start
 -----------
     # List organizations
@@ -28,6 +14,8 @@ Quick Start
 
     # Convert output
     python -m ecudo convert data/iopan_processed.jsonl
+
+See docs/ARCHITECTURE.md for detailed architecture documentation.
 """
 
 __author__ = "Bartosz Walkowicz"

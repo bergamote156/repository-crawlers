@@ -5,19 +5,6 @@ A tool for registering datasets from external open science services into Onedata
 It automatically creates HTTP storages and spaces as needed, registers files,
 creates public shares, and optionally registers DOI handles.
 
-Architecture Overview
----------------------
-The registrar is organized into several modules with clear responsibilities:
-
-- **api/**: Onedata REST API clients (Onepanel, Onezone, Oneprovider)
-- **models.py**: Data structures (InputDataset, RegistrationResult)
-- **cache.py**: ResourceCache for spaces/storages
-- **operations.py**: Business logic functions
-- **registrar.py**: High-level orchestration (DatasetRegistrar)
-- **cli.py**: Command-line interface
-
-See docs/ARCHITECTURE.md for detailed documentation.
-
 Quick Start
 -----------
     # Register datasets from JSON file
@@ -28,6 +15,8 @@ Quick Start
 
     # Show current configuration
     python -m registrar show-config
+
+See docs/ARCHITECTURE.md for detailed architecture documentation.
 """
 
 __author__ = "Bartosz Walkowicz"

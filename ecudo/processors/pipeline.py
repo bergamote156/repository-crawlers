@@ -23,6 +23,18 @@ class ProcessorPipeline[I, O](Processor[I, O]):
     Note: For type safety, all processors should have compatible
     input/output types. The pipeline's I type should match the first
     processor's input, and O should match the last processor's output.
+
+    Example usage:
+        pipeline = ProcessorPipeline([
+            DatasetFetcher(...),
+            URLValidator(...),
+            OnedataConverter(...),
+            JSONLWriter(...),
+        ])
+
+        await pipeline.open()
+        result = await pipeline.process(record_id)  # Flows through all processors
+        await pipeline.close()
     """
 
     def __init__(self, processors: Sequence[Processor]):

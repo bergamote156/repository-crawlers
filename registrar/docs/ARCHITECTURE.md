@@ -35,58 +35,27 @@ registrar/
 
 ## Data Flow
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           Registration Flow                                     │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│   ┌───────────────────┐                                                         │
-│   │   datasets.json   │  Input: list of datasets with files and metadata        │
-│   │   (input file)    │                                                         │
-│   └────────┬──────────┘                                                         │
-│            │                                                                    │
-│            ▼                                                                    │
-│   ┌───────────────────┐                                                         │
-│   │ DatasetRegistrar  │  Orchestrator: loads config, initializes clients        │
-│   │   .run()          │                                                         │
-│   └────────┬──────────┘                                                         │
-│            │                                                                    │
-│            ▼                                                                    │
-│   ┌───────────────────┐                                                         │
-│   │   load_cache()    │  Pre-load HTTP readonly spaces/storages                 │
-│   │   (operations.py) │                                                         │
-│   └────────┬──────────┘                                                         │
-│            │                                                                    │
-│            ▼                                                                    │
-│   ┌──────────────────────────────────────────────────────────────────────────┐  │
-│   │                    For each dataset:                                     │  │
-│   │                                                                          │  │
-│   │   ┌────────────────────────┐                                             │  │
-│   │   │ ensure_space_and_      │  Extract domain from file URLs              │  │
-│   │   │ storage()              │  Create storage + space if not cached       │  │
-│   │   └───────────┬────────────┘                                             │  │
-│   │               │ (space_id, storage_id)                                   │  │
-│   │               ▼                                                          │  │
-│   │   ┌────────────────────────┐                                             │  │
-│   │   │ register_dataset_      │  Register each file in Onedata              │  │
-│   │   │ files()                │  Skip if file already exists                │  │
-│   │   └───────────┬────────────┘                                             │  │
-│   │               │ (registered_count, skipped_count)                        │  │
-│   │               ▼                                                          │  │
-│   │   ┌────────────────────────┐                                             │  │
-│   │   │ find_or_create_        │  Create public share for dataset directory  │  │
-│   │   │ share()                │  Reuse existing share if matches            │  │
-│   │   └───────────┬────────────┘                                             │  │
-│   │               │ (share_id)                                               │  │
-│   │               ▼                                                          │  │
-│   │   ┌────────────────────────┐                                             │  │
-│   │   │ find_or_register_      │  Register DOI handle (optional)             │  │
-│   │   │ handle()               │  Requires handle_service_id configured      │  │
-│   │   └────────────────────────┘                                             │  │
-│   │                                                                          │  │
-│   └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph flow [Registration Flow]
+        Input["datasets.json (input file)"]
+        Registrar["DatasetRegistrar.run()"]
+        Cache["load_cache()"]
+        
+        subgraph loop [For each dataset]
+            EnsureSpace["ensure_space_and_storage()"]
+            RegisterFiles["register_dataset_files()"]
+            CreateShare["find_or_create_share()"]
+            RegisterHandle["find_or_register_handle()"]
+        end
+    end
+    
+    Input --> Registrar
+    Registrar --> Cache
+    Cache --> EnsureSpace
+    EnsureSpace -->|"space_id, storage_id"| RegisterFiles
+    RegisterFiles -->|"registered, skipped"| CreateShare
+    CreateShare -->|share_id| RegisterHandle
 ```
 
 ## Key Components
@@ -116,12 +85,6 @@ Classes that encapsulate Onedata REST API calls. Each client holds configuration
 Caches spaces and storages to minimize API calls. Only tracks HTTP readonly
 storages with matching space names (convention used for dataset registration).
 
-```python
-cache = ResourceCache()
-cache.add_space(name="example.com", space_id="abc123", storage_id="def456")
-cached = cache.get_space_by_name("example.com")
-```
-
 ### Operations (`operations.py`)
 
 Pure functions implementing business logic. Dependencies passed explicitly.
@@ -136,12 +99,8 @@ Pure functions implementing business logic. Dependencies passed explicitly.
 
 ### DatasetRegistrar (`registrar.py`)
 
-High-level orchestrator that ties everything together:
-
-```python
-registrar = DatasetRegistrar(config)
-summary = registrar.run(datasets_file="datasets.json", limit=10)
-```
+High-level orchestrator that ties everything together. Coordinates API clients,
+cache, and operations to register datasets from external sources into Onedata.
 
 ## Configuration
 
@@ -182,23 +141,6 @@ python -m registrar show-config
 ```
 
 ## Design Decisions
-
-### Classes vs Functions
-
-- **Classes** are used where state is maintained:
-  - API clients (session, config)
-  - ResourceCache (cached data)
-  - DatasetRegistrar (holds dependencies)
-
-- **Functions** are used for stateless business logic:
-  - All operations in `operations.py`
-  - Pure transformations with explicit dependencies
-
-### Naming Conventions
-
-- `registrar/` - module name (consistent with "Dataset Registrar")
-- `operations.py` - business logic functions (pythonic alternative to "services")
-- `api/` - REST API clients (clear purpose)
 
 ### Error Handling
 

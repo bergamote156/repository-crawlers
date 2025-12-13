@@ -19,7 +19,7 @@ import yaml
 from registrar import __version__, output
 from registrar.api import OnepanelClient
 from registrar.cache import ResourceCache
-from registrar.config import config_to_dict, load_config
+from registrar.config import Config, config_to_dict, load_config
 from registrar.operations import load_cache
 from registrar.registrar import DatasetRegistrar
 
@@ -89,29 +89,10 @@ def register(
 
     DATASETS_FILE is a JSON file containing an array of datasets to register.
     """
-    # Build CLI overrides
-    cli_overrides: dict = {}
+    config = load_config_with_overrides(ctx)
 
-    # Apply log level from CLI flags
-    if log_level := ctx.obj.get("log_level"):
-        cli_overrides.setdefault("logging", {})["level"] = log_level
-
-    config = load_config(
-        config_file=ctx.obj.get("config_file"),
-        cli_overrides=cli_overrides if cli_overrides else None,
-    )
-
-    # Initialize output module with configured level
-    output.set_level(config.logging.level)
-
-    # Validate tokens
     if not dry_run:
-        if not config.tokens.admin_token:
-            output.error("REGISTRAR_ADMIN_TOKEN is not set!")
-            sys.exit(1)
-        if not config.tokens.space_owner_token:
-            output.error("REGISTRAR_SPACE_OWNER_TOKEN is not set!")
-            sys.exit(1)
+        validate_tokens(config, admin=True, space_owner=True)
 
     # Run registration
     registrar = DatasetRegistrar(config)
@@ -139,29 +120,10 @@ def register(
 @click.pass_context
 def list_spaces(ctx: click.Context):
     """List HTTP readonly spaces on the provider."""
-    cli_overrides: dict = {}
-    if log_level := ctx.obj.get("log_level"):
-        cli_overrides.setdefault("logging", {})["level"] = log_level
+    config = load_config_with_overrides(ctx)
+    validate_tokens(config, admin=True)
 
-    config = load_config(
-        config_file=ctx.obj.get("config_file"),
-        cli_overrides=cli_overrides if cli_overrides else None,
-    )
-    output.set_level(config.logging.level)
-
-    if not config.tokens.admin_token:
-        output.error("REGISTRAR_ADMIN_TOKEN is not set!")
-        sys.exit(1)
-
-    onepanel = OnepanelClient(
-        domain=config.onedata.oneprovider_domain,
-        token=config.tokens.admin_token,
-        port=config.onedata.panel_port,
-        verify_ssl=config.onedata.verify_ssl,
-    )
-
-    cache = ResourceCache()
-    load_cache(onepanel=onepanel, cache=cache)
+    _, cache = init_onepanel_with_cache(config)
 
     output.always(f"\nHTTP readonly spaces ({len(cache.spaces)}):\n")
     output.always(f"{'Name':<40} {'Space ID':<40} {'Storage ID'}")
@@ -175,29 +137,10 @@ def list_spaces(ctx: click.Context):
 @click.pass_context
 def list_storages(ctx: click.Context):
     """List HTTP readonly storages on the provider."""
-    cli_overrides: dict = {}
-    if log_level := ctx.obj.get("log_level"):
-        cli_overrides.setdefault("logging", {})["level"] = log_level
+    config = load_config_with_overrides(ctx)
+    validate_tokens(config, admin=True)
 
-    config = load_config(
-        config_file=ctx.obj.get("config_file"),
-        cli_overrides=cli_overrides if cli_overrides else None,
-    )
-    output.set_level(config.logging.level)
-
-    if not config.tokens.admin_token:
-        output.error("REGISTRAR_ADMIN_TOKEN is not set!")
-        sys.exit(1)
-
-    onepanel = OnepanelClient(
-        domain=config.onedata.oneprovider_domain,
-        token=config.tokens.admin_token,
-        port=config.onedata.panel_port,
-        verify_ssl=config.onedata.verify_ssl,
-    )
-
-    cache = ResourceCache()
-    load_cache(onepanel=onepanel, cache=cache)
+    _, cache = init_onepanel_with_cache(config)
 
     output.always(f"\nHTTP readonly storages ({len(cache.storages)}):\n")
     output.always(f"{'Name':<40} {'Storage ID':<40} {'Endpoint'}")
@@ -212,11 +155,77 @@ def list_storages(ctx: click.Context):
 @click.pass_context
 def show_config(ctx: click.Context):
     """Show current configuration."""
-    config = load_config(config_file=ctx.obj.get("config_file"))
+    config = load_config_with_overrides(ctx)
     config_dict = config_to_dict(config)
 
     output.always("Current configuration:\n")
     output.always(yaml.dump(config_dict, default_flow_style=False, sort_keys=False))
+
+
+# Helper functions
+
+
+def load_config_with_overrides(ctx: click.Context) -> Config:
+    """
+    Load configuration with CLI overrides from context.
+
+    Args:
+        ctx: Click context containing config_file and log_level
+
+    Returns:
+        Loaded configuration object
+    """
+    cli_overrides: dict = {}
+    if log_level := ctx.obj.get("log_level"):
+        cli_overrides.setdefault("logging", {})["level"] = log_level
+
+    config = load_config(
+        config_file=ctx.obj.get("config_file"),
+        cli_overrides=cli_overrides if cli_overrides else None,
+    )
+    output.set_level(config.logging.level)
+    return config
+
+
+def validate_tokens(config: Config, *, admin: bool = False, space_owner: bool = False):
+    """
+    Validate that required tokens are set.
+
+    Args:
+        config: Configuration object
+        admin: Whether to check admin token
+        space_owner: Whether to check space owner token
+
+    Exits:
+        Exits with code 1 if any required token is missing
+    """
+    if admin and not config.tokens.admin_token:
+        output.error("REGISTRAR_ADMIN_TOKEN is not set!")
+        sys.exit(1)
+    if space_owner and not config.tokens.space_owner_token:
+        output.error("REGISTRAR_SPACE_OWNER_TOKEN is not set!")
+        sys.exit(1)
+
+
+def init_onepanel_with_cache(config: Config) -> tuple[OnepanelClient, ResourceCache]:
+    """
+    Initialize OnepanelClient and load resource cache.
+
+    Args:
+        config: Configuration object
+
+    Returns:
+        Tuple of (OnepanelClient, ResourceCache)
+    """
+    onepanel = OnepanelClient(
+        domain=config.onedata.oneprovider_domain,
+        token=config.tokens.admin_token,
+        port=config.onedata.panel_port,
+        verify_ssl=config.onedata.verify_ssl,
+    )
+    cache = ResourceCache()
+    load_cache(onepanel=onepanel, cache=cache)
+    return onepanel, cache
 
 
 def main():

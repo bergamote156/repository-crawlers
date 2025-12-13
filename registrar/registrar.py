@@ -30,6 +30,10 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
     Coordinates API clients, cache, and operations to register datasets
     from external sources into Onedata.
+
+    Usage:
+        registrar = DatasetRegistrar(config)
+        summary = registrar.run(datasets_file="datasets.json", limit=10)
     """
 
     def __init__(self, config: Config):

@@ -25,7 +25,7 @@ class EcudoDatasetIDIterator:
 
     Usage:
         async with EcudoClient() as client:
-            iterator = RecordIDIterator(client, "iopan", max_datasets=100)
+            iterator = EcudoDatasetIDIterator(client, "iopan", max_datasets=100)
             async for dataset_id in iterator:
                 # Process dataset_id
                 pass

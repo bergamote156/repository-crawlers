@@ -52,88 +52,43 @@ ecudo/
 
 The entire crawl is expressed as a single pipeline:
 
-```
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                           Processing Pipeline                                   │
-├─────────────────────────────────────────────────────────────────────────────────┤
-│                                                                                 │
-│   ┌───────────────────┐                                                         │
-│   │  RecordIDIterator │  Lightweight: fetches only record IDs                   │
-│   │  (sequential)     │                                                         │
-│   └────────┬──────────┘                                                         │
-│            │ yields IDs (str)                                                   │
-│            ▼                                                                    │
-│   ┌──────────────────────────────────────────────────────────────────────────┐  │
-│   │                 run_parallel_pipeline() (N workers)                      │  │
-│   │                                                                          │  │
-│   │   ┌──────────────────────────────────────────────────────────────────┐   │  │
-│   │   │                    ProcessorPipeline                             │   │  │
-│   │   │                                                                  │   │  │
-│   │   │   ┌────────────────┐                                             │   │  │
-│   │   │   │ DatasetFetcher │  ID → fetch JSON-LD → parse → EcudoDataset  │   │  │
-│   │   │   └───────┬────────┘                                             │   │  │
-│   │   │           │ EcudoDataset                                         │   │  │
-│   │   │           ▼                                                      │   │  │
-│   │   │   ┌────────────────┐                                             │   │  │
-│   │   │   │  URLValidator  │  Validates all file URLs (optional)         │   │  │
-│   │   │   └───────┬────────┘                                             │   │  │
-│   │   │           │ EcudoDataset                                         │   │  │
-│   │   │           ▼                                                      │   │  │
-│   │   │   ┌────────────────┐                                             │   │  │
-│   │   │   │DiversityFilter │  Limits similar datasets (optional)         │   │  │
-│   │   │   └───────┬────────┘                                             │   │  │
-│   │   │           │ EcudoDataset                                         │   │  │
-│   │   │           ▼                                                      │   │  │
-│   │   │   ┌────────────────┐                                             │   │  │
-│   │   │   │  JSONLWriter   │  Saves _raw JSON to JSONL (pass-through)    │   │  │
-│   │   │   └───────┬────────┘                                             │   │  │
-│   │   │           │ EcudoDataset                                         │   │  │
-│   │   │           ▼                                                      │   │  │
-│   │   │   ┌────────────────┐                                             │   │  │
-│   │   │   │OnedataConverter│  EcudoDataset → OnedataDataset + XML        │   │  │
-│   │   │   └───────┬────────┘                                             │   │  │
-│   │   │           │ OnedataDataset                                       │   │  │
-│   │   │           ▼                                                      │   │  │
-│   │   │   ┌────────────────┐                                             │   │  │
-│   │   │   │  JSONLWriter   │  Saves final output                         │   │  │
-│   │   │   └────────────────┘                                             │   │  │
-│   │   │                                                                  │   │  │
-│   │   └──────────────────────────────────────────────────────────────────┘   │  │
-│   │                                                                          │  │
-│   └──────────────────────────────────────────────────────────────────────────┘  │
-│                                                                                 │
-└─────────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph pipeline [Processing Pipeline]
+        Iterator["EcudoRecordIDIterator (sequential)"]
+        
+        subgraph parallel ["run_parallel_pipeline() - N workers"]
+            subgraph proc [ProcessorPipeline]
+                Fetcher["DatasetFetcher"]
+                Validator["URLValidator (optional)"]
+                Filter["DiversityFilter (optional)"]
+                RawWriter["JSONLWriter (raw)"]
+                Converter["OnedataConverter"]
+                FinalWriter["JSONLWriter (final)"]
+            end
+        end
+    end
+    
+    Iterator -->|"yields IDs (str)"| Fetcher
+    Fetcher -->|EcudoDataset| Validator
+    Validator -->|EcudoDataset| Filter
+    Filter -->|EcudoDataset| RawWriter
+    RawWriter -->|EcudoDataset| Converter
+    Converter -->|OnedataDataset| FinalWriter
 ```
 
 ## Key Components
 
 ### EcudoClient (`ecudo_api/client.py`)
 
-Low-level HTTP client for eCUDO API. Handles:
-- Session management (async context manager)
-- Retries with exponential backoff
-- JSON fetching
-- URL validation (HEAD requests)
-
-```python
-async with EcudoClient() as client:
-    orgs = await client.get_organizations()
-    metadata = await client.get_dataset_metadata(record_id)
-```
+Low-level HTTP client for eCUDO API. Handles session management (async context
+manager), retries with exponential backoff, JSON fetching, and URL validation.
 
 ### EcudoDatasetIDIterator (`ecudo_api/iterator.py`)
 
 Async iterator that yields record IDs from an organization. Lightweight - fetches
 only IDs (small payloads), not full metadata. This allows the heavy metadata
 fetching to be parallelized by workers.
-
-```python
-async with EcudoClient() as client:
-    iterator = EcudoDatasetIDIterator(client, "iopan", max_records=100)
-    async for record_id in iterator:
-        # record_id is fed to the pipeline
-        pass
-```
 
 ### EcudoDataset (`models/ecudo.py`)
 
@@ -142,69 +97,29 @@ to be easily extended when other data sources are added.
 
 ### OnedataDataset (`models/onedata.py`)
 
-Output structure ready for Onedata registration:
+Output structure ready for Onedata registration.
 
 ### Processor[I, O] (`processors/base.py`)
 
-Generic typed processor base class. Processors can:
-- Transform data (`I` → `O`)
-- Filter data (return `None` to skip)
-- Have lifecycle methods (`open()`, `close()`)
-- Report statistics (`get_stats()`)
-
-```python
-class MyProcessor(Processor[EcudoDataset, EcudoDataset]):
-    async def process(self, record: EcudoDataset) -> EcudoDataset | None:
-        if not self.is_valid(record):
-            return None  # Filter out
-        return record  # Pass through
-    
-    def get_stats(self) -> dict:
-        return {"processed": self._count}
-```
+Generic typed processor base class. Processors can transform data (`I` → `O`),
+filter data (return `None` to skip) and have lifecycle methods (`open()`, `close()`).
 
 ### ProcessorPipeline (`processors/pipeline.py`)
 
-Chains multiple processors into a sequential pipeline:
+Chains multiple processors into a sequential pipeline. Items flow through
+processors in order; if any processor returns `None`, the pipeline stops for
+that item.
 
-```python
-pipeline = ProcessorPipeline([
-    DatasetFetcher(...),
-    URLValidator(...),
-    DiversityFilter(...),
-    OnedataConverter(serializer),
-    JSONLWriter(processed_output),
-])
+### run_parallel_pipeline (`orchestration/parallel.py`)
 
-await pipeline.open()
-result = await pipeline.process(record_id)  # Flows through all processors
-await pipeline.close()
-
-# Aggregate stats from all processors
-stats = pipeline.get_stats()
-```
-
-## Parallel fetcher (`orchestration/parallel.py`)
-
-`run_parallel_pipeline` implements the producer-consumer loop used by the CLI.
-It separates lightweight ID iteration from heavy metadata processing and applies
-backpressure via a bounded queue.
+Producer-consumer loop that separates lightweight ID iteration from heavy
+metadata processing. Applies backpressure via a bounded queue.
 
 Key behaviors:
 - Configurable `concurrency` and `queue_size` for workers and backpressure.
 - `ProcessingStats` tracks queued, processed, and failed items.
 - Errors per item are logged as warnings; processing continues for other items.
 - Uses `None` sentinels to stop workers cleanly once the producer finishes.
-
-Example:
-```python
-stats = await run_parallel_pipeline(
-    dataset_id_source=record_id_iterator,
-    dataset_pipeline=pipeline,
-    concurrency=128,
-    queue_size=1000,
-)
-```
 
 ### Built-in Processors
 
@@ -225,33 +140,39 @@ Configuration uses a three-layer hierarchy (higher overrides lower):
 
 See `config.example.yaml` for all options.
 
-## Extending the Crawler
+## Design Decisions
 
-### Adding a New Processor
+### Pipeline Pattern
 
-1. Create processor class:
+The crawler uses a pipeline pattern where each processor is a single-responsibility
+unit that transforms or filters data. This design:
+- Makes it easy to add/remove/reorder processing steps
+- Enables unit testing of individual processors
+- Provides clear data flow visibility
 
-```python
-from ecudo.processors.base import Processor
-from ecudo.models import EcudoDataset
+### Async/Await
 
+The entire codebase is async-first using `asyncio` and `aiohttp`. This enables:
+- High concurrency (128+ parallel workers) without threads
+- Efficient I/O-bound operations (network requests dominate the workload)
+- Clean cancellation and timeout handling
 
-class MyFilter(Processor[EcudoDataset, EcudoDataset]):
-    def __init__(self, threshold: float):
-        self.threshold = threshold
-        self._filtered = 0
+### JSONL as Intermediate Format
 
-    async def process(self, record: EcudoDataset) -> EcudoDataset | None:
-        if self.should_skip(record):
-            self._filtered += 1
-            return None
-        return record
+Raw and processed data is saved as JSONL (JSON Lines) rather than a single JSON
+array. Benefits:
+- **Streaming writes**: Each record is appended immediately; no buffering needed
+- **Crash resilience**: Partial results are preserved if the crawler is interrupted
+- **Memory efficiency**: No need to hold all records in memory
+- **Easy inspection**: `head`, `tail`, `wc -l` work directly on the file
 
-    def get_stats(self) -> dict:
-        return {"filtered": self._filtered}
-```
+### Separation of ID Iteration and Processing
 
-2. Add to pipeline in `crawler.py`
+The `EcudoRecordIDIterator` only fetches lightweight dataset IDs, while the heavy
+metadata fetching happens in parallel workers. This design:
+- Minimizes memory usage (only IDs in the queue, not full records)
+- Allows backpressure control via bounded queue
+- Keeps the producer fast and non-blocking
 
 ## Performance Considerations
 
