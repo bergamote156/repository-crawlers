@@ -57,4 +57,4 @@ lint: black-check static-analysis type-check
 
 test:
 	$(call print_target)
-	$(call docker_run, sh -c "pip install -qq --break-system-packages -r requirements.txt && pytest tests")
+	$(call docker_run, sh -c "pip install -qq --break-system-packages -r requirements.txt && pytest tests -v --junitxml=public-data-crawlers-tests-results.xml")
