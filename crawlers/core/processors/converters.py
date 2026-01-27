@@ -9,8 +9,8 @@ __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from collections import Counter
-from urllib.parse import urlparse
 from typing import Protocol
+from urllib.parse import urlparse
 
 from crawlers.core import output
 from crawlers.core.abc.metadata import MetadataBuilder
@@ -41,14 +41,14 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset]):
     file paths specifically for Onedata registration (resolving collisions).
     """
 
-    def __init__(self, metadata_generator: MetadataBuilder[T]):
+    def __init__(self, metadata_builder: MetadataBuilder[T]):
         """
         Initialize converter.
 
         Args:
-            metadata_generator: Generator for producing metadata XML
+            metadata_builder: Generator for producing metadata XML
         """
-        self.metadata_generator = metadata_generator
+        self.metadata_builder = metadata_builder
         self._converted = 0
 
     async def process(self, item: T) -> OnedataDataset:
@@ -68,7 +68,7 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset]):
             name=item.title,
             location=item.title.replace("/", "-"),
             pid=item.identifier,
-            metadata_xml=self.metadata_generator.build(item),
+            metadata_xml=self.metadata_builder.build(item),
             files=[
                 OnedataFile(name=f.name, url=f.url, path=path)
                 for f, path in zip(item.files, paths)
