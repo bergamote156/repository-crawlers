@@ -39,7 +39,7 @@ class Parser[RawDatasetT, DatasetT](Protocol):
         ...
 
 
-class DatasetFetcher[RawDatasetT, DatasetT](Processor[RawDatasetT, DatasetT]):
+class DatasetFetcher[RawDatasetT, DatasetT](Processor[str, DatasetT]):
     """
     Fetches and parses metadata for a dataset ID.
 
