@@ -65,6 +65,7 @@ class JSONLWriter[T: dict | Serializable](Processor[T, T]):
                 # Type checker knows it must be a dict due to T: dict | Serializable
                 data = cast(dict, item)
 
+            # TODO async write?
             json_str = json.dumps(data, ensure_ascii=False)
             self._file.write(json_str + "\n")
             self._file.flush()  # Ensure data is written
