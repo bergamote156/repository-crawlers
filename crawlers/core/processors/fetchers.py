@@ -14,7 +14,7 @@ from crawlers.core import output
 from crawlers.core.abc.processor import Processor
 
 
-class Parser[RawDatasetT, DatasetT](Protocol):
+class Parser[I, O](Protocol):
     """
     Protocol for data parsers.
 
@@ -22,11 +22,11 @@ class Parser[RawDatasetT, DatasetT](Protocol):
     Fetchers accept anything that has a `parse()` method (duck typing).
 
     Generics:
-        RawDatasetT: Type of raw data (e.g. dict from JSON)
-        DatasetT: Type of output model (e.g. EcudoDataset)
+        I: Type of raw data (e.g. dict from JSON)
+        O: Type of output model (e.g. EcudoDataset)
     """
 
-    def parse(self, raw: RawDatasetT) -> DatasetT | None:
+    def parse(self, raw: I) -> O | None:
         """
         Parse raw data into a dataset model.
 
@@ -39,7 +39,7 @@ class Parser[RawDatasetT, DatasetT](Protocol):
         ...
 
 
-class DatasetFetcher[RawDatasetT, DatasetT](Processor[str, DatasetT]):
+class DatasetFetcher[I, O](Processor[str, O]):
     """
     Fetches and parses metadata for a dataset ID.
 
@@ -49,15 +49,15 @@ class DatasetFetcher[RawDatasetT, DatasetT](Processor[str, DatasetT]):
 
     def __init__(
         self,
-        fetch_fn: Callable[[str], Awaitable[RawDatasetT]],
-        parser: Parser[RawDatasetT, DatasetT],
+        fetch_fn: Callable[[str], Awaitable[I]],
+        parser: Parser[I, O],
     ):
         """
         Initialize fetcher.
 
         Args:
-            fetch_fn: Async function taking ID and returning raw RawDatasetT
-            parser: Parser instance/protocol to convert RawDatasetT to DatasetT
+            fetch_fn: Async function taking ID and returning raw I
+            parser: Parser instance/protocol to convert I to O
         """
         self.fetch_fn = fetch_fn
         self.parser = parser
@@ -65,7 +65,7 @@ class DatasetFetcher[RawDatasetT, DatasetT](Processor[str, DatasetT]):
         self._parsed = 0
         self._failed = 0
 
-    async def process(self, item: str) -> DatasetT | None:
+    async def process(self, item: str) -> O | None:
         """
         Fetch and parse metadata for a dataset ID.
 

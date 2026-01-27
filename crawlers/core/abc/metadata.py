@@ -7,16 +7,16 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from abc import ABC, abstractmethod
 
 
-class MetadataBuilder[DatasetT](ABC):
+class MetadataBuilder[T](ABC):
     """
     Abstract base class for metadata builders.
 
     Generics:
-        DatasetT: Dataset type
+        T: Dataset type
     """
 
     @abstractmethod
-    def build(self, dataset: DatasetT) -> str:
+    def build(self, dataset: T) -> str:
         """
         Generate metadata for dataset.
 

@@ -21,7 +21,7 @@ class Dataset(Protocol):
     title: str
 
 
-class DiversityFilter(Processor[Dataset, Dataset]):
+class DiversityFilter[T: Dataset](Processor[T, T]):
     """
     Filters out datasets with similar titles to ensure diversity.
 
@@ -51,7 +51,7 @@ class DiversityFilter(Processor[Dataset, Dataset]):
         self._processed = 0
         self._filtered = 0
 
-    async def process(self, item: Dataset) -> Dataset | None:
+    async def process(self, item: T) -> T | None:
         """
         Check if dataset is too similar to existing ones.
 
