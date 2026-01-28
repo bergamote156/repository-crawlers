@@ -19,7 +19,7 @@ import yaml
 
 from crawlers.core.config import ConfigSchema
 
-T = TypeVar("T")
+ConfigT = TypeVar("ConfigT")
 
 # --- Command Definition ---
 
@@ -185,9 +185,9 @@ class CrawlerPlugin(ABC):
     def load_config(
         self,
         cli_args: argparse.Namespace,
-        config_cls: type[T],
+        config_cls: type[ConfigT],
         command_name: str,
-    ) -> T:
+    ) -> ConfigT:
         """
         Build and validate configuration from ENV + YAML + CLI.
 
@@ -226,12 +226,12 @@ class CrawlerPlugin(ABC):
 
     def _instantiate_config(
         self,
-        config_cls: type[T],
+        config_cls: type[ConfigT],
         global_yaml: dict[str, Any],
         plugin_yaml: dict[str, Any],
         command_yaml: dict[str, Any],
         cli_args: argparse.Namespace | None,
-    ) -> T:
+    ) -> ConfigT:
         """Recursively instantiate dataclass config from sources using schema."""
         schema: ConfigSchema = config_cls.__config_schema__
         init_kwargs: dict[str, Any] = {}
@@ -334,6 +334,7 @@ class CrawlerPlugin(ABC):
 
 
 def get_yaml_section(config_yaml, key):
+    """Safely get a section from YAML dict."""
     if isinstance(config_yaml, dict):
         return config_yaml.get(key, {})
 

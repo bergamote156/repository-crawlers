@@ -1,11 +1,12 @@
 """Base Crawler."""
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import asyncio
 from abc import ABC, abstractmethod
+from pprint import pformat
 from typing import Any, AsyncIterable
 
 from crawlers.core import output
@@ -50,6 +51,8 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
                 await self.before_crawl(client)
 
                 self._pipeline = self.build_pipeline(client)
+                self._print_pipeline()
+
                 await self._pipeline.open()
 
                 try:
@@ -134,12 +137,24 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
         Override in subclass for custom banner.
         """
         output.info(f"Starting crawler: {self.__class__.__name__}")
+        output.debug(f"{pformat(self.config)}")
+
+    def _print_pipeline(self) -> None:
+        """
+        Print pipeline description after building.
+
+        Uses pipeline.format_description() to show all processors.
+        """
+        if self._pipeline:
+            output.info("\n📦 Processing pipeline:")
+            output.info(self._pipeline.format_description())
 
     def _print_summary(self) -> None:
         """
         Print summary at crawl end (always called, even on interrupt).
 
-        Override in subclass for custom summary.
+        Prints processor statistics, overall stats, and output artifacts.
+        Override in subclass for custom summary additions.
         """
         output.always("\n" + "=" * 80)
         if self.interrupted:
@@ -157,3 +172,15 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
         # Print overall crawl stats
         if self.stats:
             output.always(f"\nOverall: {self.stats}")
+
+        # Print output artifacts collected from pipeline
+        if self._pipeline:
+            artifacts = self._pipeline.get_artifacts()
+            if artifacts:
+                output.always("\nOutput files:")
+                for path in artifacts:
+                    output.always(f"  {path}")
+
+        output.always("\nNext steps:")
+        output.always("  1. Run: registrar")
+        output.always("=" * 80)

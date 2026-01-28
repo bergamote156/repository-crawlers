@@ -5,7 +5,7 @@ Crawler implementation for the eCUDO data repository.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import sys
@@ -14,10 +14,8 @@ from typing import Any, AsyncIterable, cast
 
 from crawlers.core import output
 from crawlers.core.abc.api import ApiClient
-from crawlers.core.abc.processor import Processor
 from crawlers.core.crawler import BaseCrawler
 from crawlers.core.metadata.openaire import OpenAIREBuilder
-from crawlers.core.onedata import OnedataDataset
 from crawlers.core.processors.converters import OnedataConverter
 from crawlers.core.processors.fetchers import DatasetFetcher
 from crawlers.core.processors.filters import DiversityFilter
@@ -47,8 +45,8 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
         output_dir.mkdir(parents=True, exist_ok=True)
 
         org = config.organization
-        self.raw_output_file = output_dir / f"{org}_raw.jsonl"
-        self.processed_output_file = output_dir / f"{org}_processed.jsonl"
+        self._raw_output_path = output_dir / f"{org}_raw.jsonl"
+        self._processed_output_path = output_dir / f"{org}_processed.jsonl"
 
     def create_client(self) -> EcudoClient:
         """Create eCUDO API client."""
@@ -58,9 +56,9 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
             max_retries=self.config.max_retries,
         )
 
-    def create_iterator(self, client: EcudoClient) -> AsyncIterable[Any]:
+    def create_iterator(self, client: ApiClient) -> AsyncIterable[Any]:
         """Create iterator over eCUDO dataset IDs."""
-        ecudo_client = client
+        ecudo_client = cast(EcudoClient, client)
 
         opts = EcudoIteratorOpts(
             org_id=self.config.organization,
@@ -70,9 +68,9 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
 
         return ecudo_client.iterate_datasets(opts)
 
-    def build_pipeline(self, client: EcudoClient) -> ProcessorPipeline:
+    def build_pipeline(self, client: ApiClient) -> ProcessorPipeline:
         """
-        Build the processing pipeline.
+        Build the processing pipeline declaratively.
 
         Pipeline stages:
         1. Fetcher: ID -> EcudoDataset
@@ -83,66 +81,43 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
         6. ProcessedWriter: write OnedataDataset to JSONL
         """
         ecudo_client = cast(EcudoClient, client)
+        cfg = self.config
+        url_cfg = cfg.processors.url_validator
+        df_cfg = cfg.processors.diversity_filter
 
-        output.info("\n📦 Building processing pipeline...")
-        processors: list[Processor] = []
-
-        # 1. Fetcher: ID -> EcudoDataset
-        output.info("   ✓ DatasetFetcher: fetch and parse JSON-LD")
-        fetcher = DatasetFetcher[dict, EcudoDataset](
-            fetch_fn=ecudo_client.get_dataset_metadata,
-            parser=EcudoParser(),
-        )
-        processors.append(fetcher)
-
-        # 2. URL Validator (optional)
-        if self.config.get_url_validator_enabled():
-            log_path = self.config.processors.url_validator.invalid_url_log
-            log_note = f" (log: {log_path})" if log_path else ""
-            output.info(f"   ✓ URLValidator: check URL accessibility{log_note}")
-            processors.append(
-                URLValidator[EcudoDataset](
+        return ProcessorPipeline(
+            [
+                # 1. Fetcher: ID -> EcudoDataset
+                DatasetFetcher[dict, EcudoDataset](
+                    fetch_fn=ecudo_client.get_dataset_metadata,
+                    parser=EcudoParser(),
+                ),
+                # 2. URL Validator (optional)
+                URLValidator[EcudoDataset](  # type: ignore[type-var]
                     validate_fn=ecudo_client.validate_url,
-                    invalid_url_log=(Path(log_path) if log_path else None),
-                )
-            )
-        else:
-            output.info("   ⊘ URLValidator: disabled")
-
-        # 3. Diversity Filter (optional)
-        if self.config.get_diversity_filter_enabled():
-            df_cfg = self.config.processors.diversity_filter
-            output.info(
-                f"   ✓ DiversityFilter: max {df_cfg.max_similar} similar "
-                f"({df_cfg.similarity_threshold:.0%} threshold)"
-            )
-            processors.append(
+                    invalid_url_log=(
+                        Path(url_cfg.invalid_url_log)
+                        if url_cfg.invalid_url_log
+                        else None
+                    ),
+                    enabled=cfg.get_url_validator_enabled(),
+                ),
+                # 3. Diversity Filter (optional)
                 DiversityFilter[EcudoDataset](
                     max_similar=df_cfg.max_similar,
                     similarity_threshold=df_cfg.similarity_threshold,
-                )
-            )
-        else:
-            output.info("   ⊘ DiversityFilter: disabled")
-
-        # 4. Raw output writer (before conversion)
-        output.info(f"   ✓ RawRecordWriter: {self.raw_output_file}")
-        processors.append(JSONLWriter[EcudoDataset](output_path=self.raw_output_file))
-
-        # 5. Converter: EcudoDataset -> OnedataDataset
-        output.info("   ✓ OnedataConverter: build Onedata dataset with OpenAIRE XML")
-        metadata_builder = OpenAIREBuilder()
-        processors.append(
-            OnedataConverter[EcudoDataset](metadata_builder=metadata_builder)
+                    enabled=cfg.get_diversity_filter_enabled(),
+                ),
+                # 4. Raw output writer
+                JSONLWriter[EcudoDataset](output_path=self._raw_output_path),
+                # 5. Converter: EcudoDataset -> OnedataDataset
+                OnedataConverter[EcudoDataset](  # type: ignore[type-var]
+                    metadata_builder=OpenAIREBuilder(),  # type: ignore[arg-type]
+                ),
+                # 6. Processed output writer
+                JSONLWriter(output_path=self._processed_output_path),
+            ]
         )
-
-        # 6. Processed output writer (after conversion)
-        output.info(f"   ✓ ProcessedWriter: {self.processed_output_file}")
-        processors.append(
-            JSONLWriter[OnedataDataset](output_path=self.processed_output_file)
-        )
-
-        return ProcessorPipeline(processors)
 
     async def before_crawl(self, client: ApiClient) -> None:
         """Validate that the requested organization exists."""
@@ -157,29 +132,3 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
             sys.exit(1)
 
         output.info(f"✅ Found organization: {self.config.organization}")
-
-        # Log crawl parameters
-        output.info(f"\n🚀 Starting parallel crawl of {self.config.organization}...")
-        if self.config.max_records:
-            output.info(f"   Limit: {self.config.max_records} datasets")
-        output.info(f"   Concurrency: {self.config.concurrency} workers")
-        output.info(f"   Queue size: {self.config.queue_size}")
-
-    def _print_banner(self) -> None:
-        """Print eCUDO crawler banner."""
-        output.info("=" * 80)
-        output.info(f"eCUDO Crawler - Organization: {self.config.organization.upper()}")
-        output.info("=" * 80)
-
-    def _print_summary(self) -> None:
-        """Print detailed crawl summary."""
-        super()._print_summary()
-
-        output.always(f"Raw datasets saved to:       {self.raw_output_file}")
-        output.always(f"Processed datasets saved to: {self.processed_output_file}")
-
-        output.always("\nNext steps:")
-        output.always(
-            f"  1. Run: python -m registrar register {self.processed_output_file}"
-        )
-        output.always("=" * 80)
