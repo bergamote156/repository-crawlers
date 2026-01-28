@@ -3,7 +3,7 @@ Ecudo API Client.
 """
 
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, TypedDict
 
 from crawlers.core import output
 from crawlers.core.abc.api import ApiClient
@@ -16,6 +16,14 @@ class EcudoIteratorOpts:
     org_id: str
     page_size: int = 200
     max_datasets: int | None = None
+
+
+class EcudoOrganization(TypedDict):
+    """Ecudo organization dictionary."""
+
+    id: str
+    name: str
+    link: str
 
 
 class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
@@ -91,8 +99,7 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
         url = f"{self.base_url}/metadata/{dataset_id}/json-ld"
         return await self.fetch_json(url)
 
-    # TODO typedict ??
-    async def get_organizations(self) -> list[dict]:
+    async def get_organizations(self) -> list[EcudoOrganization]:
         """
         Fetch list of all available organizations.
 
