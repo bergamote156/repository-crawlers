@@ -19,7 +19,6 @@ import yaml
 
 from crawlers.core.config import ConfigSchema
 
-
 T = TypeVar("T")
 
 # --- Command Definition ---

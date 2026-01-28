@@ -9,10 +9,11 @@ __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, TextIO, cast, runtime_checkable
 
-from crawlers.core.abc.processor import Processor
+from crawlers.core.abc.processor import Processor, ProcessorStats
 
 
 @runtime_checkable
@@ -24,7 +25,17 @@ class Serializable(Protocol):
         ...
 
 
-class JSONLWriter[T: dict | Serializable](Processor[T, T]):
+@dataclass
+class WriterStats(ProcessorStats):
+    """Statistics for JSONLWriter."""
+
+    written: int = 0
+
+    def __str__(self) -> str:
+        return f"written: {self.written}"
+
+
+class JSONLWriter[T: dict | Serializable](Processor[T, T, WriterStats]):
     """
     Writes items to a JSONL file.
 
@@ -39,8 +50,13 @@ class JSONLWriter[T: dict | Serializable](Processor[T, T]):
         Args:
             output_path: Path to the output JSONL file
         """
+        super().__init__()
         self.output_path = output_path
         self._file: TextIO | None = None
+
+    def _create_stats(self) -> WriterStats:
+        """Create writer-specific stats."""
+        return WriterStats()
 
     async def open(self) -> None:
         """Open the output file."""
@@ -69,6 +85,9 @@ class JSONLWriter[T: dict | Serializable](Processor[T, T]):
             json_str = json.dumps(data, ensure_ascii=False)
             self._file.write(json_str + "\n")
             self._file.flush()  # Ensure data is written
+
+            self._stats.written += 1
+            self._stats.processed += 1
 
         return item
 

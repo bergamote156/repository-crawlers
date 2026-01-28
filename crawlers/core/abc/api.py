@@ -44,6 +44,7 @@ class ApiClient[I, O](ABC):
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/115.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en",
         }
         self._session: aiohttp.ClientSession | None = None
 

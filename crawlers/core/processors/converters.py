@@ -9,12 +9,12 @@ __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from collections import Counter
+from dataclasses import dataclass
 from typing import Protocol
 from urllib.parse import urlparse
 
-from crawlers.core import output
 from crawlers.core.abc.metadata import MetadataBuilder
-from crawlers.core.abc.processor import Processor
+from crawlers.core.abc.processor import Processor, ProcessorStats
 from crawlers.core.onedata import OnedataDataset, OnedataFile
 
 
@@ -33,7 +33,15 @@ class Dataset(Protocol):
     files: list[DatasetFile]
 
 
-class OnedataConverter[T: Dataset](Processor[T, OnedataDataset]):
+@dataclass
+class ConverterStats(ProcessorStats):
+    """Statistics for OnedataConverter."""
+
+    def __str__(self) -> str:
+        return f"converted: {self.processed}"
+
+
+class OnedataConverter[T: Dataset](Processor[T, OnedataDataset, ConverterStats]):
     """
     Converts InputDataset to OnedataDataset.
 
@@ -48,8 +56,12 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset]):
         Args:
             metadata_builder: Generator for producing metadata XML
         """
+        super().__init__()
         self.metadata_builder = metadata_builder
-        self._converted = 0
+
+    def _create_stats(self) -> ConverterStats:
+        """Create converter-specific stats."""
+        return ConverterStats()
 
     async def process(self, item: T) -> OnedataDataset:
         """
@@ -75,13 +87,8 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset]):
             ],
         )
 
-        self._converted += 1
+        self._stats.processed += 1
         return dataset
-
-    async def close(self) -> None:
-        """Print conversion statistics."""
-        if self._converted > 0:
-            output.stats(f"   Converted: {self._converted}")
 
     def _resolve_path_collisions(self, files: list[DatasetFile]) -> list[str]:
         """

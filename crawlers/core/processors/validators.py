@@ -8,11 +8,11 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable, Protocol
 
-from crawlers.core import output
-from crawlers.core.abc.processor import Processor
+from crawlers.core.abc.processor import Processor, ProcessorStats
 from crawlers.core.processors.writers import JSONLWriter
 
 
@@ -29,7 +29,22 @@ class Dataset(Protocol):
     files: list[DatasetFile]
 
 
-class URLValidator[T: Dataset](Processor[T, T]):
+@dataclass
+class URLValidatorStats(ProcessorStats):
+    """Statistics for URLValidator."""
+
+    invalid_logged: int = 0
+
+    def __str__(self) -> str:
+        total = self.processed + self.filtered
+        rate = f"{self.processed / total:.1%}" if total > 0 else "N/A"
+        base = f"valid: {self.processed}, invalid: {self.filtered}, pass rate: {rate}"
+        if self.invalid_logged:
+            base += f", logged: {self.invalid_logged}"
+        return base
+
+
+class URLValidator[T: Dataset](Processor[T, T, URLValidatorStats]):
     """
     Validates accessibility of file URLs in a dataset.
 
@@ -48,19 +63,20 @@ class URLValidator[T: Dataset](Processor[T, T]):
             validate_fn: Async function taking URL and returning True if valid
             invalid_url_log: Optional path to log invalid URLs to
         """
+        super().__init__()
         self.validate_fn = validate_fn
         self.invalid_url_log = invalid_url_log
-        self._validated = 0
-        self._invalid = 0
-        self._logged = 0
         self._log_writer: JSONLWriter[dict] | None = None
+
+    def _create_stats(self) -> URLValidatorStats:
+        """Create validator-specific stats."""
+        return URLValidatorStats()
 
     async def open(self) -> None:
         """Prepare optional invalid-URL log."""
         if self.invalid_url_log:
             self._log_writer = JSONLWriter(self.invalid_url_log)
             await self._log_writer.open()
-            self._logged = 0
 
     async def process(self, item: T) -> T | None:
         """
@@ -85,31 +101,20 @@ class URLValidator[T: Dataset](Processor[T, T]):
                 break
 
         if not valid_dataset:
-            self._invalid += 1
+            self._stats.filtered += 1
             if self._log_writer:
                 await self._log_writer.process(
                     {"identifier": item.identifier, "url": failed_url}
                 )
-                self._logged += 1
+                self._stats.invalid_logged += 1
 
             return None
 
-        self._validated += 1
+        self._stats.processed += 1
         return item
 
     async def close(self) -> None:
-        """Print validation statistics and close log file if used."""
+        """Close log file if used."""
         if self._log_writer:
             await self._log_writer.close()
             self._log_writer = None
-
-        total = self._validated + self._invalid
-        if total > 0:
-            output.stats("\n📊 URL Validator Statistics:")
-            output.stats(f"   Validated: {self._validated}")
-            output.stats(f"   Failed: {self._invalid}")
-            output.stats(f"   Pass rate: {self._validated / total:.1%}")
-            if self.invalid_url_log and self._logged > 0:
-                output.stats(
-                    f"   Logged {self._logged} invalid URLs to {self.invalid_url_log}"
-                )

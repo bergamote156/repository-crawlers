@@ -8,10 +8,10 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Protocol
 
-from crawlers.core import output
-from crawlers.core.abc.processor import Processor
+from crawlers.core.abc.processor import Processor, ProcessorStats
 
 
 class Parser[I, O](Protocol):
@@ -39,7 +39,18 @@ class Parser[I, O](Protocol):
         ...
 
 
-class DatasetFetcher[I, O](Processor[str, O]):
+@dataclass
+class FetcherStats(ProcessorStats):
+    """Statistics for DatasetFetcher."""
+
+    fetched: int = 0
+    parsed: int = 0
+
+    def __str__(self) -> str:
+        return f"fetched: {self.fetched}, parsed: {self.parsed}, failed: {self.failed}"
+
+
+class DatasetFetcher[I, O](Processor[str, O, FetcherStats]):
     """
     Fetches and parses metadata for a dataset ID.
 
@@ -59,11 +70,13 @@ class DatasetFetcher[I, O](Processor[str, O]):
             fetch_fn: Async function taking ID and returning raw I
             parser: Parser instance/protocol to convert I to O
         """
+        super().__init__()
         self.fetch_fn = fetch_fn
         self.parser = parser
-        self._fetched = 0
-        self._parsed = 0
-        self._failed = 0
+
+    def _create_stats(self) -> FetcherStats:
+        """Create fetcher-specific stats."""
+        return FetcherStats()
 
     async def process(self, item: str) -> O | None:
         """
@@ -78,24 +91,16 @@ class DatasetFetcher[I, O](Processor[str, O]):
         raw = await self.fetch_fn(item)
 
         if not raw:
-            self._failed += 1
+            self._stats.failed += 1
             return None
 
-        self._fetched += 1
+        self._stats.fetched += 1
 
         dataset = self.parser.parse(raw)
         if dataset:
-            self._parsed += 1
+            self._stats.parsed += 1
+            self._stats.processed += 1
         else:
-            self._failed += 1  # Parsed as None (invalid/skipped)
+            self._stats.failed += 1  # Parsed as None (invalid/skipped)
 
         return dataset
-
-    async def close(self) -> None:
-        """Print fetch statistics."""
-        total = self._fetched + self._failed
-        if total > 0:
-            output.stats("\n📊 Metadata Fetcher Statistics:")
-            output.stats(f"   Fetched: {self._fetched}")
-            output.stats(f"   Parsed: {self._parsed}")
-            output.stats(f"   Failed: {self._failed}")

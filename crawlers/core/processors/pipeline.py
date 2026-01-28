@@ -10,15 +10,18 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from typing import Any, Sequence, cast
 
-from crawlers.core.abc.processor import Processor
+from crawlers.core.abc.processor import Processor, ProcessorStats
 
 
-class ProcessorPipeline[I, O](Processor[I, O]):
+class ProcessorPipeline[I, O](Processor[I, O, ProcessorStats]):
     """
     Chains multiple processors into a sequential pipeline.
 
     Items flow through processors in order. If any processor returns
     None, the pipeline stops for that item (filtered out).
+
+    Statistics are tracked by individual processors - use get_processor_stats()
+    to collect them.
 
     Note: For type safety, all processors should have compatible
     input/output types. The pipeline's I type should match the first
@@ -35,6 +38,10 @@ class ProcessorPipeline[I, O](Processor[I, O]):
         await pipeline.open()
         result = await pipeline.process(record_id)  # Flows through all processors
         await pipeline.close()
+
+        # Get stats from all processors
+        for name, stats in pipeline.get_processor_stats():
+            print(f"{name}: {stats}")
     """
 
     def __init__(self, processors: Sequence[Processor]):
@@ -44,9 +51,17 @@ class ProcessorPipeline[I, O](Processor[I, O]):
         Args:
             processors: Sequence of processors to chain
         """
+        super().__init__()
         self.processors = list(processors)
-        self._processed = 0
-        self._filtered = 0
+
+    def get_processor_stats(self) -> list[tuple[str, ProcessorStats]]:
+        """
+        Collect statistics from all processors.
+
+        Returns:
+            List of (processor_name, stats) tuples
+        """
+        return [(type(p).__name__, p.stats) for p in self.processors]
 
     async def open(self) -> None:
         """Open all processors in order."""
@@ -62,6 +77,8 @@ class ProcessorPipeline[I, O](Processor[I, O]):
         """
         Process item through all processors in sequence.
 
+        Each processor is responsible for updating its own statistics.
+
         Args:
             item: Input item
 
@@ -72,9 +89,7 @@ class ProcessorPipeline[I, O](Processor[I, O]):
         for processor in self.processors:
             current = await processor.process(current)  # type: ignore[arg-type]
             if current is None:
-                self._filtered += 1
-                return None  # Stop pipeline
-        self._processed += 1
+                return None  # Stop pipeline - processor already tracked filtered
         return cast(O, current)
 
     def __len__(self) -> int:
