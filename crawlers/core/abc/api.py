@@ -71,7 +71,46 @@ class ApiClient[OptsT, DatasetT](ABC):
             )
         return self._session
 
-    async def fetch_json(self, url: str) -> dict:
+    async def _request_json(self, method: str, url: str, **kwargs) -> dict:
+        """
+        Execute an HTTP request and return JSON response with retries and backoff.
+
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            url: URL to request
+            **kwargs: Extra arguments for the session.request()
+
+        Returns:
+            Parsed JSON as dict, or empty dict on failure
+        """
+        for attempt in range(1, self.max_retries + 1):
+            try:
+                async with self.session.request(
+                    method, url, allow_redirects=True, **kwargs
+                ) as resp:
+                    if resp.status == 200:
+                        return await resp.json()
+
+                    text = await resp.text()
+                    output.error(f"Error {resp.status} {method} {url}: {text[:100]}")
+                    return {}
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                if attempt < self.max_retries:
+                    wait = 2**attempt
+                    output.debug(
+                        f"Attempt {attempt}/{self.max_retries} failed for "
+                        f"{method} {url}: {exc}. Retrying in {wait}s..."
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+
+                output.error(
+                    f"All {self.max_retries} attempts failed for {method} {url}: {exc}"
+                )
+                return {}
+        return {}
+
+    async def get_json(self, url: str) -> dict:
         """
         Fetch JSON from URL with retries and exponential backoff.
 
@@ -81,28 +120,20 @@ class ApiClient[OptsT, DatasetT](ABC):
         Returns:
             Parsed JSON as dict, or empty dict on failure
         """
-        for attempt in range(1, self.max_retries + 1):
-            try:
-                async with self.session.get(url, allow_redirects=True) as resp:
-                    if resp.status == 200:
-                        return await resp.json()
+        return await self._request_json("GET", url)
 
-                    text = await resp.text()
-                    output.error(f"Error {resp.status} fetching {url}: {text[:100]}")
-                    return {}
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
-                if attempt < self.max_retries:
-                    wait = 2**attempt
-                    output.debug(
-                        f"Attempt {attempt}/{self.max_retries} failed for {url}: {exc}. "
-                        f"Retrying in {wait}s..."
-                    )
-                    await asyncio.sleep(wait)
-                    continue
+    async def post_json(self, url: str, body: dict) -> dict:
+        """
+        POST JSON to URL and return response with retries and exponential backoff.
 
-                output.error(f"All {self.max_retries} attempts failed for {url}: {exc}")
-                return {}
-        return {}
+        Args:
+            url: URL to post to
+            body: JSON body to send
+
+        Returns:
+            Parsed JSON as dict, or empty dict on failure
+        """
+        return await self._request_json("POST", url, json=body)
 
     async def validate_url(self, url: str) -> bool:
         """

@@ -12,7 +12,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import MISSING, Field, dataclass, field, is_dataclass
-from types import NoneType
+from types import NoneType, UnionType
 from typing import Any, ClassVar, Iterator, Union, get_args, get_origin, get_type_hints
 
 # --- Schema Data Structures ---
@@ -272,11 +272,14 @@ def _build_field_info(field_obj: Field, annotation: type) -> ConfigFieldInfo:
 def _unwrap_optional(annotation: type) -> tuple[type, bool]:
     """Unwrap Optional[X] / Union[X, None] to (X, True), or (annotation, False)."""
     origin = get_origin(annotation)
-    if origin is Union:
+
+    # Handle both typing.Union and types.UnionType (Python 3.10+ syntax: X | Y)
+    if origin is Union or isinstance(annotation, UnionType):
         args = get_args(annotation)
         non_none = [a for a in args if a is not NoneType]
         if len(non_none) == 1:
             return non_none[0], True
+
     return annotation, False
 
 
