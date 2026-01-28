@@ -11,33 +11,10 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Protocol
+from typing import Awaitable, Callable
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
-
-
-class Parser[I, O](Protocol):
-    """
-    Protocol for data parsers.
-
-    Plugins can implement this protocol or use a simple callable.
-    Fetchers accept anything that has a `parse()` method (duck typing).
-
-    Generics:
-        I: Type of raw data (e.g. dict from JSON)
-        O: Type of output model (e.g. EcudoDataset)
-    """
-
-    def parse(self, raw: I) -> O | None:
-        """
-        Parse raw data into a dataset model.
-
-        Args:
-            raw: Raw data from API
-
-        Returns:
-            Parsed model or None if data is invalid/skipped
-        """
+from .parsers import Parser
 
 
 @dataclass
