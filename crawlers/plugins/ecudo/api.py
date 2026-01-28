@@ -5,8 +5,8 @@ Ecudo API Client.
 from dataclasses import dataclass
 from typing import AsyncIterator
 
-from crawlers.core.abc.api import ApiClient
 from crawlers.core import output
+from crawlers.core.abc.api import ApiClient
 
 
 @dataclass

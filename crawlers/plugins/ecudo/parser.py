@@ -9,7 +9,6 @@ from crawlers.core import output
 from crawlers.core.processors.fetchers import Parser
 from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 
-
 # Expected @type values for structure validation
 EXPECTED_TYPES = {
     "root": "dcat:Dataset",
