@@ -10,10 +10,9 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core.config import ApiConfig, BaseCrawlConfig, config, opt
+from crawlers.core.config import ApiConfig, BaseCrawlConfig, ConfigBase, opt
 
 
-@config
 class EcudoApiConfig(ApiConfig):
     """
     Base configuration for Ecudo API connections.
@@ -24,8 +23,7 @@ class EcudoApiConfig(ApiConfig):
     base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
 
 
-@config
-class URLValidatorConfig:
+class URLValidatorConfig(ConfigBase):
     """Configuration for URL Validator processor."""
 
     enabled: bool = opt(True, yaml_key="enabled")
@@ -36,8 +34,7 @@ class URLValidatorConfig:
     )
 
 
-@config
-class DiversityFilterConfig:
+class DiversityFilterConfig(ConfigBase):
     """Configuration for Diversity Filter processor."""
 
     enabled: bool = opt(True, yaml_key="enabled")
@@ -53,8 +50,7 @@ class DiversityFilterConfig:
     )
 
 
-@config
-class EcudoProcessorsConfig:
+class EcudoProcessorsConfig(ConfigBase):
     """Configuration for Ecudo processors."""
 
     url_validator: URLValidatorConfig = opt(
@@ -67,8 +63,7 @@ class EcudoProcessorsConfig:
     )
 
 
-@config(kw_only=True)
-class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig):
+class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig, kw_only=True):
     """
     Full configuration for Ecudo crawling.
 
@@ -78,7 +73,8 @@ class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig):
     # Required positional argument
     organization: str = opt(
         ...,
-        # Explicit CLI is needed for positional args to be detected correctly (otherwise '--' will be prepended)
+        # Explicit CLI is needed for positional args to be detected correctly
+        # (otherwise '--' will be prepended)
         cli="organization",
         description="Organization ID (e.g. iopan)",
     )

@@ -5,7 +5,7 @@ Abstract base class for crawler plugins with declarative command registration.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import argparse
@@ -13,13 +13,11 @@ import os
 from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, cast
 
 import yaml
 
-from crawlers.core.config import ConfigSchema
-
-ConfigT = TypeVar("ConfigT")
+from crawlers.core.abc.config import ConfigBase
 
 # --- Command Definition ---
 
@@ -31,14 +29,14 @@ class CommandDef:
     name: str
     help: str
     method_name: str
-    config_class: type[Any] | Callable[[], type[Any]]
+    config_class: type[ConfigBase]
 
 
 def command(
     name: str,
-    config: type[Any] | Callable[[], type[Any]],
+    config: type[ConfigBase],
     *,
-    help: str = "",
+    help: str = "",  # pylint: disable=redefined-builtin
 ) -> Callable:
     """
     Decorator to register a method as a CLI command.
@@ -55,7 +53,7 @@ def command(
     """
 
     def decorator(func: Callable) -> Callable:
-        func._command_def = CommandDef(
+        cast(Any, func)._command_def = CommandDef(  # pylint: disable=protected-access
             name=name,
             help=help,
             method_name=func.__name__,
@@ -140,10 +138,10 @@ class CrawlerPlugin(ABC):
             self._add_config_args(sub, cmd_def.config_class)
 
     def _add_config_args(
-        self, parser: argparse.ArgumentParser, config_cls: type[Any]
+        self, parser: argparse.ArgumentParser, config_cls: type[ConfigBase]
     ) -> None:
         """Add CLI arguments from config schema with argument groups."""
-        schema: ConfigSchema = config_cls.__config_schema__
+        schema = config_cls.__config_schema__
 
         for group in schema.groups:
             arg_group = parser.add_argument_group(
@@ -185,9 +183,9 @@ class CrawlerPlugin(ABC):
     def load_config(
         self,
         cli_args: argparse.Namespace,
-        config_cls: type[ConfigT],
+        config_cls: type[ConfigBase],
         command_name: str,
-    ) -> ConfigT:
+    ) -> ConfigBase:
         """
         Build and validate configuration from ENV + YAML + CLI.
 
@@ -224,16 +222,17 @@ class CrawlerPlugin(ABC):
             config_cls, global_yaml, plugin_yaml, command_yaml, cli_args
         )
 
+    # pylint: disable=too-many-locals, too-many-arguments, too-many-positional-arguments
     def _instantiate_config(
         self,
-        config_cls: type[ConfigT],
+        config_cls: type[ConfigBase],
         global_yaml: dict[str, Any],
         plugin_yaml: dict[str, Any],
         command_yaml: dict[str, Any],
         cli_args: argparse.Namespace | None,
-    ) -> ConfigT:
+    ) -> ConfigBase:
         """Recursively instantiate dataclass config from sources using schema."""
-        schema: ConfigSchema = config_cls.__config_schema__
+        schema = config_cls.__config_schema__
         init_kwargs: dict[str, Any] = {}
 
         for field_info in schema.all_fields():
@@ -252,7 +251,7 @@ class CrawlerPlugin(ABC):
                     plugin_field_section = {}
                     command_field_section = {}
 
-                nested_obj = self._instantiate_config(
+                nested_obj: Any = self._instantiate_config(
                     field_info.nested_schema.config_class,
                     global_field_section,
                     plugin_field_section,
@@ -308,6 +307,7 @@ class CrawlerPlugin(ABC):
 
         return None
 
+    # pylint: disable=too-many-return-statements
     def _coerce_type(self, value: Any, field_info: Any) -> Any:
         """Type coercion using pre-computed field_type."""
         if value is None:

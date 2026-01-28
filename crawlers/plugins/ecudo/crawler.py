@@ -85,6 +85,7 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
         url_cfg = cfg.processors.url_validator
         df_cfg = cfg.processors.diversity_filter
 
+        # TODO ignore[type-var]  # pylint: disable=fixme
         return ProcessorPipeline(
             [
                 # 1. Fetcher: ID -> EcudoDataset

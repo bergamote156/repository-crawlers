@@ -12,7 +12,43 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import MISSING, Field, dataclass, field, is_dataclass
-from typing import Any, Iterator, Union, get_args, get_origin, get_type_hints
+from types import NoneType
+from typing import Any, ClassVar, Iterator, Union, get_args, get_origin, get_type_hints
+
+# --- Schema Data Structures ---
+
+
+class ConfigBase:
+    """
+    Base class for configuration classes.
+
+    All config classes should inherit from this (directly or indirectly).
+    Automatically applies @dataclass and builds __config_schema__ via __init_subclass__.
+
+    Usage:
+        class MyConfig(ConfigBase):
+            field: str = opt("default", description="My field")
+
+        # For non-keyword-only fields:
+        class MyConfig(ConfigBase, kw_only=False):
+            ...
+    """
+
+    __config_schema__: ClassVar["ConfigSchema"]
+
+    def __init_subclass__(cls, *, kw_only: bool = True, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+
+        # Skip if already processed (handles multiple inheritance)
+        if hasattr(cls, "__config_schema__"):
+            existing = cls.__config_schema__
+            if existing.config_class is cls:
+                return
+
+        # Apply @dataclass
+        dataclass(kw_only=kw_only)(cls)
+        # Build and attach schema
+        cls.__config_schema__ = _build_schema(cls)
 
 
 def opt(
@@ -23,7 +59,7 @@ def opt(
     yaml_key: str | bool | None = None,
     description: str = "",
     **kwargs,
-) -> Any:  ## TODO better type ?
+) -> Any:
     """
     Dataclass field wrapper with CLI/ENV/YAML metadata.
 
@@ -70,10 +106,11 @@ def opt(
     if default is not ...:
         field_kwargs["default"] = default
 
+    # pylint: disable=invalid-field-call
     return field(metadata=metadata, **field_kwargs)
 
 
-# --- Schema Data Structures ---
+# --- Schema Building Helpers ---
 
 
 @dataclass
@@ -118,45 +155,13 @@ class ConfigGroup:
 class ConfigSchema:
     """Complete schema for a config class - built once by @config decorator."""
 
-    config_class: type
+    config_class: type[ConfigBase]
     groups: list[ConfigGroup]  # Most specific class first
 
     def all_fields(self) -> Iterator[ConfigFieldInfo]:
         """Iterate all fields across all groups (flat)."""
         for group in self.groups:
             yield from group.fields
-
-
-# --- @config Decorator ---
-
-
-def config(cls=None, *, kw_only: bool = True):
-    """
-    Decorator that builds __config_schema__ and applies @dataclass.
-
-    Usage:
-        @config
-        class MyConfig:
-            field: str = opt("default", description="My field")
-
-        @config(kw_only=True)
-        class MyOtherConfig(BaseConfig):
-            ...
-    """
-
-    def decorator(config_class):
-        # Apply dataclass first
-        config_class = dataclass(kw_only=kw_only)(config_class)
-        # Build and attach schema
-        config_class.__config_schema__ = _build_schema(config_class)
-        return config_class
-
-    if cls is None:
-        return decorator
-    return decorator(cls)
-
-
-# --- Schema Building Helpers ---
 
 
 def _build_schema(config_cls: type) -> ConfigSchema:
@@ -269,7 +274,7 @@ def _unwrap_optional(annotation: type) -> tuple[type, bool]:
     origin = get_origin(annotation)
     if origin is Union:
         args = get_args(annotation)
-        non_none = [a for a in args if a is not type(None)]
+        non_none = [a for a in args if a is not NoneType]
         if len(non_none) == 1:
             return non_none[0], True
     return annotation, False
@@ -320,40 +325,3 @@ def _build_cli_info(
     return CliInfo(
         names=names, kwargs=kwargs, is_positional=is_positional, attr_name=attr_name
     )
-
-
-# --- Base Config Classes ---
-
-
-@config
-class ApiConfig:
-    """Base configuration for API connections."""
-
-    base_url: str = opt(..., description="API base URL")
-    timeout: int = opt(15, description="Request timeout in seconds")
-    max_retries: int = opt(3, description="Maximum retry attempts")
-
-
-@config
-class OutputConfig:
-    """Configuration for output settings."""
-
-    output_dir: str = opt(
-        "./data",
-        cli=("-o", "--output-dir"),
-        description="Output directory for crawled data",
-    )
-    log_level: str = opt("info", description="Logging verbosity level")
-
-
-@config
-class ProcessingConfig:
-    """Configuration for parallel processing."""
-
-    concurrency: int = opt(128, description="Number of concurrent workers")
-    queue_size: int = opt(1000, description="Size of the processing queue")
-
-
-@config
-class BaseCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig):
-    """Base configuration for inheritance and extending by crawler plugins."""
