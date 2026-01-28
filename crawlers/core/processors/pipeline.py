@@ -5,9 +5,10 @@ Chains multiple processors into a sequential pipeline.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from pathlib import Path
 from typing import Any, Sequence, cast
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
@@ -56,28 +57,57 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
 
     def get_processor_stats(self) -> list[tuple[str, ProcessorStats]]:
         """
-        Collect statistics from all processors.
+        Collect statistics from all enabled processors.
 
         Returns:
             List of (processor_name, stats) tuples
         """
-        return [(type(p).__name__, p.stats) for p in self.processors]
+        return [(type(p).__name__, p.stats) for p in self.processors if p.enabled]
+
+    def get_artifacts(self) -> list[Path]:
+        """
+        Collect all output files from enabled processors.
+
+        Returns:
+            List of output file paths
+        """
+        artifacts: list[Path] = []
+        for processor in self.processors:
+            if processor.enabled:
+                artifacts.extend(processor.artifacts())
+        return artifacts
+
+    def format_description(self) -> str:
+        """
+        Return formatted pipeline description for logging.
+
+        Returns:
+            Multi-line string describing all processors
+        """
+        lines: list[str] = []
+        for i, processor in enumerate(self.processors, 1):
+            status = "✓" if processor.enabled else "⊘"
+            lines.append(f"  {i}. {status} {processor.describe()}")
+        return "\n".join(lines)
 
     async def open(self) -> None:
-        """Open all processors in order."""
+        """Open all enabled processors in order."""
         for processor in self.processors:
-            await processor.open()
+            if processor.enabled:
+                await processor.open()
 
     async def close(self) -> None:
-        """Close all processors in order."""
+        """Close all enabled processors in order."""
         for processor in self.processors:
-            await processor.close()
+            if processor.enabled:
+                await processor.close()
 
     async def process(self, item: InT) -> OutT | None:
         """
-        Process item through all processors in sequence.
+        Process item through all enabled processors in sequence.
 
-        Each processor is responsible for updating its own statistics.
+        Disabled processors are skipped. Each processor is responsible
+        for updating its own statistics.
 
         Args:
             item: Input item
@@ -87,6 +117,8 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
         """
         current: Any = item
         for processor in self.processors:
+            if not processor.enabled:
+                continue
             current = await processor.process(current)  # type: ignore[arg-type]
             if current is None:
                 return None  # Stop pipeline - processor already tracked filtered

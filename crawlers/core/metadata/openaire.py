@@ -7,7 +7,7 @@ https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass

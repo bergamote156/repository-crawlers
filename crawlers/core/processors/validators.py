@@ -5,7 +5,7 @@ Processors for validating data.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
@@ -57,6 +57,7 @@ class URLValidator[DatasetT: Dataset](Processor[DatasetT, DatasetT, URLValidator
         self,
         validate_fn: Callable[[str], Awaitable[bool]],
         invalid_url_log: Path | None = None,
+        enabled: bool = True,
     ):
         """
         Initialize validator.
@@ -64,11 +65,23 @@ class URLValidator[DatasetT: Dataset](Processor[DatasetT, DatasetT, URLValidator
         Args:
             validate_fn: Async function taking URL and returning True if valid
             invalid_url_log: Optional path to log invalid URLs to
+            enabled: Whether this processor is active
         """
-        super().__init__()
+        super().__init__(enabled=enabled)
         self.validate_fn = validate_fn
         self.invalid_url_log = invalid_url_log
-        self._log_writer: JSONLWriter[dict] | None = None
+        self._log_writer: "JSONLWriter[dict] | None" = None
+
+    def describe(self) -> str:
+        """Return description with log path if configured."""
+        log_note = f" (log: {self.invalid_url_log})" if self.invalid_url_log else ""
+        return f"URLValidator: check URL accessibility{log_note}"
+
+    def artifacts(self) -> list[Path]:
+        """Return invalid URL log file if configured."""
+        if self.invalid_url_log:
+            return [self.invalid_url_log]
+        return []
 
     def _create_stats(self) -> URLValidatorStats:
         """Create validator-specific stats."""

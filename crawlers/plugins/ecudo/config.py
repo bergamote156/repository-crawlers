@@ -4,11 +4,24 @@ Ecudo Plugin Configuration.
 Defines configuration classes with CLI/ENV/YAML metadata.
 """
 
+# pylint: disable=too-few-public-methods
+
 __author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from crawlers.core.config import ApiConfig, BaseCrawlConfig, config, opt
 
-# --- Nested Processor Configs ---
+
+@config
+class EcudoApiConfig(ApiConfig):
+    """
+    Base configuration for Ecudo API connections.
+
+    Used by commands that only need API access (like list-orgs).
+    """
+
+    base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
 
 
 @config
@@ -54,20 +67,6 @@ class EcudoProcessorsConfig:
     )
 
 
-# --- Main Configs ---
-
-
-@config
-class EcudoApiConfig(ApiConfig):
-    """
-    Base configuration for Ecudo API connections.
-
-    Used by commands that only need API access (like list-orgs).
-    """
-
-    base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
-
-
 @config(kw_only=True)
 class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig):
     """
@@ -79,13 +78,9 @@ class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig):
     # Required positional argument
     organization: str = opt(
         ...,
-        # Explicit CLI is needed for positional args to be detected correctly
-        # as positional by our simplistic check (no leading dash) in core/plugin.py?
-        # Actually our updated core/plugin.py checks `cli_names[0].startswith("-")`.
-        # If we auto-generate, it generates `--organization`.
-        # So for positional args we MUST specify cli="name" explicitly still.
+        # Explicit CLI is needed for positional args to be detected correctly (otherwise '--' will be prepended)
         cli="organization",
-        description="Organization ID (e.g. iopan, p.lodz.pl)",
+        description="Organization ID (e.g. iopan)",
     )
 
     # Optional crawl settings
@@ -110,16 +105,17 @@ class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig):
         """Validate configuration."""
         if not self.organization or self.organization.isspace():
             raise ValueError("Organization cannot be empty")
+
         self.organization = self.organization.strip().lower()
 
     def get_url_validator_enabled(self) -> bool:
         """Check if URL validator should be enabled."""
         if self.no_url_validation:
             return False
-        return self.processors.url_validator.enabled
+        return self.processors.url_validator.enabled  # pylint: disable=no-member
 
     def get_diversity_filter_enabled(self) -> bool:
         """Check if diversity filter should be enabled."""
         if self.no_diversity_filter:
             return False
-        return self.processors.diversity_filter.enabled
+        return self.processors.diversity_filter.enabled  # pylint: disable=no-member

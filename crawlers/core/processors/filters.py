@@ -7,7 +7,7 @@ Processors for filtering data.
 # pylint: disable=too-few-public-methods
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import difflib
@@ -47,6 +47,7 @@ class DiversityFilter[DatasetT: Dataset](
         self,
         max_similar: int = 10,
         similarity_threshold: float = 0.85,
+        enabled: bool = True,
     ):
         """
         Initialize diversity filter.
@@ -54,14 +55,22 @@ class DiversityFilter[DatasetT: Dataset](
         Args:
             max_similar: Maximum number of similar datasets allowed
             similarity_threshold: Threshold for title similarity (0.0-1.0)
+            enabled: Whether this processor is active
         """
-        super().__init__()
+        super().__init__(enabled=enabled)
         self.max_similar = max_similar
         self.similarity_threshold = similarity_threshold
         # Stores indices of representative titles for groups
         self._groups: list[list[str]] = []
         # Count of datasets in each group
         self._group_counts: list[int] = []
+
+    def describe(self) -> str:
+        """Return description with filter parameters."""
+        return (
+            f"DiversityFilter: max {self.max_similar} similar "
+            f"({self.similarity_threshold:.0%} threshold)"
+        )
 
     def _create_stats(self) -> DiversityFilterStats:
         """Create filter-specific stats."""

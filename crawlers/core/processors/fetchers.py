@@ -7,7 +7,7 @@ Processors that fetch data from external sources.
 # pylint: disable=too-few-public-methods
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
@@ -63,6 +63,7 @@ class DatasetFetcher[RawT, DatasetT](Processor[str, DatasetT, FetcherStats]):
         self,
         fetch_fn: Callable[[str], Awaitable[RawT]],
         parser: Parser[RawT, DatasetT],
+        enabled: bool = True,
     ):
         """
         Initialize fetcher.
@@ -70,10 +71,16 @@ class DatasetFetcher[RawT, DatasetT](Processor[str, DatasetT, FetcherStats]):
         Args:
             fetch_fn: Async function taking ID and returning raw I
             parser: Parser instance/protocol to convert I to O
+            enabled: Whether this processor is active
         """
-        super().__init__()
+        super().__init__(enabled=enabled)
         self.fetch_fn = fetch_fn
         self.parser = parser
+
+    def describe(self) -> str:
+        """Return description with parser name."""
+        parser_name = type(self.parser).__name__
+        return f"DatasetFetcher: fetch and parse with {parser_name}"
 
     def _create_stats(self) -> FetcherStats:
         """Create fetcher-specific stats."""

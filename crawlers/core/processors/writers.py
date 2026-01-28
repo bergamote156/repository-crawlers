@@ -7,7 +7,7 @@ Processors for writing data to various outputs.
 # pylint: disable=too-few-public-methods
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
@@ -44,16 +44,25 @@ class JSONLWriter[ItemT: dict | Serializable](Processor[ItemT, ItemT, WriterStat
     Supports items that are either dictionaries or objects with a `to_json()` method.
     """
 
-    def __init__(self, output_path: Path):
+    def __init__(self, output_path: Path, enabled: bool = True):
         """
         Initialize the writer.
 
         Args:
             output_path: Path to the output JSONL file
+            enabled: Whether this processor is active
         """
-        super().__init__()
+        super().__init__(enabled=enabled)
         self.output_path = output_path
         self._file: TextIO | None = None
+
+    def describe(self) -> str:
+        """Return description with output path."""
+        return f"JSONLWriter: {self.output_path}"
+
+    def artifacts(self) -> list[Path]:
+        """Return output file path."""
+        return [self.output_path]
 
     def _create_stats(self) -> WriterStats:
         """Create writer-specific stats."""

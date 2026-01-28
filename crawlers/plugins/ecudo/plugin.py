@@ -7,7 +7,7 @@ Declarative plugin using @command decorator for CLI commands.
 # pylint: disable=import-outside-toplevel
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from crawlers.core import output
@@ -35,7 +35,6 @@ class EcudoPlugin(CrawlerPlugin):
 
         output.set_level(config.log_level)
         output.info(f"Starting crawl for organization: {config.organization}")
-        output.debug(f"Configuration: {config}")
 
         crawler = EcudoCrawler(config)
         await crawler.run()

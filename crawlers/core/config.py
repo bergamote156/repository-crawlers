@@ -1,12 +1,14 @@
 """
-Configuration Base
+Configuration Management.
 
 Base configuration classes and helpers for the crawler framework.
 Uses dataclasses for configuration definition.
 """
 
+# pylint: disable=too-few-public-methods
+
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import MISSING, Field, dataclass, field, is_dataclass
@@ -87,6 +89,8 @@ class CliInfo:
 @dataclass
 class ConfigFieldInfo:
     """Complete info about a config field."""
+
+    # pylint: disable=too-many-instance-attributes
 
     name: str
     field_type: type  # Actual type after unwrapping Optional

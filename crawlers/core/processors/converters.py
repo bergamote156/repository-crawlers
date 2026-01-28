@@ -5,7 +5,7 @@ Processors that convert between data models.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from collections import Counter
@@ -53,15 +53,25 @@ class OnedataConverter[DatasetT: Dataset](
     file paths specifically for Onedata registration (resolving collisions).
     """
 
-    def __init__(self, metadata_builder: MetadataBuilder[DatasetT]):
+    def __init__(
+        self,
+        metadata_builder: MetadataBuilder[DatasetT],
+        enabled: bool = True,
+    ):
         """
         Initialize converter.
 
         Args:
             metadata_builder: Generator for producing metadata XML
+            enabled: Whether this processor is active
         """
-        super().__init__()
+        super().__init__(enabled=enabled)
         self.metadata_builder = metadata_builder
+
+    def describe(self) -> str:
+        """Return description with metadata builder name."""
+        builder_name = type(self.metadata_builder).__name__
+        return f"OnedataConverter: build Onedata dataset with {builder_name}"
 
     def _create_stats(self) -> ConverterStats:
         """Create converter-specific stats."""
