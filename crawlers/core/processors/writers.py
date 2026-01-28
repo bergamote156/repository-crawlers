@@ -4,6 +4,8 @@ Writers Processors
 Processors for writing data to various outputs.
 """
 
+# pylint: disable=too-few-public-methods
+
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -22,7 +24,6 @@ class Serializable(Protocol):
 
     def to_json(self) -> dict:
         """Convert object to JSON dictionary."""
-        ...
 
 
 @dataclass
@@ -35,7 +36,7 @@ class WriterStats(ProcessorStats):
         return f"written: {self.written}"
 
 
-class JSONLWriter[T: dict | Serializable](Processor[T, T, WriterStats]):
+class JSONLWriter[ItemT: dict | Serializable](Processor[ItemT, ItemT, WriterStats]):
     """
     Writes items to a JSONL file.
 
@@ -64,7 +65,7 @@ class JSONLWriter[T: dict | Serializable](Processor[T, T, WriterStats]):
         # pylint: disable=consider-using-with
         self._file = open(self.output_path, "a", encoding="utf-8")
 
-    async def process(self, item: T) -> T:
+    async def process(self, item: ItemT) -> ItemT:
         """
         Write item to file and pass it through.
 

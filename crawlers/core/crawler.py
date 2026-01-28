@@ -55,8 +55,8 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
                 try:
                     iterator = self.create_iterator(client)
                     self.stats = await run_parallel_pipeline(
-                        pipeline=self._pipeline,
                         source_iterator=iterator,
+                        pipeline=self._pipeline,
                         concurrency=self.config.concurrency,
                         queue_size=self.config.queue_size,
                     )
@@ -118,7 +118,6 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
 
         Use for validation (e.g. check organization exists) or setup.
         """
-        pass
 
     async def after_crawl(self) -> None:
         """
@@ -127,7 +126,6 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
         Use for custom post-processing. Note: _print_summary() is called
         separately and always runs (even on interrupt).
         """
-        pass
 
     def _print_banner(self) -> None:
         """

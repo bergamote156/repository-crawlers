@@ -26,6 +26,7 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
     Provides method to fetch full metadata for a given ID.
     """
 
+    # pylint: disable=invalid-overridden-method
     async def iterate_datasets(self, opts: EcudoIteratorOpts) -> AsyncIterator[str]:
         """
         Iterate over dataset IDs in the specified organization.

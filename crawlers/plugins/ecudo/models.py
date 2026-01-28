@@ -3,6 +3,7 @@ Ecudo Data Models.
 """
 
 from dataclasses import dataclass, field
+from typing import Sequence
 
 
 @dataclass
@@ -13,6 +14,7 @@ class EcudoFile:
     url: str
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class EcudoDataset:
     """Ecudo Dataset model."""
@@ -22,7 +24,7 @@ class EcudoDataset:
     description: str
     publisher: str
     issued: str  # publication date
-    files: list[EcudoFile]
+    files: Sequence[EcudoFile]
 
     # Optional but common fields
     language: str = "en"

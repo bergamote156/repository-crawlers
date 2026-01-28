@@ -41,14 +41,11 @@ KNOWN_ROOT_FIELDS = {
 KNOWN_ACCESS_LEVELS = {"public"}
 
 
+# pylint: disable=too-few-public-methods
 class EcudoParser(Parser[dict, EcudoDataset]):
     """
     Parses Ecudo JSON-LD into EcudoDataset.
     """
-
-    def __init__(self):
-        self._parsed = 0
-        self._skipped = 0
 
     def parse(self, raw: dict) -> EcudoDataset | None:
         """
@@ -62,17 +59,14 @@ class EcudoParser(Parser[dict, EcudoDataset]):
         """
         identifier = raw.get("identifier")
         if not identifier:
-            self._skipped += 1
             return None
 
         try:
             validate_structure(raw, identifier)
             dataset = self._parse_record(raw, identifier)
-            self._parsed += 1
             return dataset
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-except
             output.warning(f"Failed to parse record {identifier}: {e}")
-            self._skipped += 1
             return None
 
     def _parse_record(self, raw: dict, identifier: str) -> None | EcudoDataset:
@@ -106,9 +100,6 @@ class EcudoParser(Parser[dict, EcudoDataset]):
             access_level=raw.get("accessLevel", "public"),
             _raw=raw,
         )
-
-    def get_stats(self) -> dict:
-        return {"parsed": self._parsed, "skipped": self._skipped}
 
 
 def validate_structure(raw: dict, identifier: str) -> None:

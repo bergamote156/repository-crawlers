@@ -168,8 +168,5 @@ class EcudoCrawler:  # pylint: disable=too-few-public-methods
         output.always(f"Processed datasets saved to: {self.processed_output_file}")
 
         output.always("\nNext steps:")
-        output.always(
-            f"  1. Convert JSONL to JSON: python -m ecudo convert {self.processed_output_file}"
-        )
-        output.always("  2. Run python -m registrar register with the converted file")
+        output.always("  1. Run python -m registrar register with the converted file")
         output.always("=" * 80)

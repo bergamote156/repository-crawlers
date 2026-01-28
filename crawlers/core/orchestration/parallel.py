@@ -32,9 +32,9 @@ class CrawlStats:
         )
 
 
-async def run_parallel_pipeline[I, O](
-    source_iterator: AsyncIterable[I],
-    pipeline: ProcessorPipeline[I, O],
+async def run_parallel_pipeline[InT, OutT](
+    source_iterator: AsyncIterable[InT],
+    pipeline: ProcessorPipeline[InT, OutT],
     *,
     concurrency: int = 10,
     queue_size: int = 1000,
@@ -54,7 +54,7 @@ async def run_parallel_pipeline[I, O](
     Returns:
         CrawlStats with aggregated statistics
     """
-    queue: asyncio.Queue[I | None] = asyncio.Queue(maxsize=queue_size)
+    queue: asyncio.Queue[InT | None] = asyncio.Queue(maxsize=queue_size)
     stats = CrawlStats()
 
     # Producer task: reads from iterator and puts into queue
@@ -63,7 +63,7 @@ async def run_parallel_pipeline[I, O](
             async for item in source_iterator:
                 await queue.put(item)
                 stats.queued += 1
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             output.error(f"Producer error: {e}")
         finally:
             # Signal workers to stop
@@ -85,7 +85,7 @@ async def run_parallel_pipeline[I, O](
                     stats.processed += 1
                 else:
                     stats.filtered += 1
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 item_str = str(item)[:50] if item else "?"
                 output.warning(f"Worker {worker_id} error processing {item_str}: {e}")
                 stats.failed += 1

@@ -1,5 +1,7 @@
 """Metadata Generator Base."""
 
+# pylint: disable=too-few-public-methods
+
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -7,7 +9,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from abc import ABC, abstractmethod
 
 
-class MetadataBuilder[T](ABC):
+class MetadataBuilder[DatasetT](ABC):
     """
     Abstract base class for metadata builders.
 
@@ -16,7 +18,7 @@ class MetadataBuilder[T](ABC):
     """
 
     @abstractmethod
-    def build(self, dataset: T) -> str:
+    def build(self, dataset: DatasetT) -> str:
         """
         Generate metadata for dataset.
 

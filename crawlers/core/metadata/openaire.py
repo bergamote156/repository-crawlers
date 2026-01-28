@@ -12,7 +12,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Protocol, Tuple
+from typing import Callable, Protocol, Sequence, Tuple
 
 from crawlers.core import output
 from crawlers.core.abc.metadata import MetadataBuilder
@@ -62,6 +62,7 @@ XML_NAMESPACES = (
 
 
 class DatasetFile(Protocol):
+    # pylint: disable=too-few-public-methods
     """Dataset file object required properties by OpenAIREBuilder."""
 
     url: str
@@ -70,12 +71,14 @@ class DatasetFile(Protocol):
 class Dataset(Protocol):
     """Dataset object required properties by OpenAIREBuilder."""
 
+    # pylint: disable=duplicate-code, too-few-public-methods
+
     identifier: str
     title: str
     description: str
     publisher: str
     issued: str  # publication date
-    files: list[DatasetFile]
+    files: Sequence[DatasetFile]
     language: str
     keywords: list[str]
     access_level: str
@@ -173,6 +176,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
     # --- Section Builders ---
 
     def build_title_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build title section."""
         return [
             "  <!-- 1. Title (M) -->",
             "  <datacite:titles>",
@@ -183,6 +187,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_creator_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build creator section."""
         return [
             "  <!-- 2. Creator (M) -->",
             "  <datacite:creators>",
@@ -195,18 +200,21 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_language_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build language section."""
         return [
             "  <!-- 8. Language (MA) -->",
             f"  <dc:language>{ctx.language_code}</dc:language>",
         ]
 
     def build_publisher_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build publisher section."""
         return [
             "  <!-- 9. Publisher (MA) -->",
             f"  <dc:publisher>{self._escape_xml(ctx.dataset.publisher)}</dc:publisher>",
         ]
 
     def build_publication_date_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build publication date section."""
         publication_date = ctx.dataset.issued or datetime.now().strftime("%Y-%m-%d")
         return [
             "  <!-- 10. Publication Date (M) -->",
@@ -216,6 +224,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_resource_type_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build resource type section."""
         resource_type_uri = self._infer_coar_resource_type(ctx.dataset)
         return [
             "  <!-- 11. Resource Type (M) - COAR Resource Type Vocabulary -->",
@@ -225,6 +234,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_description_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build description section."""
         if not ctx.dataset.description:
             return []
         return [
@@ -235,6 +245,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_identifier_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build identifier section."""
         return [
             "  <!-- 14. Resource Identifier (M) -->",
             '  <datacite:identifier identifierType="URN">',
@@ -243,6 +254,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_access_rights_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build access rights section."""
         return [
             "  <!-- 15. Access Rights (M) - COAR Access Rights Vocabulary -->",
             f'  <datacite:rights rightsURI="{ctx.rights_uri}">',
@@ -251,6 +263,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_subjects_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build subject/keywords section."""
         if not ctx.dataset.keywords:
             return []
 
@@ -266,6 +279,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         return lines
 
     def build_temporal_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build temporal coverage section."""
         if not ctx.dataset.temporal:
             return []
         return [
@@ -274,11 +288,13 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         ]
 
     def build_geo_location_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build spatial coverage section."""
         if not ctx.dataset.spatial:
             return []
         return self._build_geo_location_xml(ctx.dataset.spatial)
 
     def build_files_section(self, ctx: OpenAIREContext) -> list[str]:
+        """Build file links section."""
         if not ctx.dataset.files:
             return []
 
@@ -381,10 +397,14 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
                     "  <datacite:geoLocations>",
                     "    <datacite:geoLocation>",
                     "      <datacite:geoLocationBox>",
-                    f"        <datacite:westBoundLongitude>{west_lon}</datacite:westBoundLongitude>",
-                    f"        <datacite:eastBoundLongitude>{east_lon}</datacite:eastBoundLongitude>",
-                    f"        <datacite:southBoundLatitude>{south_lat}</datacite:southBoundLatitude>",
-                    f"        <datacite:northBoundLatitude>{north_lat}</datacite:northBoundLatitude>",
+                    f"        <datacite:westBoundLongitude>{west_lon}"
+                    "</datacite:westBoundLongitude>",
+                    f"        <datacite:eastBoundLongitude>{east_lon}"
+                    "</datacite:eastBoundLongitude>",
+                    f"        <datacite:southBoundLatitude>{south_lat}"
+                    "</datacite:southBoundLatitude>",
+                    f"        <datacite:northBoundLatitude>{north_lat}"
+                    "</datacite:northBoundLatitude>",
                     "      </datacite:geoLocationBox>",
                     "    </datacite:geoLocation>",
                     "  </datacite:geoLocations>",

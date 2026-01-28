@@ -4,6 +4,8 @@ Filter Processors
 Processors for filtering data.
 """
 
+# pylint: disable=too-few-public-methods
+
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -31,7 +33,9 @@ class DiversityFilterStats(ProcessorStats):
         return f"{self.processed} passed, {self.filtered} filtered, {self.groups_count} groups"
 
 
-class DiversityFilter[T: Dataset](Processor[T, T, DiversityFilterStats]):
+class DiversityFilter[DatasetT: Dataset](
+    Processor[DatasetT, DatasetT, DiversityFilterStats]
+):
     """
     Filters out datasets with similar titles to ensure diversity.
 
@@ -63,7 +67,7 @@ class DiversityFilter[T: Dataset](Processor[T, T, DiversityFilterStats]):
         """Create filter-specific stats."""
         return DiversityFilterStats()
 
-    async def process(self, item: T) -> T | None:
+    async def process(self, item: DatasetT) -> DatasetT | None:
         """
         Check if dataset is too similar to existing ones.
 

@@ -11,6 +11,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import argparse
 import asyncio
 import sys
+import traceback
 
 from crawlers.core import output
 from crawlers.plugins import REGISTERED_PLUGINS
@@ -67,25 +68,23 @@ def main() -> int:
         return 1
 
     # Find plugin
-    plugin = plugin_instances.get(args.plugin)
-    if not plugin:
+    selected_plugin = plugin_instances.get(args.plugin)
+    if not selected_plugin:
         output.error(f"Plugin '{args.plugin}' not found.")
         return 1
 
     try:
         # Plugin handles everything: config loading, command dispatch
-        asyncio.run(plugin.run(args))
+        asyncio.run(selected_plugin.run(args))
         return 0
 
     except ValueError as e:
         output.error(str(e))
         return 1
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         output.error(f"Execution failed: {e}")
         if output.get_level() <= output.LogLevel.DEBUG:
-            import traceback
-
             traceback.print_exc()
         return 1
 

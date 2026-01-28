@@ -13,7 +13,7 @@ from typing import Any, Sequence, cast
 from crawlers.core.abc.processor import Processor, ProcessorStats
 
 
-class ProcessorPipeline[I, O](Processor[I, O, ProcessorStats]):
+class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
     """
     Chains multiple processors into a sequential pipeline.
 
@@ -73,7 +73,7 @@ class ProcessorPipeline[I, O](Processor[I, O, ProcessorStats]):
         for processor in self.processors:
             await processor.close()
 
-    async def process(self, item: I) -> O | None:
+    async def process(self, item: InT) -> OutT | None:
         """
         Process item through all processors in sequence.
 
@@ -90,7 +90,7 @@ class ProcessorPipeline[I, O](Processor[I, O, ProcessorStats]):
             current = await processor.process(current)  # type: ignore[arg-type]
             if current is None:
                 return None  # Stop pipeline - processor already tracked filtered
-        return cast(O, current)
+        return cast(OutT, current)
 
     def __len__(self) -> int:
         """Return number of processors in pipeline."""

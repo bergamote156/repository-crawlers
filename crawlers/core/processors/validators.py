@@ -10,23 +10,25 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable, Protocol
+from typing import Awaitable, Callable, Protocol, Sequence
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
 from crawlers.core.processors.writers import JSONLWriter
 
 
 class DatasetFile(Protocol):
+    # pylint: disable=too-few-public-methods
     """Dataset file object required properties by URLValidator."""
 
     url: str
 
 
 class Dataset(Protocol):
+    # pylint: disable=too-few-public-methods
     """Dataset object required properties by URLValidator."""
 
     identifier: str
-    files: list[DatasetFile]
+    files: Sequence[DatasetFile]
 
 
 @dataclass
@@ -44,7 +46,7 @@ class URLValidatorStats(ProcessorStats):
         return base
 
 
-class URLValidator[T: Dataset](Processor[T, T, URLValidatorStats]):
+class URLValidator[DatasetT: Dataset](Processor[DatasetT, DatasetT, URLValidatorStats]):
     """
     Validates accessibility of file URLs in a dataset.
 
@@ -78,7 +80,7 @@ class URLValidator[T: Dataset](Processor[T, T, URLValidatorStats]):
             self._log_writer = JSONLWriter(self.invalid_url_log)
             await self._log_writer.open()
 
-    async def process(self, item: T) -> T | None:
+    async def process(self, item: DatasetT) -> DatasetT | None:
         """
         Validate all file URLs in the dataset.
 

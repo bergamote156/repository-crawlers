@@ -10,6 +10,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import cast
 
 
 @dataclass
@@ -29,7 +30,7 @@ class ProcessorStats:
         return f"{self.processed} ok, {self.filtered} filtered, {self.failed} failed"
 
 
-class Processor[I, O, S: ProcessorStats](ABC):
+class Processor[InT, OutT, StatsT: ProcessorStats](ABC):
     """
     Abstract base class for typed processors.
 
@@ -55,9 +56,9 @@ class Processor[I, O, S: ProcessorStats](ABC):
 
     def __init__(self):
         """Initialize processor with statistics."""
-        self._stats: S = self._create_stats()
+        self._stats = self._create_stats()
 
-    def _create_stats(self) -> S:
+    def _create_stats(self) -> StatsT:
         """
         Create statistics instance for this processor.
 
@@ -66,10 +67,10 @@ class Processor[I, O, S: ProcessorStats](ABC):
         Returns:
             ProcessorStats instance (or subclass)
         """
-        return ProcessorStats()
+        return cast(StatsT, ProcessorStats())
 
     @property
-    def stats(self) -> S:
+    def stats(self) -> StatsT:
         """Return processor statistics."""
         return self._stats
 
@@ -93,7 +94,7 @@ class Processor[I, O, S: ProcessorStats](ABC):
         return None
 
     @abstractmethod
-    async def process(self, item: I) -> O | None:
+    async def process(self, item: InT) -> OutT | None:
         """
         Process a single item.
 

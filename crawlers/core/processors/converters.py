@@ -10,7 +10,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Protocol, Sequence
 from urllib.parse import urlparse
 
 from crawlers.core.abc.metadata import MetadataBuilder
@@ -19,6 +19,7 @@ from crawlers.core.onedata import OnedataDataset, OnedataFile
 
 
 class DatasetFile(Protocol):
+    # pylint: disable=too-few-public-methods
     """Dataset file object required properties by OnedataConverter."""
 
     name: str
@@ -26,11 +27,12 @@ class DatasetFile(Protocol):
 
 
 class Dataset(Protocol):
+    # pylint: disable=too-few-public-methods
     """Dataset object required properties by OnedataConverter."""
 
     identifier: str
     title: str
-    files: list[DatasetFile]
+    files: Sequence[DatasetFile]
 
 
 @dataclass
@@ -41,7 +43,9 @@ class ConverterStats(ProcessorStats):
         return f"converted: {self.processed}"
 
 
-class OnedataConverter[T: Dataset](Processor[T, OnedataDataset, ConverterStats]):
+class OnedataConverter[DatasetT: Dataset](
+    Processor[DatasetT, OnedataDataset, ConverterStats]
+):
     """
     Converts InputDataset to OnedataDataset.
 
@@ -49,7 +53,7 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset, ConverterStats])
     file paths specifically for Onedata registration (resolving collisions).
     """
 
-    def __init__(self, metadata_builder: MetadataBuilder[T]):
+    def __init__(self, metadata_builder: MetadataBuilder[DatasetT]):
         """
         Initialize converter.
 
@@ -63,7 +67,7 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset, ConverterStats])
         """Create converter-specific stats."""
         return ConverterStats()
 
-    async def process(self, item: T) -> OnedataDataset:
+    async def process(self, item: DatasetT) -> OnedataDataset:
         """
         Convert input dataset to Onedata format.
 
@@ -90,7 +94,7 @@ class OnedataConverter[T: Dataset](Processor[T, OnedataDataset, ConverterStats])
         self._stats.processed += 1
         return dataset
 
-    def _resolve_path_collisions(self, files: list[DatasetFile]) -> list[str]:
+    def _resolve_path_collisions(self, files: Sequence[DatasetFile]) -> list[str]:
         """
         Generate unique paths for files, resolving collisions using URL structure.
 

@@ -13,7 +13,7 @@ import aiohttp  # type: ignore[import-not-found]
 from crawlers.core import output
 
 
-class ApiClient[I, O](ABC):
+class ApiClient[OptsT, DatasetT](ABC):
     """
     Base API client with built-in HTTP handling.
 
@@ -121,7 +121,7 @@ class ApiClient[I, O](ABC):
             return False
 
     @abstractmethod
-    def iterate_datasets(self, opts: I) -> AsyncIterator[O]:
+    def iterate_datasets(self, opts: OptsT) -> AsyncIterator[DatasetT]:
         """
         Iterate over datasets.
 
