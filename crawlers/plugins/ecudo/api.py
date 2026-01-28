@@ -87,7 +87,7 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
         url = (
             f"{self.base_url}/organizations/{org_id}/data?offset={offset}&limit={limit}"
         )
-        data = await self.fetch_json(url)
+        data = await self.get_json(url)
         return data.get("metadata", [])
 
     async def get_dataset_metadata(self, dataset_id: str) -> dict:
@@ -101,7 +101,7 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
             Dictionary with JSON-LD metadata
         """
         url = f"{self.base_url}/metadata/{dataset_id}/json-ld"
-        return await self.fetch_json(url)
+        return await self.get_json(url)
 
     async def get_organizations(self) -> list[EcudoOrganization]:
         """
@@ -110,5 +110,5 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
         Returns:
             List of organization dicts with 'id', 'name', 'link' keys
         """
-        data = await self.fetch_json(f"{self.base_url}/organizations")
+        data = await self.get_json(f"{self.base_url}/organizations")
         return data.get("organizations", [])
