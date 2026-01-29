@@ -13,7 +13,9 @@ import asyncio
 import sys
 import traceback
 
-from crawlers.core import output
+from rich.table import Table
+
+from crawlers.core.ui import console
 from crawlers.plugins import REGISTERED_PLUGINS
 
 
@@ -33,6 +35,18 @@ def main() -> int:
         "--list-plugins",
         action="store_true",
         help="List available plugins and exit",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose output (debug messages)",
+    )
+    parser.add_argument(
+        "-q",
+        "--quiet",
+        action="store_true",
+        help="Suppress non-error output",
     )
 
     # Subparsers for plugins
@@ -58,9 +72,12 @@ def main() -> int:
 
     # Handle basic commands
     if args.list_plugins:
-        output.info("Available plugins:")
+        table = Table(title="Available Plugins", show_header=True, header_style="bold")
+        table.add_column("Name", style="cyan")
+        table.add_column("Description")
         for p in REGISTERED_PLUGINS:
-            print(f"  {p.name:<10} - {p.description}")
+            table.add_row(p.name, p.description)
+        console.print(table)
         return 0
 
     if not args.plugin:
@@ -70,8 +87,14 @@ def main() -> int:
     # Find plugin
     selected_plugin = plugin_instances.get(args.plugin)
     if not selected_plugin:
-        output.error(f"Plugin '{args.plugin}' not found.")
+        console.error(f"Plugin '{args.plugin}' not found.")
         return 1
+
+    # Set verbosity from CLI flags
+    if args.verbose:
+        console.set_verbosity(console.Verbosity.VERBOSE)
+    elif args.quiet:
+        console.set_verbosity(console.Verbosity.QUIET)
 
     try:
         # Plugin handles everything: config loading, command dispatch
@@ -79,13 +102,12 @@ def main() -> int:
         return 0
 
     except ValueError as e:
-        output.error(str(e))
+        console.error(str(e))
         return 1
 
     except Exception as e:  # pylint: disable=broad-except
-        output.error(f"Execution failed: {e}")
-        if output.get_level() <= output.LogLevel.DEBUG:
-            traceback.print_exc()
+        console.error(f"Execution failed: {e}")
+        traceback.print_exc()
         return 1
 
 

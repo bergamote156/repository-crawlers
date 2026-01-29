@@ -8,7 +8,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core import output
+from crawlers.core.ui import console
 from crawlers.core.processors.fetchers import Parser
 from crawlers.plugins.eodc.models import EODCDataset, EODCFile
 
@@ -49,13 +49,13 @@ class EODCParser(Parser[dict, EODCDataset]):
         """
         item_id = raw.get("id")
         if not item_id:
-            output.warning("STAC item missing 'id' field")
+            console.warning("STAC item missing 'id' field")
             return None
 
         try:
             return self._parse_item(raw, item_id)
         except Exception as e:  # pylint: disable=broad-except
-            output.warning(f"Failed to parse STAC item {item_id}: {e}")
+            console.warning(f"Failed to parse STAC item {item_id}: {e}")
             return None
 
     def _parse_item(self, raw: dict, item_id: str) -> EODCDataset | None:
@@ -65,12 +65,12 @@ class EODCParser(Parser[dict, EODCDataset]):
         # Extract assets
         assets = raw.get("assets", {})
         if not assets:
-            output.debug(f"Skipping {item_id}: no assets")
+            console.debug(f"Skipping {item_id}: no assets")
             return None
 
         files = self._parse_assets(assets)
         if not files:
-            output.debug(f"Skipping {item_id}: no valid asset URLs")
+            console.debug(f"Skipping {item_id}: no valid asset URLs")
             return None
 
         # Build dynamic title

@@ -10,8 +10,10 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core import output
+from rich.table import Table
+
 from crawlers.core.plugin import CrawlerPlugin, command
+from crawlers.core.ui import console
 from crawlers.plugins.eodc.config import EODCApiConfig, EODCCrawlConfig
 
 
@@ -33,11 +35,6 @@ class EODCPlugin(CrawlerPlugin):
         # Lazy import to avoid import overhead when not running this command
         from crawlers.plugins.eodc.crawler import EODCCrawler
 
-        output.set_level(config.log_level)
-
-        collections = config.get_collections_list()
-        output.info(f"Starting EODC crawl for collections: {', '.join(collections)}")
-
         crawler = EODCCrawler(config)
         await crawler.run()
 
@@ -52,18 +49,24 @@ class EODCPlugin(CrawlerPlugin):
             timeout=config.timeout,
             max_retries=config.max_retries,
         ) as client:
-            collections = await client.get_collections()
+            with console.status("Fetching collections..."):
+                collections = await client.get_collections()
 
-            output.info(f"Found {len(collections)} collections:")
+            table = Table(
+                title=f"Available Collections ({len(collections)})",
+                show_header=True,
+                header_style="bold",
+            )
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Title")
+            table.add_column("Description", max_width=60)
+
             for coll in collections:
                 coll_id = coll.get("id", "unknown")
-                title = coll.get("title", "")
-                description = coll.get("description", "")[:80]
+                title = coll.get("title", "-")
+                desc = coll.get("description", "")[:80]
+                if len(coll.get("description", "")) > 80:
+                    desc += "..."
+                table.add_row(coll_id, title, desc)
 
-                if title:
-                    print(f"  {coll_id}: {title}")
-                else:
-                    print(f"  {coll_id}")
-
-                if description:
-                    print(f"    {description}...")
+            console.print(table)

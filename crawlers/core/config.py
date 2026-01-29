@@ -25,7 +25,6 @@ class OutputConfig(ConfigBase):
         cli=("-o", "--output-dir"),
         description="Output directory for crawled data",
     )
-    log_level: str = opt("info", description="Logging verbosity level")
 
 
 class ProcessingConfig(ConfigBase):

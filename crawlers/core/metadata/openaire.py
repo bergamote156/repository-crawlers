@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Protocol, Sequence, Tuple
 
-from crawlers.core import output
+from crawlers.core.ui import console
 from crawlers.core.abc.metadata import MetadataBuilder
 
 # COAR Access Rights vocabulary mapping
@@ -351,7 +351,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         if len(language_lower) in (2, 3) and language_lower.isalpha():
             return language_lower
 
-        output.warning(
+        console.warning(
             f"Unknown language '{language}', defaulting to 'en'. "
             "Consider extending language_map."
         )
@@ -362,7 +362,7 @@ class OpenAIREBuilder(MetadataBuilder[Dataset]):
         if access_level in ACCESS_RIGHTS_MAP:
             return ACCESS_RIGHTS_MAP[access_level]
 
-        output.warning(
+        console.warning(
             f"Unknown access_level '{access_level}', defaulting to 'open access'."
         )
         return DEFAULT_ACCESS_RIGHTS

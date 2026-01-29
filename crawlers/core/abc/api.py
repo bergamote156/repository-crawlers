@@ -10,7 +10,7 @@ from typing import AsyncIterator, Self
 
 import aiohttp  # type: ignore[import-not-found]
 
-from crawlers.core import output
+from crawlers.core.ui import console
 
 
 class ApiClient[OptsT, DatasetT](ABC):
@@ -92,19 +92,19 @@ class ApiClient[OptsT, DatasetT](ABC):
                         return await resp.json()
 
                     text = await resp.text()
-                    output.error(f"Error {resp.status} {method} {url}: {text[:100]}")
+                    console.error(f"Error {resp.status} {method} {url}: {text[:100]}")
                     return {}
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self.max_retries:
                     wait = 2**attempt
-                    output.debug(
+                    console.debug(
                         f"Attempt {attempt}/{self.max_retries} failed for "
                         f"{method} {url}: {exc}. Retrying in {wait}s..."
                     )
                     await asyncio.sleep(wait)
                     continue
 
-                output.error(
+                console.error(
                     f"All {self.max_retries} attempts failed for {method} {url}: {exc}"
                 )
                 return {}

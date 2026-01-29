@@ -1,7 +1,7 @@
 """
 Parallel Execution
 
-Utilities for running pipelines concurrently.
+Utilities for running pipelines concurrently with progress tracking.
 """
 
 __author__ = "Bartosz Walkowicz"
@@ -12,8 +12,8 @@ import asyncio
 from dataclasses import dataclass
 from typing import AsyncIterable
 
-from crawlers.core import output
 from crawlers.core.processors.pipeline import ProcessorPipeline
+from crawlers.core.ui import console
 
 
 @dataclass
@@ -32,30 +32,36 @@ class CrawlStats:
         )
 
 
+# pylint: disable=too-many-locals
 async def run_parallel_pipeline[InT, OutT](
     source_iterator: AsyncIterable[InT],
     pipeline: ProcessorPipeline[InT, OutT],
     *,
     concurrency: int = 10,
     queue_size: int = 1000,
+    max_items: int | None = None,
 ) -> CrawlStats:
     """
     Run pipeline concurrently on items from source iterator.
 
     Uses a queue to buffer items from the iterator and a pool of workers
-    to process them through the pipeline.
+    to process them through the pipeline. Shows live progress tracking.
 
     Args:
         source_iterator: Async iterator yielding input items
         pipeline: The processor pipeline to run
         concurrency: Number of concurrent workers
         queue_size: Max size of the buffer queue
+        max_items: Maximum items to process (enables progress bar if set)
 
     Returns:
         CrawlStats with aggregated statistics
     """
     queue: asyncio.Queue[InT | None] = asyncio.Queue(maxsize=queue_size)
     stats = CrawlStats()
+
+    # Create progress with appropriate display based on whether total is known
+    progress = console.create_progress(total=max_items)
 
     # Producer task: reads from iterator and puts into queue
     async def producer():
@@ -64,14 +70,14 @@ async def run_parallel_pipeline[InT, OutT](
                 await queue.put(item)
                 stats.queued += 1
         except Exception as e:  # pylint: disable=broad-exception-caught
-            output.error(f"Producer error: {e}")
+            progress.console.print(f"[error]:cross_mark:[/] Producer error: {e}")
         finally:
             # Signal workers to stop
             for _ in range(concurrency):
                 await queue.put(None)
 
     # Worker task: reads from queue and runs pipeline
-    async def worker(worker_id: int):
+    async def worker(worker_id: int, task_id):
         while True:
             item = await queue.get()
 
@@ -87,22 +93,32 @@ async def run_parallel_pipeline[InT, OutT](
                     stats.filtered += 1
             except Exception as e:  # pylint: disable=broad-exception-caught
                 item_str = str(item)[:50] if item else "?"
-                output.warning(f"Worker {worker_id} error processing {item_str}: {e}")
+                progress.console.print(
+                    f"[warning]:warning:[/] Worker {worker_id} error processing {item_str}: {e}"
+                )
                 stats.failed += 1
             finally:
                 queue.task_done()
+                # Update progress
+                progress.update(task_id, advance=1)
 
-    # Start producer
-    producer_task = asyncio.create_task(producer())
+    # Run with live progress display
+    with progress:
+        progress_task_id = progress.add_task("Processing", total=max_items)
 
-    # Start workers
-    workers = [asyncio.create_task(worker(i)) for i in range(concurrency)]
+        # Start producer
+        producer_task = asyncio.create_task(producer())
 
-    # Wait for producer to finish (iterating over all items)
-    await producer_task
+        # Start workers
+        workers = [
+            asyncio.create_task(worker(i, progress_task_id)) for i in range(concurrency)
+        ]
 
-    # Wait for workers to finish processing the queue (including None signals)
-    await asyncio.gather(*workers)
-    await queue.join()
+        # Wait for producer to finish (iterating over all items)
+        await producer_task
+
+        # Wait for workers to finish processing the queue (including None signals)
+        await asyncio.gather(*workers)
+        await queue.join()
 
     return stats

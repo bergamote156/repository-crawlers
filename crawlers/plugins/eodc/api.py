@@ -11,7 +11,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass
 from typing import AsyncIterator
 
-from crawlers.core import output
+from crawlers.core.ui import console
 from crawlers.core.abc.api import ApiClient
 
 
@@ -57,12 +57,12 @@ class EODCClient(ApiClient[EODCSearchOpts, dict]):
             data = await self.post_json(url, body)
 
             if not data:
-                output.warning(f"Empty response from STAC API at {url}")
+                console.warning(f"Empty response from STAC API at {url}")
                 break
 
             features = data.get("features", [])
             if not features:
-                output.debug(f"No features in response from {url}")
+                console.debug(f"No features in response from {url}")
                 break
 
             for item in features:
@@ -70,11 +70,11 @@ class EODCClient(ApiClient[EODCSearchOpts, dict]):
                 yielded += 1
 
                 if opts.max_items and yielded >= opts.max_items:
-                    output.info(f"Reached max_items limit: {opts.max_items}")
+                    console.info(f"Reached max_items limit: {opts.max_items}")
                     return
 
             page += 1
-            output.info(f"📄 Page {page} | {yielded} items fetched")
+            console.info(f"📄 Page {page} | {yielded} items fetched")
 
             # Find next page link
             url = self._find_next_link(data.get("links", []))
@@ -83,7 +83,7 @@ class EODCClient(ApiClient[EODCSearchOpts, dict]):
             # Some STAC APIs use body for pagination, others use URL params
             # EODC seems to use URL-based pagination
 
-        output.info(f"STAC iteration complete. Total: {yielded}")
+        console.info(f"STAC iteration complete. Total: {yielded}")
 
     def _build_search_body(self, opts: EODCSearchOpts) -> dict:
         """

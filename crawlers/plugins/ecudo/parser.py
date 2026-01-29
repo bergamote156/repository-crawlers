@@ -9,7 +9,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from contextlib import suppress
 from urllib.parse import urlparse
 
-from crawlers.core import output
+from crawlers.core.ui import console
 from crawlers.core.processors.fetchers import Parser
 from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 
@@ -70,7 +70,7 @@ class EcudoParser(Parser[dict, EcudoDataset]):
             dataset = self._parse_record(raw, identifier)
             return dataset
         except Exception as e:  # pylint: disable=broad-except
-            output.warning(f"Failed to parse record {identifier}: {e}")
+            console.warning(f"Failed to parse record {identifier}: {e}")
             return None
 
     def _parse_record(self, raw: dict, identifier: str) -> None | EcudoDataset:
@@ -79,12 +79,12 @@ class EcudoParser(Parser[dict, EcudoDataset]):
         # Extract files (distribution)
         distributions = raw.get("distribution", [])
         if not distributions:
-            output.debug(f"Skipping {identifier}: no distribution URLs")
+            console.debug(f"Skipping {identifier}: no distribution URLs")
             return None
 
         files = parse_files(distributions, identifier)
         if not files:
-            output.debug(f"Skipping {identifier}: no valid download URLs")
+            console.debug(f"Skipping {identifier}: no valid download URLs")
             return None
 
         publisher = parse_publisher(raw.get("publisher"), identifier)
@@ -119,7 +119,7 @@ def validate_structure(raw: dict, identifier: str) -> None:
     # Check root @type
     root_type = raw.get("@type")
     if root_type and root_type != EXPECTED_TYPES["root"]:
-        output.warning(
+        console.warning(
             f"Unexpected root @type '{root_type}' (expected '{EXPECTED_TYPES['root']}')"
             f" in record {identifier}"
         )
@@ -127,7 +127,7 @@ def validate_structure(raw: dict, identifier: str) -> None:
     # Check for unknown root fields
     unknown_fields = set(raw.keys()) - KNOWN_ROOT_FIELDS
     if unknown_fields:
-        output.warning(
+        console.warning(
             f"Unknown fields {sorted(unknown_fields)} in record {identifier} - consider"
             " updating parser"
         )
@@ -135,7 +135,7 @@ def validate_structure(raw: dict, identifier: str) -> None:
     # Check accessLevel
     access_level = raw.get("accessLevel")
     if access_level and access_level not in KNOWN_ACCESS_LEVELS:
-        output.warning(
+        console.warning(
             f"Unknown accessLevel '{access_level}' in record {identifier} - verify COAR"
             " mapping"
         )
@@ -145,7 +145,7 @@ def validate_structure(raw: dict, identifier: str) -> None:
     if isinstance(publisher, dict):
         pub_type = publisher.get("@type")
         if pub_type and pub_type != EXPECTED_TYPES["publisher"]:
-            output.warning(
+            console.warning(
                 f"Unexpected publisher @type '{pub_type}' (expected"
                 f" '{EXPECTED_TYPES['publisher']}') in record {identifier}"
             )
@@ -155,7 +155,7 @@ def validate_structure(raw: dict, identifier: str) -> None:
     if isinstance(contact, dict):
         contact_type = contact.get("@type")
         if contact_type and contact_type != EXPECTED_TYPES["contactPoint"]:
-            output.warning(
+            console.warning(
                 f"Unexpected contactPoint @type '{contact_type}' (expected"
                 f" '{EXPECTED_TYPES['contactPoint']}') in record {identifier}"
             )
@@ -177,7 +177,7 @@ def parse_files(distributions: list, identifier: str = "") -> list[EcudoFile]:
         # Validate distribution @type
         dist_type = dist.get("@type")
         if dist_type and dist_type != EXPECTED_TYPES["distribution"]:
-            output.warning(
+            console.warning(
                 f"Unexpected distribution @type '{dist_type}' (expected"
                 f" '{EXPECTED_TYPES['distribution']}') in record {identifier}"
             )
@@ -216,7 +216,7 @@ def parse_publisher(publisher_data, identifier: str = "") -> str:
     if isinstance(publisher_data, str):
         return publisher_data
 
-    output.warning(
+    console.warning(
         f"Unexpected publisher type {type(publisher_data).__name__} in record"
         f" {identifier}"
     )

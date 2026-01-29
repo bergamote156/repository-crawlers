@@ -55,6 +55,15 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
         super().__init__()
         self.processors = list(processors)
 
+    def get_processor_info(self) -> list[tuple[str, str, bool]]:
+        """
+        Get processor information for display.
+
+        Returns:
+            List of (class_name, description, enabled) tuples
+        """
+        return [(type(p).__name__, p.describe(), p.enabled) for p in self.processors]
+
     def get_processor_stats(self) -> list[tuple[str, ProcessorStats]]:
         """
         Collect statistics from all enabled processors.
@@ -76,19 +85,6 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
             if processor.enabled:
                 artifacts.extend(processor.artifacts())
         return artifacts
-
-    def format_description(self) -> str:
-        """
-        Return formatted pipeline description for logging.
-
-        Returns:
-            Multi-line string describing all processors
-        """
-        lines: list[str] = []
-        for i, processor in enumerate(self.processors, 1):
-            status = "✓" if processor.enabled else "⊘"
-            lines.append(f"  {i}. {status} {processor.describe()}")
-        return "\n".join(lines)
 
     async def open(self) -> None:
         """Open all enabled processors in order."""

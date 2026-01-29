@@ -111,3 +111,12 @@ class EODCCrawler(BaseCrawler[EODCCrawlConfig]):
                 JSONLWriter(output_path=self._processed_output_path),
             ]
         )
+
+    def get_max_items(self) -> int | None:
+        """Return max_records from config for progress tracking."""
+        return self.config.max_records
+
+    def _get_banner_subtitle(self) -> str | None:
+        """Return collection names as banner subtitle."""
+        collections = self.config.get_collections_list()
+        return f"Collections: {', '.join(collections)}"

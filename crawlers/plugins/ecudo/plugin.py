@@ -10,8 +10,10 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core import output
+from rich.table import Table
+
 from crawlers.core.plugin import CrawlerPlugin, command
+from crawlers.core.ui import console
 from crawlers.plugins.ecudo.config import EcudoApiConfig, EcudoCrawlConfig
 
 
@@ -33,9 +35,6 @@ class EcudoPlugin(CrawlerPlugin):
         # Lazy import to avoid import overhead when not running this command
         from crawlers.plugins.ecudo.crawler import EcudoCrawler
 
-        output.set_level(config.log_level)
-        output.info(f"Starting crawl for organization: {config.organization}")
-
         crawler = EcudoCrawler(config)
         await crawler.run()
 
@@ -50,8 +49,18 @@ class EcudoPlugin(CrawlerPlugin):
             timeout=config.timeout,
             max_retries=config.max_retries,
         ) as client:
-            orgs = await client.get_organizations()
+            with console.status("Fetching organizations..."):
+                organizations = await client.get_organizations()
 
-            output.info(f"Found {len(orgs)} organizations:")
-            for org in orgs:
-                print(f"  {org['id']}: {org['name']}")
+            table = Table(
+                title=f"Available Organizations ({len(organizations)})",
+                show_header=True,
+                header_style="bold",
+            )
+            table.add_column("ID", style="cyan", no_wrap=True)
+            table.add_column("Name")
+
+            for org in organizations:
+                table.add_row(org.get("id", "unknown"), org.get("name", "-"))
+
+            console.print(table)

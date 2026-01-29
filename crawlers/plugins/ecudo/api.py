@@ -9,7 +9,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass
 from typing import AsyncIterator, TypedDict
 
-from crawlers.core import output
+from crawlers.core.ui import console
 from crawlers.core.abc.api import ApiClient
 
 
@@ -64,13 +64,13 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
                 yielded += 1
 
                 if opts.max_datasets and yielded >= opts.max_datasets:
-                    output.info(f"Reached max_datasets limit: {opts.max_datasets}")
+                    console.info(f"Reached max_datasets limit: {opts.max_datasets}")
                     return
 
             page += 1
-            output.info(f"📄 Page {page} | {yielded} IDs fetched")
+            console.info(f"📄 Page {page} | {yielded} IDs fetched")
 
-        output.info(f"ID iteration complete. Total: {yielded}")
+        console.info(f"ID iteration complete. Total: {yielded}")
 
     async def list_dataset_ids(self, org_id: str, offset: int, limit: int) -> list[str]:
         """

@@ -12,9 +12,9 @@ import sys
 from pathlib import Path
 from typing import Any, AsyncIterable, cast
 
-from crawlers.core import output
 from crawlers.core.abc.api import ApiClient
 from crawlers.core.crawler import BaseCrawler
+from crawlers.core.ui import console
 from crawlers.core.metadata.openaire import OpenAIREBuilder
 from crawlers.core.processors.converters import OnedataConverter
 from crawlers.core.processors.fetchers import DatasetFetcher
@@ -120,16 +120,24 @@ class EcudoCrawler(BaseCrawler[EcudoCrawlConfig]):
             ]
         )
 
+    def get_max_items(self) -> int | None:
+        """Return max_records from config for progress tracking."""
+        return self.config.max_records
+
+    def _get_banner_subtitle(self) -> str | None:
+        """Return organization name as banner subtitle."""
+        return f"Organization: {self.config.organization}"
+
     async def before_crawl(self, client: ApiClient) -> None:
         """Validate that the requested organization exists."""
         ecudo_client = cast(EcudoClient, client)
 
-        output.info("📡 Validating organization...")
-        orgs = await ecudo_client.get_organizations()
+        with console.status("Validating organization..."):
+            orgs = await ecudo_client.get_organizations()
 
         if not any(o["id"] == self.config.organization for o in orgs):
-            output.error(f"Organization '{self.config.organization}' not found.")
-            output.error(f"   Available: {', '.join(o['id'] for o in orgs)}")
+            console.error(f"Organization '{self.config.organization}' not found.")
+            console.error(f"Available: {', '.join(o['id'] for o in orgs)}")
             sys.exit(1)
 
-        output.info(f"✅ Found organization: {self.config.organization}")
+        console.success(f"Found organization: {self.config.organization}")
