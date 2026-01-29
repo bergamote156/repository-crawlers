@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
+
 from .parsers import Parser
 
 

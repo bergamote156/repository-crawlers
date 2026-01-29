@@ -59,9 +59,9 @@ class ParserProcessor[RawT, DatasetT](Processor[RawT, DatasetT, ParserStats]):
     """
 
     def __init__(
-            self,
-            parser: Parser[RawT, DatasetT],
-            enabled: bool = True,
+        self,
+        parser: Parser[RawT, DatasetT],
+        enabled: bool = True,
     ):
         """
         Initialize parser processor.
