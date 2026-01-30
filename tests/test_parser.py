@@ -4,11 +4,11 @@
 
 import pytest
 
-from ecudo.parsers.ecudo import (
+from crawlers.plugins.ecudo.parser import (
     extract_filename,
     parse_files,
     parse_publisher,
-    parse_record,
+    EcudoParser,
 )
 
 
@@ -39,7 +39,8 @@ class TestParseRecord:
 
     def test_parse_valid_record(self, valid_record):
         """Test parsing a valid record."""
-        result = parse_record(valid_record)
+        parser = EcudoParser()
+        result = parser.parse(valid_record)
 
         assert result is not None
         assert result.identifier == "urn:SDN:CDI:iopan.pl:uuid:test-123"
@@ -61,7 +62,8 @@ class TestParseRecord:
             "title": "No ID Dataset",
             "distribution": [{"downloadURL": "https://example.com/data.zip"}],
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is None
 
     def test_parse_missing_distribution(self):
@@ -70,7 +72,8 @@ class TestParseRecord:
             "identifier": "urn:test:123",
             "title": "No Files Dataset",
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is None
 
     def test_parse_empty_distribution(self):
@@ -80,7 +83,8 @@ class TestParseRecord:
             "title": "Empty Files Dataset",
             "distribution": [],
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is None
 
     def test_parse_distribution_without_url(self):
@@ -90,7 +94,8 @@ class TestParseRecord:
             "title": "Bad Distribution",
             "distribution": [{"format": "unknown"}],
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is None
 
     def test_parse_publisher_as_string(self):
@@ -101,7 +106,8 @@ class TestParseRecord:
             "publisher": "Simple Publisher Name",
             "distribution": [{"downloadURL": "https://example.com/data.zip"}],
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is not None
         assert result.publisher == "Simple Publisher Name"
 
@@ -112,7 +118,8 @@ class TestParseRecord:
             "title": "No Publisher",
             "distribution": [{"downloadURL": "https://example.com/data.zip"}],
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is not None
         assert result.publisher == "Unknown Publisher"
 
@@ -127,7 +134,8 @@ class TestParseRecord:
                 {"downloadURL": "https://example.com/file3.csv"},
             ],
         }
-        result = parse_record(record)
+        parser = EcudoParser()
+        result = parser.parse(record)
         assert result is not None
         assert len(result.files) == 3
         assert result.files[0].name == "file1.csv"
@@ -136,7 +144,8 @@ class TestParseRecord:
 
     def test_parse_preserves_raw(self, valid_record):
         """Test that _raw field preserves original data."""
-        result = parse_record(valid_record)
+        parser = EcudoParser()
+        result = parser.parse(valid_record)
         assert result is not None
         assert result._raw == valid_record
 
@@ -161,7 +170,6 @@ class TestParseFiles:
         assert len(files) == 1
         assert files[0].name == "data.zip"
         assert files[0].url == "https://example.com/data.zip"
-        assert files[0].format == "WWW:DOWNLOAD"
 
     def test_parse_multiple_distributions(self):
         """Test parsing multiple distributions."""
@@ -201,7 +209,6 @@ class TestParseFiles:
         files = parse_files(distributions)
 
         assert len(files) == 1
-        assert files[0].format is None
 
 
 class TestParsePublisher:

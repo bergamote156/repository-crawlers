@@ -4,14 +4,15 @@
 
 import pytest
 
-from ecudo.processors.base import Processor
-from ecudo.processors.pipeline import ProcessorPipeline
+from crawlers.core.abc.processor import Processor, ProcessorStats
+from crawlers.core.processors.pipeline import ProcessorPipeline
 
 
-class PassThroughProcessor(Processor[int, int]):
+class PassThroughProcessor(Processor[int, int, ProcessorStats]):
     """Simple processor that passes items through unchanged."""
 
     def __init__(self):
+        super().__init__()
         self.opened = False
         self.closed = False
         self.processed_items = []
@@ -27,36 +28,42 @@ class PassThroughProcessor(Processor[int, int]):
         return item
 
 
-class DoubleProcessor(Processor[int, int]):
+class DoubleProcessor(Processor[int, int, ProcessorStats]):
     """Processor that doubles the input value."""
 
     async def process(self, item: int) -> int:
+        self.stats.processed += 1
         return item * 2
 
 
-class AddProcessor(Processor[int, int]):
+class AddProcessor(Processor[int, int, ProcessorStats]):
     """Processor that adds a fixed value."""
 
     def __init__(self, value: int):
+        super().__init__()
         self.value = value
 
     async def process(self, item: int) -> int:
+        self.stats.processed += 1
         return item + self.value
 
 
-class FilterEvenProcessor(Processor[int, int]):
+class FilterEvenProcessor(Processor[int, int, ProcessorStats]):
     """Processor that filters out even numbers."""
 
     async def process(self, item: int) -> int | None:
         if item % 2 == 0:
+            self.stats.filtered += 1
             return None  # Filter out even numbers
+        self.stats.processed += 1
         return item
 
 
-class IntToStrProcessor(Processor[int, str]):
+class IntToStrProcessor(Processor[int, str, ProcessorStats]):
     """Processor that converts int to string."""
 
     async def process(self, item: int) -> str:
+        self.stats.processed += 1
         return f"value:{item}"
 
 
@@ -117,12 +124,12 @@ class TestProcessorPipeline:
         # 5 * 2 = 10, filtered out (even)
         result = await pipeline.process(5)
         assert result is None
-        assert pipeline._filtered == 1
+        assert filter_even.stats.filtered == 1
 
         # 3 * 2 = 6, filtered out (even)
         result = await pipeline.process(3)
         assert result is None
-        assert pipeline._filtered == 2
+        assert filter_even.stats.filtered == 2
 
         # 2 * 2 = 4, filtered out (even)
         result = await pipeline.process(2)
@@ -135,21 +142,18 @@ class TestProcessorPipeline:
         """Test that odd numbers pass through filter."""
         # Pipeline: double first (produces odd result for input 0.5 not possible)
         # So let's use: add 1, then filter
-        pipeline = ProcessorPipeline(
-            [
-                AddProcessor(1),  # 4 -> 5 (odd)
-                FilterEvenProcessor(),  # 5 passes
-                DoubleProcessor(),  # 5 -> 10
-            ]
-        )
+        add = AddProcessor(1)
+        filter_even = FilterEvenProcessor()
+        double = DoubleProcessor()
+        pipeline = ProcessorPipeline([add, filter_even, double])
 
         await pipeline.open()
         result = await pipeline.process(4)
         await pipeline.close()
 
         assert result == 10
-        assert pipeline._processed == 1
-        assert pipeline._filtered == 0
+        assert add.stats.processed == 1
+        assert filter_even.stats.filtered == 0
 
     @pytest.mark.asyncio
     async def test_lifecycle_methods_called(self):
@@ -251,5 +255,5 @@ class TestProcessorPipeline:
 
         await pipeline.close()
 
-        assert pipeline._filtered == 5
-        assert pipeline._processed == 0
+        assert pipeline.processors[1].stats.filtered == 5
+        assert pipeline.processors[1].stats.processed == 0

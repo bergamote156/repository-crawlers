@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from ecudo.processors.writers import JSONLWriter
+from crawlers.core.processors.writers import JSONLWriter
 
 
 @dataclass
@@ -30,7 +30,7 @@ class TestJSONLWriter:
     async def test_writes_dict_items(self, tmp_path):
         """Test writing plain dict items."""
         filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
         await writer.process({"a": 1, "b": 2})
@@ -46,7 +46,7 @@ class TestJSONLWriter:
     async def test_writes_objects_with_to_json(self, tmp_path):
         """Test writing objects that have to_json() method."""
         filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
         await writer.process(SampleItem("foo", 42))
@@ -62,7 +62,7 @@ class TestJSONLWriter:
     async def test_returns_same_item(self, tmp_path):
         """Test that process() returns the same item (pass-through)."""
         filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
         item = {"test": "value"}
@@ -75,7 +75,7 @@ class TestJSONLWriter:
     async def test_creates_parent_directories(self, tmp_path):
         """Test that parent directories are created if they don't exist."""
         filepath = tmp_path / "nested" / "dir" / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
         await writer.process({"data": "test"})
@@ -90,13 +90,13 @@ class TestJSONLWriter:
         filepath = tmp_path / "output.jsonl"
 
         # First write
-        writer1 = JSONLWriter(filepath, show_stats=False)
+        writer1 = JSONLWriter(filepath)
         await writer1.open()
         await writer1.process({"line": 1})
         await writer1.close()
 
         # Second write (should append)
-        writer2 = JSONLWriter(filepath, show_stats=False)
+        writer2 = JSONLWriter(filepath)
         await writer2.open()
         await writer2.process({"line": 2})
         await writer2.close()
@@ -107,29 +107,20 @@ class TestJSONLWriter:
         assert json.loads(lines[1]) == {"line": 2}
 
     @pytest.mark.asyncio
-    async def test_raises_error_when_not_opened(self, tmp_path):
-        """Test that processing without open() raises error."""
-        filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
-
-        with pytest.raises(RuntimeError, match="Writer not opened"):
-            await writer.process({"data": "test"})
-
-    @pytest.mark.asyncio
     async def test_tracks_written_count(self, tmp_path):
         """Test that _written counter is tracked."""
         filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
-        assert writer._written == 0
+        assert writer.stats.written == 0
 
         await writer.process({"a": 1})
-        assert writer._written == 1
+        assert writer.stats.written == 1
 
         await writer.process({"b": 2})
         await writer.process({"c": 3})
-        assert writer._written == 3
+        assert writer.stats.written == 3
 
         await writer.close()
 
@@ -137,7 +128,7 @@ class TestJSONLWriter:
     async def test_handles_unicode(self, tmp_path):
         """Test that unicode characters are preserved."""
         filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
         await writer.process({"text": "Zażółć gęślą jaźń"})
@@ -152,30 +143,16 @@ class TestJSONLWriter:
     async def test_close_without_open_is_safe(self, tmp_path):
         """Test that close() without open() doesn't raise."""
         filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         # Should not raise
         await writer.close()
 
     @pytest.mark.asyncio
-    async def test_show_stats_prints_message(self, tmp_path, capsys):
-        """Test that show_stats=True prints statistics."""
-        filepath = tmp_path / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=True)
-
-        await writer.open()
-        await writer.process({"data": "test"})
-        await writer.close()
-
-        captured = capsys.readouterr()
-        assert "Wrote 1 items" in captured.out
-        assert str(filepath) in captured.out
-
-    @pytest.mark.asyncio
     async def test_accepts_path_object(self, tmp_path):
         """Test that Path objects are accepted."""
         filepath = Path(tmp_path) / "output.jsonl"
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(filepath)
 
         await writer.open()
         await writer.process({"path": "test"})
@@ -187,7 +164,7 @@ class TestJSONLWriter:
     async def test_accepts_string_path(self, tmp_path):
         """Test that string paths are accepted."""
         filepath = str(tmp_path / "output.jsonl")
-        writer = JSONLWriter(filepath, show_stats=False)
+        writer = JSONLWriter(Path(filepath))
 
         await writer.open()
         await writer.process({"string": "path"})

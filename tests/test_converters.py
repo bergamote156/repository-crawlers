@@ -4,15 +4,15 @@
 
 import pytest
 
-from ecudo.metadata import openaire
-from ecudo.models import EcudoDataset, EcudoFile
-from ecudo.processors.converters import OnedataConverter, resolve_path_collisions
+from crawlers.core.metadata.openaire import OpenAIREBuilder
+from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
+from crawlers.core.processors.converters import OnedataConverter
 
 
 @pytest.fixture
 def converter():
     """Create converter instance."""
-    return OnedataConverter(openaire.generate_xml)
+    return OnedataConverter(OpenAIREBuilder())
 
 
 @pytest.fixture
@@ -116,52 +116,52 @@ class TestOnedataConverter:
 class TestResolvePathCollisions:
     """Tests for resolve_path_collisions function."""
 
-    def test_empty_list(self):
+    def test_empty_list(self, converter):
         """Empty file list returns empty path list."""
-        assert resolve_path_collisions([]) == []
+        assert converter._resolve_path_collisions([]) == []
 
-    def test_single_file(self):
+    def test_single_file(self, converter):
         """Single file gets simple path."""
         files = [EcudoFile(name="data.csv", url="https://example.com/data.csv")]
 
-        paths = resolve_path_collisions(files)
+        paths = converter._resolve_path_collisions(files)
 
         assert paths == ["data.csv"]
 
-    def test_no_collisions(self):
+    def test_no_collisions(self, converter):
         """Files with unique names keep simple paths."""
         files = [
             EcudoFile(name="data.csv", url="https://example.com/a/data.csv"),
             EcudoFile(name="readme.txt", url="https://example.com/b/readme.txt"),
         ]
 
-        paths = resolve_path_collisions(files)
+        paths = converter._resolve_path_collisions(files)
 
         assert paths == ["data.csv", "readme.txt"]
 
-    def test_simple_collision(self):
+    def test_simple_collision(self, converter):
         """Two files with same name get disambiguated."""
         files = [
             EcudoFile(name="data.csv", url="https://example.com/raw/data.csv"),
             EcudoFile(name="data.csv", url="https://example.com/processed/data.csv"),
         ]
 
-        paths = resolve_path_collisions(files)
+        paths = converter._resolve_path_collisions(files)
 
         assert paths == ["raw/data.csv", "processed/data.csv"]
 
-    def test_deep_collision(self):
+    def test_deep_collision(self, converter):
         """Collisions requiring multiple path segments to resolve."""
         files = [
             EcudoFile(name="23", url="https://example.com/api/stats/hl/2013/2/23"),
             EcudoFile(name="23", url="https://example.com/api/data/hl/2013/2/23"),
         ]
 
-        paths = resolve_path_collisions(files)
+        paths = converter._resolve_path_collisions(files)
 
         assert paths == ["stats/hl/2013/2/23", "data/hl/2013/2/23"]
 
-    def test_multiple_collisions(self):
+    def test_multiple_collisions(self, converter):
         """Multiple files with same name all get unique paths."""
         files = [
             EcudoFile(name="data.bin", url="https://example.com/a/data.bin"),
@@ -169,11 +169,11 @@ class TestResolvePathCollisions:
             EcudoFile(name="data.bin", url="https://example.com/c/data.bin"),
         ]
 
-        paths = resolve_path_collisions(files)
+        paths = converter._resolve_path_collisions(files)
 
         assert paths == ["a/data.bin", "b/data.bin", "c/data.bin"]
 
-    def test_mixed_collisions(self):
+    def test_mixed_collisions(self, converter):
         """Some files collide, others don't."""
         files = [
             EcudoFile(name="data.csv", url="https://example.com/raw/data.csv"),
@@ -181,6 +181,6 @@ class TestResolvePathCollisions:
             EcudoFile(name="readme.txt", url="https://example.com/readme.txt"),
         ]
 
-        paths = resolve_path_collisions(files)
+        paths = converter._resolve_path_collisions(files)
 
         assert paths == ["raw/data.csv", "processed/data.csv", "readme.txt"]

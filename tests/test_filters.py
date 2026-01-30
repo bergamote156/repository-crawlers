@@ -4,8 +4,8 @@
 
 import pytest
 
-from ecudo.models import EcudoDataset, EcudoFile
-from ecudo.processors import DiversityFilter
+from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
+from crawlers.core.processors.filters import DiversityFilter
 
 
 def make_record(identifier: str, title: str) -> EcudoDataset:
@@ -35,8 +35,8 @@ class TestDiversityFilter:
 
         assert result is not None
         assert result.identifier == "id1"
-        assert diversity_filter._accepted == 1
-        assert diversity_filter._skipped == 0
+        assert diversity_filter.stats.processed == 1
+        assert diversity_filter.stats.filtered == 0
 
     @pytest.mark.asyncio
     async def test_accepts_different_titles(self):
@@ -51,9 +51,9 @@ class TestDiversityFilter:
         assert await diversity_filter.process(r2) is not None
         assert await diversity_filter.process(r3) is not None
 
-        assert diversity_filter._accepted == 3
-        assert diversity_filter._skipped == 0
-        assert len(diversity_filter._title_groups) == 3
+        assert diversity_filter.stats.processed == 3
+        assert diversity_filter.stats.filtered == 0
+        assert len(diversity_filter._groups) == 3
 
     @pytest.mark.asyncio
     async def test_limits_similar_titles(self):
@@ -73,8 +73,8 @@ class TestDiversityFilter:
         assert result2 is not None  # Second accepted (limit=2)
         assert result3 is None  # Third rejected
 
-        assert diversity_filter._accepted == 2
-        assert diversity_filter._skipped == 1
+        assert diversity_filter.stats.processed == 2
+        assert diversity_filter.stats.filtered == 1
 
     @pytest.mark.asyncio
     async def test_similarity_threshold(self):
@@ -120,26 +120,6 @@ class TestDiversityFilter:
         assert await diversity_filter.process(vdr3) is None  # VDR group full
         assert await diversity_filter.process(ctd3) is None  # CTD group full
 
-        assert diversity_filter._accepted == 4
-        assert diversity_filter._skipped == 2
-        assert len(diversity_filter._title_groups) == 2
-
-    @pytest.mark.asyncio
-    async def test_close_prints_statistics(self, capsys):
-        """Test that close() prints statistics."""
-        diversity_filter = DiversityFilter(max_similar=2, similarity_threshold=0.85)
-
-        # Use very different titles to ensure separate groups
-        await diversity_filter.process(
-            make_record("id1", "Ocean Temperature Measurements")
-        )
-        await diversity_filter.process(
-            make_record("id2", "Satellite Imagery Collection")
-        )
-
-        await diversity_filter.close()
-
-        captured = capsys.readouterr()
-        assert "Diversity Filter Statistics" in captured.out
-        assert "Total groups: 2" in captured.out
-        assert "Accepted: 2" in captured.out
+        assert diversity_filter.stats.processed == 4
+        assert diversity_filter.stats.filtered == 2
+        assert len(diversity_filter._groups) == 2
