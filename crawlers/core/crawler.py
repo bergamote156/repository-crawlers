@@ -154,7 +154,7 @@ class BaseCrawler[ConfigT: BaseCrawlConfig](ABC):
         Override in subclass for custom banner.
         """
         title = self.__class__.__name__
-        subtitle = self._get_banner_subtitle()
+        subtitle = self._get_banner_subtitle()  # pylint: disable=assignment-from-none
 
         content = f"[header]{title}[/]"
         if subtitle:

@@ -9,8 +9,8 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass
 from typing import AsyncIterator, TypedDict
 
-from crawlers.core.ui import console
 from crawlers.core.abc.api import ApiClient
+from crawlers.core.ui import console
 
 
 @dataclass

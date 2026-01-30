@@ -4,8 +4,8 @@
 
 import pytest
 
-from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 from crawlers.core.processors.filters import DiversityFilter
+from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 
 
 def make_record(identifier: str, title: str) -> EcudoDataset:

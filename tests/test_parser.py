@@ -5,10 +5,10 @@
 import pytest
 
 from crawlers.plugins.ecudo.parser import (
+    EcudoParser,
     extract_filename,
     parse_files,
     parse_publisher,
-    EcudoParser,
 )
 
 

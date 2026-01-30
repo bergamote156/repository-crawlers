@@ -9,8 +9,8 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from contextlib import suppress
 from urllib.parse import urlparse
 
-from crawlers.core.ui import console
 from crawlers.core.processors.fetchers import Parser
+from crawlers.core.ui import console
 from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 
 # Expected @type values for structure validation

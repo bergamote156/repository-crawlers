@@ -5,8 +5,8 @@
 import pytest
 
 from crawlers.core.metadata.openaire import OpenAIREBuilder
-from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 from crawlers.core.processors.converters import OnedataConverter
+from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
 
 
 @pytest.fixture

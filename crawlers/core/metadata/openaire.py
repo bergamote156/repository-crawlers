@@ -14,8 +14,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable, Protocol, Sequence, Tuple
 
-from crawlers.core.ui import console
 from crawlers.core.abc.metadata import MetadataBuilder
+from crawlers.core.ui import console
 
 # COAR Access Rights vocabulary mapping
 # https://vocabularies.coar-repositories.org/access_rights/

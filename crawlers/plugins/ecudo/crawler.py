@@ -14,7 +14,6 @@ from typing import Any, AsyncIterable, cast
 
 from crawlers.core.abc.api import ApiClient
 from crawlers.core.crawler import BaseCrawler
-from crawlers.core.ui import console
 from crawlers.core.metadata.openaire import OpenAIREBuilder
 from crawlers.core.processors.converters import OnedataConverter
 from crawlers.core.processors.fetchers import DatasetFetcher
@@ -22,6 +21,7 @@ from crawlers.core.processors.filters import DiversityFilter
 from crawlers.core.processors.pipeline import ProcessorPipeline
 from crawlers.core.processors.validators import URLValidator
 from crawlers.core.processors.writers import JSONLWriter
+from crawlers.core.ui import console
 from crawlers.plugins.ecudo.api import EcudoClient, EcudoIteratorOpts
 from crawlers.plugins.ecudo.config import EcudoCrawlConfig
 from crawlers.plugins.ecudo.models import EcudoDataset

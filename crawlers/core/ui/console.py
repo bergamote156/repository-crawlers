@@ -26,12 +26,12 @@ from rich.status import Status
 
 from crawlers.core.ui.theme import THEME, Verbosity
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Console State (thin class)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# pylint: disable=too-few-public-methods
 class Console:
     """
     Thin wrapper holding console state.
@@ -49,7 +49,7 @@ class Console:
 # Global Console Instance (singleton)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_console: Console | None = None
+_console: Console | None = None  # pylint: disable=invalid-name
 
 
 def get_console() -> Console:

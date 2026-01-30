@@ -33,10 +33,6 @@ def sample_record():
 class TestOpenAIREMetadata:
     """Tests for OpenAIRE metadata generator."""
 
-    def test_format_constants(self):
-        """Test format name and content type constants."""
-        pass
-
     def test_generate_xml_produces_valid_xml(self, sample_record):
         """Test that generate_xml produces valid XML."""
         builder = OpenAIREBuilder()
