@@ -1,0 +1,9 @@
+__pycache__
+.idea
+.tox
+.coverage
+.local/
+.cache/
+
+.cursor/
+data/
