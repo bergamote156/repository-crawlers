@@ -34,7 +34,7 @@ class OnepanelClient:
         self,
         domain: str,
         token: str,
-        port: int = 9443,
+        port: int = 443,
         verify_ssl: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ):
@@ -44,7 +44,7 @@ class OnepanelClient:
         Args:
             domain: Oneprovider domain
             token: Admin token
-            port: Onepanel port (default: 9443)
+            port: Onepanel port (default: 443)
             verify_ssl: Whether to verify SSL certificates
             timeout: Request timeout in seconds
         """
