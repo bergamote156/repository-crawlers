@@ -11,8 +11,8 @@
 onedata:
   onezone_domain: demo.onedata.org
   oneprovider_domain: provider.demo.onedata.org
-  panel_port: 9443
-  verify_ssl: false
+  panel_port: 443
+  verify_ssl: true
 
 # Authentication tokens
 # These can also be set via environment variables:

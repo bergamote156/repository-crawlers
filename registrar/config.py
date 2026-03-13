@@ -24,7 +24,7 @@ class OnedataConfig:
 
     onezone_domain: str = "demo.onedata.org"
     oneprovider_domain: str = "provider.demo.onedata.org"
-    panel_port: int = 9443
+    panel_port: int = 443
     verify_ssl: bool = False
 
 
