@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from crawlers.core.result import Result
+
 
 @dataclass
 class ProcessorStats:
@@ -43,17 +45,20 @@ class Processor[InT, OutT, StatsT: ProcessorStats](ABC):
     - Statistics tracking via stats property
     - Optional enable/disable via `enabled` flag
 
-    Returning None from process() signals that the item should be
-    filtered out (not passed to the next processor).
+    Returning Err from process() signals that the item should be
+    rejected (not passed to the next processor). The pipeline
+    routes Err values to the rejection sink via errors.to_json().
 
     Example:
         class MyProcessor(Processor[InputDataset, OutputDataset]):
-            async def process(self, item: InputDataset) -> OutputDataset | None:
+
+            async def process(self, item: InputDataset) -> Result[OutputDataset, object]:
                 if item.title.startswith("Test"):
                     self._stats.filtered += 1
-                    return None  # Filter out
+                    return Err({"dataset_id": item.identifier, "reason": "filtered"})
+
                 self._stats.processed += 1
-                return item  # Pass through
+                return Ok(item)
     """
 
     def __init__(self, enabled: bool = True):
@@ -126,14 +131,14 @@ class Processor[InT, OutT, StatsT: ProcessorStats](ABC):
         return None
 
     @abstractmethod
-    async def process(self, item: InT) -> OutT | None:
+    async def process(self, item: InT) -> Result[OutT, object]:
         """
         Process a single item.
 
         Args:
-            item: Input item of type I
+            item: Input item of type InT
 
         Returns:
-            Processed item of type O, or None to filter out
+            Ok(item) on success, Err(reason) to reject
         """
         raise NotImplementedError

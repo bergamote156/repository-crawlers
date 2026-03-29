@@ -6,10 +6,13 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 import asyncio
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Self
+from collections.abc import AsyncIterator
+from typing import Self
 
 import aiohttp  # type: ignore[import-not-found]
 
+from crawlers.core.errors import ApiError, HttpError, HttpTimeoutError
+from crawlers.core.result import Err, Ok, Result
 from crawlers.core.ui import console
 
 
@@ -18,8 +21,8 @@ class ApiClient[OptsT, DatasetT](ABC):
     Base API client with built-in HTTP handling.
 
     Generics:
-        T: Type yielded by the iterator (e.g. str for ID, dict for JSON)
-        P: Type of iterator options (e.g. EcudoIteratorOpts)
+        OptsT: Type of iterator options (e.g. EcudoIteratorOpts)
+        DatasetT: Type yielded by the iterator (e.g. str for ID, dict for JSON)
     """
 
     def __init__(
@@ -71,7 +74,9 @@ class ApiClient[OptsT, DatasetT](ABC):
             )
         return self._session
 
-    async def _request_json(self, method: str, url: str, **kwargs) -> dict:
+    async def _request_json(
+        self, method: str, url: str, **kwargs
+    ) -> Result[dict, ApiError]:
         """
         Execute an HTTP request and return JSON response with retries and backoff.
 
@@ -81,7 +86,7 @@ class ApiClient[OptsT, DatasetT](ABC):
             **kwargs: Extra arguments for the session.request()
 
         Returns:
-            Parsed JSON as dict, or empty dict on failure
+            Ok(dict) on success, Err(ApiError) on failure
         """
         for attempt in range(1, self.max_retries + 1):
             try:
@@ -89,11 +94,17 @@ class ApiClient[OptsT, DatasetT](ABC):
                     method, url, allow_redirects=True, **kwargs
                 ) as resp:
                     if resp.status == 200:
-                        return await resp.json()
+                        return Ok(await resp.json())
 
                     text = await resp.text()
-                    console.error(f"Error {resp.status} {method} {url}: {text[:100]}")
-                    return {}
+                    return Err(
+                        HttpError(
+                            status=resp.status,
+                            method=method,
+                            url=url,
+                            body=text[:200],
+                        )
+                    )
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt < self.max_retries:
                     wait = 2**attempt
@@ -104,13 +115,23 @@ class ApiClient[OptsT, DatasetT](ABC):
                     await asyncio.sleep(wait)
                     continue
 
-                console.error(
-                    f"All {self.max_retries} attempts failed for {method} {url}: {exc}"
+                return Err(
+                    HttpTimeoutError(
+                        method=method,
+                        url=url,
+                        attempts=self.max_retries,
+                        last_error=str(exc),
+                    )
                 )
-                return {}
-        return {}
 
-    async def get_json(self, url: str) -> dict:
+        # Unreachable, but satisfies type checker
+        return Err(
+            HttpTimeoutError(
+                method=method, url=url, attempts=self.max_retries, last_error="unknown"
+            )
+        )
+
+    async def get_json(self, url: str) -> Result[dict, ApiError]:
         """
         Fetch JSON from URL with retries and exponential backoff.
 
@@ -118,11 +139,11 @@ class ApiClient[OptsT, DatasetT](ABC):
             url: URL to fetch
 
         Returns:
-            Parsed JSON as dict, or empty dict on failure
+            Ok(dict) on success, Err(ApiError) on failure
         """
         return await self._request_json("GET", url)
 
-    async def post_json(self, url: str, body: dict) -> dict:
+    async def post_json(self, url: str, body: dict) -> Result[dict, ApiError]:
         """
         POST JSON to URL and return response with retries and exponential backoff.
 
@@ -131,11 +152,11 @@ class ApiClient[OptsT, DatasetT](ABC):
             body: JSON body to send
 
         Returns:
-            Parsed JSON as dict, or empty dict on failure
+            Ok(dict) on success, Err(ApiError) on failure
         """
         return await self._request_json("POST", url, json=body)
 
-    async def validate_url(self, url: str) -> bool:
+    async def validate_url(self, url: str) -> Result[bool, ApiError]:
         """
         Check if a URL is accessible using HEAD request.
 
@@ -143,13 +164,20 @@ class ApiClient[OptsT, DatasetT](ABC):
             url: URL to validate
 
         Returns:
-            True if URL returns 200, False otherwise
+            Ok(True) if URL returns 200, Err(ApiError) on failure
         """
         try:
             async with self.session.head(url, allow_redirects=True) as resp:
-                return resp.status == 200
-        except (aiohttp.ClientError, asyncio.TimeoutError):
-            return False
+                if resp.status == 200:
+                    return Ok(True)
+
+                return Err(HttpError(status=resp.status, method="HEAD", url=url))
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            return Err(
+                HttpTimeoutError(
+                    method="HEAD", url=url, attempts=1, last_error=str(exc)
+                )
+            )
 
     @abstractmethod
     def iterate_datasets(self, opts: OptsT) -> AsyncIterator[DatasetT]:

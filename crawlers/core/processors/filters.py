@@ -15,11 +15,13 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
+from crawlers.core.result import Err, Ok, Result
 
 
 class Dataset(Protocol):
     """Dataset object required properties by DiversityFilter."""
 
+    identifier: str
     title: str
 
 
@@ -40,7 +42,6 @@ class DiversityFilter[DatasetT: Dataset](
     Filters out datasets with similar titles to ensure diversity.
 
     Groups datasets by similar titles and limits the number of datasets per group.
-    Uses `title` attribute of InputDataset.
     """
 
     def __init__(
@@ -76,7 +77,7 @@ class DiversityFilter[DatasetT: Dataset](
         """Create filter-specific stats."""
         return DiversityFilterStats()
 
-    async def process(self, item: DatasetT) -> DatasetT | None:
+    async def process(self, item: DatasetT) -> Result[DatasetT, object]:
         """
         Check if dataset is too similar to existing ones.
 
@@ -84,30 +85,36 @@ class DiversityFilter[DatasetT: Dataset](
             item: Dataset to check
 
         Returns:
-            Dataset if it passes the filter, None otherwise
+            Ok(dataset) if it passes, Err(reason) if filtered
         """
         title = item.title
 
-        # Check against existing groups
         for idx, representatives in enumerate(self._groups):
-            # Check similarity with representative titles of the group
-            # We use the first one as primary representative
             rep_title = representatives[0]
             similarity = difflib.SequenceMatcher(None, title, rep_title).ratio()
 
             if similarity >= self.similarity_threshold:
-                # Corresponds to this group
                 if self._group_counts[idx] >= self.max_similar:
                     self._stats.filtered += 1
-                    return None  # Max limit reached for this group
+                    return Err(
+                        {
+                            "dataset_id": item.identifier,
+                            "reason": "filtered_duplicate",
+                            "detail": {
+                                "similar_to": rep_title,
+                                "similarity": round(similarity, 3),
+                            },
+                            "processor": "DiversityFilter",
+                        }
+                    )
 
                 self._group_counts[idx] += 1
                 self._stats.processed += 1
-                return item
+                return Ok(item)
 
         # No matching group found, start a new one
         self._groups.append([title])
         self._group_counts.append(1)
         self._stats.groups_count += 1
         self._stats.processed += 1
-        return item
+        return Ok(item)

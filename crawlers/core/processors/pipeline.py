@@ -11,7 +11,10 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from pathlib import Path
 from typing import Any, Sequence, cast
 
+from crawlers.core import errors
 from crawlers.core.abc.processor import Processor, ProcessorStats
+from crawlers.core.result import Err, Ok, Result
+from crawlers.core.sinks import Sink
 
 
 class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
@@ -19,7 +22,8 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
     Chains multiple processors into a sequential pipeline.
 
     Items flow through processors in order. If any processor returns
-    None, the pipeline stops for that item (filtered out).
+    Err, the pipeline stops for that item and pushes the error to
+    the rejection sink.
 
     Statistics are tracked by individual processors - use get_processor_stats()
     to collect them.
@@ -29,12 +33,16 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
     processor's input, and O should match the last processor's output.
 
     Example usage:
-        pipeline = ProcessorPipeline([
-            DatasetFetcher(...),
-            URLValidator(...),
-            OnedataConverter(...),
-            JSONLWriter(...),
-        ])
+        pipeline = ProcessorPipeline(
+            processors=[
+                DatasetFetcher(...),
+                URLValidator(...),
+                Tap(raw_sink),
+                OnedataConverter(...),
+                Tap(processed_sink),
+            ],
+            rejection_sink=ctx.rejection_sink,
+        )
 
         await pipeline.open()
         result = await pipeline.process(record_id)  # Flows through all processors
@@ -45,15 +53,21 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
             print(f"{name}: {stats}")
     """
 
-    def __init__(self, processors: Sequence[Processor]):
+    def __init__(
+        self,
+        processors: Sequence[Processor],
+        rejection_sink: Sink | None = None,
+    ):
         """
         Initialize pipeline.
 
         Args:
             processors: Sequence of processors to chain
+            rejection_sink: Optional sink for rejected items (Err values)
         """
         super().__init__()
         self.processors = list(processors)
+        self.rejection_sink = rejection_sink
 
     def get_processor_info(self) -> list[tuple[str, str, bool]]:
         """
@@ -75,7 +89,7 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
 
     def get_artifacts(self) -> list[Path]:
         """
-        Collect all output files from enabled processors.
+        Collect all output files from enabled processors and rejection sink.
 
         Returns:
             List of output file paths
@@ -84,6 +98,8 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
         for processor in self.processors:
             if processor.enabled:
                 artifacts.extend(processor.artifacts())
+        if self.rejection_sink:
+            artifacts.extend(self.rejection_sink.artifacts())
         return artifacts
 
     async def open(self) -> None:
@@ -98,7 +114,7 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
             if processor.enabled:
                 await processor.close()
 
-    async def process(self, item: InT) -> OutT | None:
+    async def process(self, item: InT) -> Result[OutT, object]:
         """
         Process item through all enabled processors in sequence.
 
@@ -109,16 +125,26 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
             item: Input item
 
         Returns:
-            Final processed item, or None if filtered by any processor
+            Ok(result) on success, Err(reason) if rejected by any processor
         """
         current: Any = item
         for processor in self.processors:
             if not processor.enabled:
                 continue
-            current = await processor.process(current)  # type: ignore[arg-type]
-            if current is None:
-                return None  # Stop pipeline - processor already tracked filtered
-        return cast(OutT, current)
+
+            result = await processor.process(current)  # type: ignore[arg-type]
+
+            match result:
+                case Ok(value=val):
+                    current = val
+                case Err(value=reason):
+                    if self.rejection_sink:
+                        await self.rejection_sink.push(errors.to_json(reason))
+                    return result
+                case other:
+                    raise errors.MatchError(other)
+
+        return Ok(cast(OutT, current))
 
     def __len__(self) -> int:
         """Return number of processors in pipeline."""

@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 from crawlers.core.abc.metadata import MetadataBuilder
 from crawlers.core.abc.processor import Processor, ProcessorStats
 from crawlers.core.onedata import OnedataDataset, OnedataFile
+from crawlers.core.result import Ok, Result
 
 
 class DatasetFile(Protocol):
@@ -77,7 +78,7 @@ class OnedataConverter[DatasetT: Dataset](
         """Create converter-specific stats."""
         return ConverterStats()
 
-    async def process(self, item: DatasetT) -> OnedataDataset:
+    async def process(self, item: DatasetT) -> Result[OnedataDataset, object]:
         """
         Convert input dataset to Onedata format.
 
@@ -85,7 +86,7 @@ class OnedataConverter[DatasetT: Dataset](
             item: Input dataset
 
         Returns:
-            Dataset ready for registration
+            Ok(dataset) ready for registration
         """
         # Resolve path collisions when multiple files have the same filename
         paths = self._resolve_path_collisions(item.files)
@@ -102,7 +103,7 @@ class OnedataConverter[DatasetT: Dataset](
         )
 
         self._stats.processed += 1
-        return dataset
+        return Ok(dataset)
 
     def _resolve_path_collisions(self, files: Sequence[DatasetFile]) -> list[str]:
         """
