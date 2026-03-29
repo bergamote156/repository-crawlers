@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
+from crawlers.core.result import Err, Ok, Result
 
 
 class Parser[I, O](Protocol):
@@ -82,7 +83,7 @@ class ParserProcessor[RawT, DatasetT](Processor[RawT, DatasetT, ParserStats]):
         """Create parser-specific stats."""
         return ParserStats()
 
-    async def process(self, item: RawT) -> DatasetT | None:
+    async def process(self, item: RawT) -> Result[DatasetT, object]:
         """
         Parse raw data into dataset model.
 
@@ -90,14 +91,28 @@ class ParserProcessor[RawT, DatasetT](Processor[RawT, DatasetT, ParserStats]):
             item: Raw data (e.g. dict)
 
         Returns:
-            Parsed dataset or None if failed/skipped
+            Ok(dataset) on success, Err(reason) on failure
         """
         dataset = self.parser.parse(item)
 
         if dataset:
             self._stats.parsed += 1
             self._stats.processed += 1
-        else:
-            self._stats.failed += 1
+            return Ok(dataset)
 
-        return dataset
+        self._stats.failed += 1
+        return Err(
+            {
+                "dataset_id": self._extract_id(item),
+                "reason": "parse_failed",
+                "processor": "ParserProcessor",
+            }
+        )
+
+    def _extract_id(self, item: RawT) -> str:
+        """Best-effort ID extraction from raw data."""
+        if isinstance(item, str):
+            return item
+        if isinstance(item, dict):
+            return str(item.get("id", item.get("identifier", "unknown")))
+        return "unknown"

@@ -10,7 +10,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncIterable
+from typing import AsyncIterable, Awaitable, Callable
 
 from crawlers.core.processors.pipeline import ProcessorPipeline
 from crawlers.core.ui import console
@@ -32,7 +32,7 @@ class CrawlStats:
         )
 
 
-# pylint: disable=too-many-locals
+# pylint: disable=too-many-locals,too-many-arguments
 async def run_parallel_pipeline[InT, OutT](
     source_iterator: AsyncIterable[InT],
     pipeline: ProcessorPipeline[InT, OutT],
@@ -40,6 +40,8 @@ async def run_parallel_pipeline[InT, OutT](
     concurrency: int = 10,
     queue_size: int = 1000,
     max_items: int | None = None,
+    state_callback: Callable[[CrawlStats], Awaitable[None]] | None = None,
+    state_save_interval: int = 100,
 ) -> CrawlStats:
     """
     Run pipeline concurrently on items from source iterator.
@@ -53,6 +55,9 @@ async def run_parallel_pipeline[InT, OutT](
         concurrency: Number of concurrent workers
         queue_size: Max size of the buffer queue
         max_items: Maximum items to process (enables progress bar if set)
+        state_callback: Optional callback invoked periodically with current stats.
+                        Used by BaseCrawler to persist state for resume support.
+        state_save_interval: Invoke state_callback every N processed items
 
     Returns:
         CrawlStats with aggregated statistics
@@ -87,7 +92,7 @@ async def run_parallel_pipeline[InT, OutT](
 
             try:
                 result = await pipeline.process(item)
-                if result is not None:
+                if result.is_ok():
                     stats.processed += 1
                 else:
                     stats.filtered += 1
@@ -99,8 +104,13 @@ async def run_parallel_pipeline[InT, OutT](
                 stats.failed += 1
             finally:
                 queue.task_done()
-                # Update progress
                 progress.update(task_id, advance=1)
+
+                # Periodically save state for resume support
+                if state_callback:
+                    total_done = stats.processed + stats.filtered + stats.failed
+                    if total_done > 0 and total_done % state_save_interval == 0:
+                        await state_callback(stats)
 
     # Run with live progress display
     with progress:

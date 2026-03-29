@@ -1,4 +1,9 @@
-"""Base Configuration Classes."""
+"""
+Default Crawl Configuration.
+
+Extends BaseCrawlConfig with standard options for the default pipeline:
+URL validation toggle, page size, max records.
+"""
 
 # pylint: disable=too-few-public-methods
 
@@ -34,5 +39,23 @@ class ProcessingConfig(ConfigBase):
     queue_size: int = opt(1000, description="Size of the processing queue")
 
 
-class BaseCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig):
-    """Base configuration for inheritance and extending by crawler plugins."""
+class DefaultCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig, kw_only=True):
+    """
+    Default configuration for crawlers using DefaultCrawlerPlugin.
+
+    Provides standard options that most crawlers need. Subclass to add
+    plugin-specific fields (e.g. collection names, API keys).
+
+    Includes:
+    - All BaseCrawlConfig fields (base_url, timeout, output_dir, concurrency)
+    - Pagination (page_size, max_records)
+    - Processor toggles (no_url_validation)
+    """
+
+    page_size: int = opt(100, description="Items per API page")
+    max_records: int | None = opt(
+        None,
+        cli=("-n", "--max-records"),
+        description="Maximum number of items to fetch",
+    )
+    no_url_validation: bool = opt(False, description="Disable URL validation")
