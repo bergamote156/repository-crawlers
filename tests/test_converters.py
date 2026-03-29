@@ -40,39 +40,34 @@ class TestOnedataConverter:
     async def test_converts_record(self, converter, sample_record):
         """Test basic conversion."""
         result = await converter.process(sample_record)
+        dataset = result.unwrap()
 
-        assert result is not None
-        assert result.name == "Test Dataset / With Slash"
-        assert result.location == "Test Dataset - With Slash"  # Slash replaced
-        assert result.pid == "urn:SDN:CDI:iopan.pl:uuid:test-123"
+        assert dataset.name == "Test Dataset / With Slash"
+        assert dataset.location == "Test Dataset - With Slash"  # Slash replaced
+        assert dataset.pid == "urn:SDN:CDI:iopan.pl:uuid:test-123"
 
     @pytest.mark.asyncio
     async def test_generates_metadata_xml(self, converter, sample_record):
         """Test that metadata XML is generated."""
-        result = await converter.process(sample_record)
+        dataset = (await converter.process(sample_record)).unwrap()
 
-        assert result is not None
-        assert result.metadata_xml.startswith('<?xml version="1.0"')
-        assert "Test Dataset" in result.metadata_xml
+        assert dataset.metadata_xml.startswith('<?xml version="1.0"')
+        assert "Test Dataset" in dataset.metadata_xml
 
     @pytest.mark.asyncio
     async def test_converts_files(self, converter, sample_record):
         """Test file conversion."""
-        result = await converter.process(sample_record)
+        dataset = (await converter.process(sample_record)).unwrap()
 
-        assert result is not None
-        assert len(result.files) == 2
-        assert result.files[0].name == "data.csv"
-        assert result.files[0].url == "https://example.com/data.csv"
-        assert result.files[0].path == "data.csv"
+        assert len(dataset.files) == 2
+        assert dataset.files[0].name == "data.csv"
+        assert dataset.files[0].url == "https://example.com/data.csv"
+        assert dataset.files[0].path == "data.csv"
 
     @pytest.mark.asyncio
     async def test_to_json(self, converter, sample_record):
         """Test to_json method."""
-        result = await converter.process(sample_record)
-
-        assert result is not None
-        d = result.to_json()
+        d = (await converter.process(sample_record)).unwrap().to_json()
 
         assert d["name"] == "Test Dataset / With Slash"
         assert d["location"] == "Test Dataset - With Slash"
@@ -104,13 +99,12 @@ class TestOnedataConverter:
             ],
         )
 
-        result = await converter.process(record)
+        dataset = (await converter.process(record)).unwrap()
 
-        assert result is not None
-        assert len(result.files) == 2
+        assert len(dataset.files) == 2
         # Paths should be resolved with enough segments to be unique
-        assert result.files[0].path == "stats/hl/station/26015/2013/2/23"
-        assert result.files[1].path == "tabular/hl/station/26015/2013/2/23"
+        assert dataset.files[0].path == "stats/hl/station/26015/2013/2/23"
+        assert dataset.files[1].path == "tabular/hl/station/26015/2013/2/23"
 
 
 class TestResolvePathCollisions:

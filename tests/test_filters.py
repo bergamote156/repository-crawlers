@@ -33,8 +33,8 @@ class TestDiversityFilter:
         record = make_record("id1", "Unique Dataset Title")
         result = await diversity_filter.process(record)
 
-        assert result is not None
-        assert result.identifier == "id1"
+        assert result.is_ok()
+        assert result.unwrap().identifier == "id1"
         assert diversity_filter.stats.processed == 1
         assert diversity_filter.stats.filtered == 0
 
@@ -47,9 +47,9 @@ class TestDiversityFilter:
         r2 = make_record("id2", "Satellite Imagery Collection")
         r3 = make_record("id3", "Weather Station Readings")
 
-        assert await diversity_filter.process(r1) is not None
-        assert await diversity_filter.process(r2) is not None
-        assert await diversity_filter.process(r3) is not None
+        assert (await diversity_filter.process(r1)).is_ok()
+        assert (await diversity_filter.process(r2)).is_ok()
+        assert (await diversity_filter.process(r3)).is_ok()
 
         assert diversity_filter.stats.processed == 3
         assert diversity_filter.stats.filtered == 0
@@ -69,9 +69,9 @@ class TestDiversityFilter:
         result2 = await diversity_filter.process(r2)
         result3 = await diversity_filter.process(r3)
 
-        assert result1 is not None  # First accepted
-        assert result2 is not None  # Second accepted (limit=2)
-        assert result3 is None  # Third rejected
+        assert result1.is_ok()  # First accepted
+        assert result2.is_ok()  # Second accepted (limit=2)
+        assert result3.is_err()  # Third rejected
 
         assert diversity_filter.stats.processed == 2
         assert diversity_filter.stats.filtered == 1
@@ -85,8 +85,8 @@ class TestDiversityFilter:
         r1 = make_record("id1", "Ocean Data 2024")
         r2 = make_record("id2", "Ocean Data 2023")
 
-        assert await filter_strict.process(r1) is not None
-        assert await filter_strict.process(r2) is not None  # Different enough
+        assert (await filter_strict.process(r1)).is_ok()
+        assert (await filter_strict.process(r2)).is_ok()  # Different enough
 
         # Low threshold - more lenient
         filter_lenient = DiversityFilter(max_similar=1, similarity_threshold=0.5)
@@ -94,8 +94,8 @@ class TestDiversityFilter:
         r3 = make_record("id3", "Ocean Data 2024")
         r4 = make_record("id4", "Ocean Data 2023")
 
-        assert await filter_lenient.process(r3) is not None
-        assert await filter_lenient.process(r4) is None  # Too similar
+        assert (await filter_lenient.process(r3)).is_ok()
+        assert (await filter_lenient.process(r4)).is_err()  # Too similar
 
     @pytest.mark.asyncio
     async def test_multiple_groups(self):
@@ -113,12 +113,12 @@ class TestDiversityFilter:
         ctd3 = make_record("ctd3", "CTD Measurements Station C")
 
         # Process interleaved
-        assert await diversity_filter.process(vdr1) is not None
-        assert await diversity_filter.process(ctd1) is not None
-        assert await diversity_filter.process(vdr2) is not None
-        assert await diversity_filter.process(ctd2) is not None
-        assert await diversity_filter.process(vdr3) is None  # VDR group full
-        assert await diversity_filter.process(ctd3) is None  # CTD group full
+        assert (await diversity_filter.process(vdr1)).is_ok()
+        assert (await diversity_filter.process(ctd1)).is_ok()
+        assert (await diversity_filter.process(vdr2)).is_ok()
+        assert (await diversity_filter.process(ctd2)).is_ok()
+        assert (await diversity_filter.process(vdr3)).is_err()  # VDR group full
+        assert (await diversity_filter.process(ctd3)).is_err()  # CTD group full
 
         assert diversity_filter.stats.processed == 4
         assert diversity_filter.stats.filtered == 2

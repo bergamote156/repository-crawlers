@@ -6,6 +6,7 @@ import pytest
 
 from crawlers.core.abc.processor import Processor, ProcessorStats
 from crawlers.core.processors.pipeline import ProcessorPipeline
+from crawlers.core.result import Err, Ok, Result
 
 
 class PassThroughProcessor(Processor[int, int, ProcessorStats]):
@@ -23,17 +24,17 @@ class PassThroughProcessor(Processor[int, int, ProcessorStats]):
     async def close(self) -> None:
         self.closed = True
 
-    async def process(self, item: int) -> int:
+    async def process(self, item: int) -> Result[int, object]:
         self.processed_items.append(item)
-        return item
+        return Ok(item)
 
 
 class DoubleProcessor(Processor[int, int, ProcessorStats]):
     """Processor that doubles the input value."""
 
-    async def process(self, item: int) -> int:
+    async def process(self, item: int) -> Result[int, object]:
         self.stats.processed += 1
-        return item * 2
+        return Ok(item * 2)
 
 
 class AddProcessor(Processor[int, int, ProcessorStats]):
@@ -43,28 +44,28 @@ class AddProcessor(Processor[int, int, ProcessorStats]):
         super().__init__()
         self.value = value
 
-    async def process(self, item: int) -> int:
+    async def process(self, item: int) -> Result[int, object]:
         self.stats.processed += 1
-        return item + self.value
+        return Ok(item + self.value)
 
 
 class FilterEvenProcessor(Processor[int, int, ProcessorStats]):
     """Processor that filters out even numbers."""
 
-    async def process(self, item: int) -> int | None:
+    async def process(self, item: int) -> Result[int, object]:
         if item % 2 == 0:
             self.stats.filtered += 1
-            return None  # Filter out even numbers
+            return Err({"reason": "even", "value": item})
         self.stats.processed += 1
-        return item
+        return Ok(item)
 
 
 class IntToStrProcessor(Processor[int, str, ProcessorStats]):
     """Processor that converts int to string."""
 
-    async def process(self, item: int) -> str:
+    async def process(self, item: int) -> Result[str, object]:
         self.stats.processed += 1
-        return f"value:{item}"
+        return Ok(f"value:{item}")
 
 
 class TestProcessorPipeline:
@@ -79,7 +80,7 @@ class TestProcessorPipeline:
         result = await pipeline.process(42)
         await pipeline.close()
 
-        assert result == 42
+        assert result == Ok(42)
 
     @pytest.mark.asyncio
     async def test_single_processor(self):
@@ -91,7 +92,7 @@ class TestProcessorPipeline:
         result = await pipeline.process(5)
         await pipeline.close()
 
-        assert result == 10
+        assert result == Ok(10)
 
     @pytest.mark.asyncio
     async def test_multiple_processors(self):
@@ -108,11 +109,11 @@ class TestProcessorPipeline:
         result = await pipeline.process(5)
         await pipeline.close()
 
-        assert result == 26
+        assert result == Ok(26)
 
     @pytest.mark.asyncio
     async def test_filter_stops_pipeline(self):
-        """Test that returning None stops the pipeline."""
+        """Test that returning Err stops the pipeline."""
         double = DoubleProcessor()
         filter_even = FilterEvenProcessor()
         add = AddProcessor(100)
@@ -123,17 +124,17 @@ class TestProcessorPipeline:
 
         # 5 * 2 = 10, filtered out (even)
         result = await pipeline.process(5)
-        assert result is None
+        assert result.is_err()
         assert filter_even.stats.filtered == 1
 
         # 3 * 2 = 6, filtered out (even)
         result = await pipeline.process(3)
-        assert result is None
+        assert result.is_err()
         assert filter_even.stats.filtered == 2
 
         # 2 * 2 = 4, filtered out (even)
         result = await pipeline.process(2)
-        assert result is None
+        assert result.is_err()
 
         await pipeline.close()
 
@@ -151,7 +152,7 @@ class TestProcessorPipeline:
         result = await pipeline.process(4)
         await pipeline.close()
 
-        assert result == 10
+        assert result == Ok(10)
         assert add.stats.processed == 1
         assert filter_even.stats.filtered == 0
 
@@ -211,7 +212,7 @@ class TestProcessorPipeline:
         result = await pipeline.process(21)
         await pipeline.close()
 
-        assert result == "value:42"
+        assert result == Ok("value:42")
 
     def test_len(self):
         """Test __len__ method."""
