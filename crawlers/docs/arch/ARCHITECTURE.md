@@ -2,7 +2,7 @@
 
 ## Overview
 
-The **crawlers** framework is a plugin-based system for crawling and processing 
+The **crawlers** framework is a plugin-based system for crawling and processing
 public scientific datasets. It provides:
 
 - **Declarative configuration** with automatic CLI generation
@@ -10,8 +10,9 @@ public scientific datasets. It provides:
 - **Processing pipelines** for data transformation
 - **Metadata generation** for standardized formats (DataCite, OpenAIRE)
 - **Parallel execution** with progress tracking
+- **Run persistence** with structured output directories and state files
 
-The framework separates concerns: core provides reusable infrastructure, plugins 
+The framework separates concerns: core provides reusable infrastructure, plugins
 implement source-specific logic.
 
 ## Module Structure
@@ -24,22 +25,24 @@ crawlers/
 │
 ├── core/                    # Framework infrastructure
 │   ├── abc/                 # Abstract base classes
-│   │   ├── api.py           # ApiClient base
+│   │   ├── api.py           # ApiClient, DatasetIterator
 │   │   ├── config.py        # ConfigBase, opt(), schema building
 │   │   ├── metadata.py      # MetadataBuilder base
-│   │   └── processor.py     # Processor base, ProcessorStats
+│   │   ├── plugin.py        # CrawlerPlugin, @command decorator
+│   │   ├── processor.py     # Processor base, ProcessorStats
+│   │   └── workspace.py     # RunContext ABC, make_run_dir()
 │   │
-│   ├── config.py            # Reusable config classes (ApiConfig, etc.)
-│   ├── crawler.py           # BaseCrawler orchestration
-│   ├── plugin.py            # CrawlerPlugin, @command decorator
-│   ├── onedata.py           # Output data models
+│   ├── default/             # Ready-to-use implementations
+│   │   ├── config.py        # ApiConfig, DefaultCrawlConfig, etc.
+│   │   ├── plugin.py        # DefaultCrawlerPlugin, CrawlSpec
+│   │   └── workspace.py     # DefaultRunContext
 │   │
 │   ├── metadata/            # Built-in metadata builders
 │   │   ├── datacite.py      # DataCite Kernel 4.5
 │   │   └── openaire.py      # OpenAIRE v4.0
 │   │
 │   ├── orchestration/       # Execution infrastructure
-│   │   └── parallel.py      # Concurrent pipeline execution
+│   │   └── parallel.py      # run_parallel_pipeline, CrawlStats
 │   │
 │   ├── processors/          # Built-in processors
 │   │   ├── pipeline.py      # ProcessorPipeline
@@ -48,39 +51,42 @@ crawlers/
 │   │   ├── validators.py    # URLValidator
 │   │   ├── filters.py       # DiversityFilter
 │   │   ├── converters.py    # OnedataConverter
-│   │   └── writers.py       # JSONLWriter
+│   │   └── tap.py           # Tap
+│   │
+│   ├── errors.py            # Structured error types (HttpError, TimeoutError)
+│   ├── onedata.py           # Output data models (OnedataDataset)
+│   ├── result.py            # Result[T, E] with Ok/Err variants
+│   ├── sinks.py             # Sink ABC, JSONLSink, NullSink
 │   │
 │   └── ui/                  # Console output
 │       ├── console.py       # Rich console wrapper
 │       └── theme.py         # Color theme
 │
 ├── plugins/                 # Data source implementations
-│   ├── __init__.py          # Plugin registry
+│   ├── __init__.py          # Plugin registry (REGISTERED_PLUGINS)
 │   ├── ecudo/               # eCUDO.pl plugin
-│   │   ├── api.py           # EcudoClient
-│   │   ├── config.py        # EcudoCrawlConfig
-│   │   ├── crawler.py       # EcudoCrawler
-│   │   ├── models.py        # EcudoDataset
+│   │   ├── api.py           # EcudoClient, EcudoIteratorOpts
+│   │   ├── config.py        # EcudoApiConfig, EcudoCrawlConfig
+│   │   ├── models.py        # EcudoDataset, EcudoFile
 │   │   ├── parser.py        # EcudoParser
 │   │   └── plugin.py        # EcudoPlugin
 │   └── eodc/                # EODC STAC plugin
-│       ├── api.py           # EODCClient
+│       ├── api.py           # EODCClient, EODCSearchOpts
 │       ├── config.py        # EODCCrawlConfig
-│       ├── crawler.py       # EODCCrawler
 │       ├── metadata.py      # EODCDataCiteBuilder
-│       ├── models.py        # EODCDataset
+│       ├── models.py        # EODCDataset, EODCFile
 │       ├── parser.py        # EODCParser
 │       └── plugin.py        # EODCPlugin
 │
-└── docs/                        # Documentation
-    ├── arch/                    # Architecture documentation
-    |   ├── ARCHITECTURE.md      # This file
-    |   ├── configuration.md     # Configuration system
-    |   ├── plugins.md           # Plugin system
-    |   ├── processors.md        # Processing pipeline
-    |   ├── metadata.md          # Metadata generation
-    |   └── crawling.md          # API clients and crawlers
-    └── PLUGIN_GUIDE.md          # Plugin implementation guide
+└── docs/                    # Documentation
+    ├── arch/
+    │   ├── ARCHITECTURE.md  # This file
+    │   ├── configuration.md # Configuration system
+    │   ├── plugins.md       # Plugin system
+    │   ├── processors.md    # Processing pipeline
+    │   ├── metadata.md      # Metadata generation
+    │   └── crawling.md      # API clients, crawling, run context
+    └── PLUGIN_GUIDE.md      # Step-by-step plugin guide
 ```
 
 ## Data Flow
@@ -93,14 +99,15 @@ flowchart TB
 
     subgraph Plugin ["Plugin Layer"]
         plugin_select[Plugin Selection]
-        command["Command  selection"]
+        command[Command Selection]
         config_load[Config Loading]
+        prepare[prepare_crawl → CrawlSpec]
     end
 
     subgraph Execution ["Execution Layer"]
-        crawler[BaseCrawler]
+        ctx[RunContext]
         client[ApiClient]
-        iterator[Dataset Iterator]
+        iterator[DatasetIterator]
         parallel[Parallel Workers]
     end
 
@@ -108,38 +115,51 @@ flowchart TB
         fetcher[Fetcher/Parser]
         validator[URLValidator]
         filter[DiversityFilter]
-        writer_raw[JSONLWriter Raw]
+        tap_raw[Tap raw]
         converter[OnedataConverter]
         metadata[MetadataBuilder]
-        writer_proc[JSONLWriter Processed]
+        tap_proc[Tap processed]
+        rejected[rejection_sink]
     end
 
-    subgraph Output ["Output"]
+    subgraph Output ["Run Directory"]
+        config_json[config.json]
+        state_json[state.json]
         raw_jsonl[raw.jsonl]
         proc_jsonl[processed.jsonl]
+        rej_jsonl[rejected.jsonl]
     end
 
     cli --> plugin_select
     plugin_select --> command
     command --> config_load
-    config_load --> crawler
+    config_load --> prepare
+    prepare --> ctx
+    prepare --> client
 
-    crawler --> client
-    crawler --> iterator
+    ctx --> config_json
+    ctx --> state_json
+    ctx --> raw_jsonl
+    ctx --> proc_jsonl
+    ctx --> rej_jsonl
+
+    client --> iterator
     iterator --> parallel
 
     parallel --> fetcher
     fetcher --> validator
     validator --> filter
-    filter --> writer_raw
-
-    writer_raw --> raw_jsonl
-
-    writer_raw --> converter
+    filter --> tap_raw
+    tap_raw --> raw_jsonl
+    tap_raw --> converter
     converter --> metadata
     metadata --> converter
-    converter --> writer_proc
-    writer_proc --> proc_jsonl
+    converter --> tap_proc
+    tap_proc --> proc_jsonl
+
+    validator -.->|Err| rejected
+    filter -.->|Err| rejected
+    rejected --> rej_jsonl
 ```
 
 ## Key Components
@@ -148,11 +168,12 @@ flowchart TB
 
 Declarative configuration using dataclasses with automatic CLI/YAML/ENV support.
 
-| Component | Purpose |
-|-----------|---------|
-| `ConfigBase` | Base class, auto-applies `@dataclass`, builds schema |
-| `opt()` | Field wrapper with CLI/ENV/YAML metadata |
-| `ConfigSchema` | Pre-built schema for argparse generation |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `ConfigBase` | `core.abc.config` | Base class, auto-applies `@dataclass`, builds schema |
+| `opt()` | `core.abc.config` | Field wrapper with CLI/ENV/YAML metadata |
+| `ApiConfig` | `core.default.config` | Base API fields (base_url, timeout, max_retries) |
+| `DefaultCrawlConfig` | `core.default.config` | Standard crawl config (+ output_dir, concurrency, max_records) |
 
 **See:** [configuration.md](configuration.md)
 
@@ -160,11 +181,12 @@ Declarative configuration using dataclasses with automatic CLI/YAML/ENV support.
 
 Plugin architecture with automatic CLI generation from decorated commands.
 
-| Component | Purpose |
-|-----------|---------|
-| `CrawlerPlugin` | Base class for plugins |
-| `@command` | Decorator registering methods as CLI commands |
-| `CommandDef` | Command metadata (name, config class, method) |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `CrawlerPlugin` | `core.abc.plugin` | Base class for all plugins |
+| `DefaultCrawlerPlugin` | `core.default.plugin` | Batteries-included base for typical crawlers |
+| `@command` | `core.abc.plugin` | Decorator registering methods as CLI commands |
+| `CrawlSpec` | `core.default.plugin` | Describes what to crawl (client, opts, parser, builder) |
 
 **See:** [plugins.md](plugins.md)
 
@@ -172,11 +194,12 @@ Plugin architecture with automatic CLI generation from decorated commands.
 
 Modular processors chained for data transformation.
 
-| Component | Purpose |
-|-----------|---------|
-| `Processor` | Base class with typed I/O and statistics |
-| `ProcessorPipeline` | Chains processors, handles filtering |
-| `ProcessorStats` | Statistics tracking (processed, filtered, failed) |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `Processor` | `core.abc.processor` | Base class with typed I/O and statistics |
+| `ProcessorPipeline` | `core.processors.pipeline` | Chains processors, routes `Err` to rejection sink |
+| `Tap` | `core.processors.tap` | Pass-through, copies items to a Sink |
+| `Sink` / `JSONLSink` | `core.sinks` | External data destinations |
 
 **See:** [processors.md](processors.md)
 
@@ -184,22 +207,23 @@ Modular processors chained for data transformation.
 
 Builders for standardized metadata formats.
 
-| Component | Purpose |
-|-----------|---------|
-| `MetadataBuilder` | Base class for metadata generators |
-| `DataCiteBuilder` | DataCite Kernel 4.5 XML |
-| `OpenAIREBuilder` | OpenAIRE v4.0 XML |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `MetadataBuilder` | `core.abc.metadata` | Base class for metadata generators |
+| `DataCiteBuilder` | `core.metadata.datacite` | DataCite Kernel 4.5 XML |
+| `OpenAIREBuilder` | `core.metadata.openaire` | OpenAIRE v4.0 XML |
 
 **See:** [metadata.md](metadata.md)
 
 ### Crawling System
 
-API clients and crawler orchestration.
+API clients, run context, and parallel execution.
 
-| Component | Purpose |
-|-----------|---------|
-| `ApiClient` | HTTP client with retries and session management |
-| `BaseCrawler` | Crawl lifecycle orchestration |
-| `run_parallel_pipeline` | Concurrent execution with progress |
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| `ApiClient` | `core.abc.api` | HTTP client with retries and session management |
+| `DefaultCrawlerPlugin` | `core.default.plugin` | Crawl lifecycle orchestration |
+| `RunContext` | `core.abc.workspace` | Run directory, state, and sink lifecycle |
+| `run_parallel_pipeline` | `core.orchestration.parallel` | Concurrent execution with progress |
 
 **See:** [crawling.md](crawling.md)

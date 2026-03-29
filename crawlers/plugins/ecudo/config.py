@@ -10,7 +10,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core.config import ApiConfig, BaseCrawlConfig, ConfigBase, opt
+from crawlers.core.default.config import ApiConfig, ConfigBase, DefaultCrawlConfig, opt
 
 
 class EcudoApiConfig(ApiConfig):
@@ -27,11 +27,6 @@ class URLValidatorConfig(ConfigBase):
     """Configuration for URL Validator processor."""
 
     enabled: bool = opt(True, yaml_key="enabled")
-    invalid_url_log: str | None = opt(
-        "invalid_urls.jsonl",
-        yaml_key="invalid_url_log",
-        description="File to log invalid URLs",
-    )
 
 
 class DiversityFilterConfig(ConfigBase):
@@ -63,7 +58,7 @@ class EcudoProcessorsConfig(ConfigBase):
     )
 
 
-class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig, kw_only=True):
+class EcudoCrawlConfig(EcudoApiConfig, DefaultCrawlConfig, kw_only=True):
     """
     Full configuration for Ecudo crawling.
 

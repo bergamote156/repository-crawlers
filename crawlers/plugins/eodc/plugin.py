@@ -1,56 +1,79 @@
 """
-EODC Plugin Definition.
+EODC Plugin (default architecture).
 
-Declarative plugin using @command decorator for CLI commands.
+Single-class plugin for EODC STAC API using DefaultCrawlerPlugin.
 """
-
-# pylint: disable=import-outside-toplevel
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from typing import cast
+
 from rich.table import Table
 
-from crawlers.core.plugin import CrawlerPlugin, command
+from crawlers.core.abc.plugin import command
+from crawlers.core.default.config import DefaultCrawlConfig
+from crawlers.core.default.plugin import CrawlSpec, DefaultCrawlerPlugin
 from crawlers.core.ui import console
+from crawlers.plugins.eodc.api import EODCClient, EODCSearchOpts
 from crawlers.plugins.eodc.config import EODCApiConfig, EODCCrawlConfig
+from crawlers.plugins.eodc.metadata import EODCDataCiteBuilder
+from crawlers.plugins.eodc.parser import EODCParser
 
 
-class EODCPlugin(CrawlerPlugin):
+class EODCPlugin(DefaultCrawlerPlugin):
     """
-    Plugin implementation for EODC STAC API.
-
-    Provides commands:
-    - crawl: Crawl STAC items from specified collections
-    - list-collections: List available STAC collections
+    EODC STAC API crawler using the default plugin architecture.
     """
 
     name = "eodc"
-    description = "Crawler for EODC Earth Observation Data Centre STAC API"
+    description = "Crawler for EODC STAC API (default architecture)"
+    config_class = EODCCrawlConfig
 
-    @command("crawl", EODCCrawlConfig, help="Crawl STAC items from collections")
-    async def run_crawl(self, config: EODCCrawlConfig) -> None:
-        """Execute crawling for the specified collections."""
-        # Lazy import to avoid import overhead when not running this command
-        from crawlers.plugins.eodc.crawler import EODCCrawler
+    def prepare_crawl(self, config: DefaultCrawlConfig) -> CrawlSpec:
+        cfg = cast(EODCCrawlConfig, config)
+        api_client = EODCClient(
+            base_url=cfg.base_url,
+            timeout=cfg.timeout,
+            max_retries=cfg.max_retries,
+        )
+        iterator_opts = EODCSearchOpts(
+            collections=cfg.get_collections_list(),
+            intersects=cfg.intersects,
+            datetime=cfg.datetime_range,
+            limit=cfg.page_size,
+            max_items=cfg.max_records,
+        )
+        collections = cfg.get_collections_list()
 
-        crawler = EODCCrawler(config)
-        await crawler.run()
+        return CrawlSpec(
+            client=api_client,
+            iterator_opts=iterator_opts,
+            parser=EODCParser(),
+            metadata_builder=EODCDataCiteBuilder(),
+            run_context_name=collections[0] if collections else "eodc",
+            banner_subtitle=f"Collections: {', '.join(collections)}",
+            max_items=cfg.max_records,
+            url_validation=not cfg.no_url_validation,
+        )
 
     @command("list-collections", EODCApiConfig, help="List available STAC collections")
     async def list_collections(self, config: EODCApiConfig) -> None:
         """List all available STAC collections from EODC."""
-        # Lazy import
-        from crawlers.plugins.eodc.api import EODCClient
-
         async with EODCClient(
             base_url=config.base_url,
             timeout=config.timeout,
             max_retries=config.max_retries,
         ) as client:
             with console.status("Fetching collections..."):
-                collections = await client.get_collections()
+                result = await client.get_collections()
+
+            if result.is_err():
+                console.error(f"Failed to fetch collections: {result.err()}")
+                return
+
+            collections = result.unwrap()
 
             table = Table(
                 title=f"Available Collections ({len(collections)})",

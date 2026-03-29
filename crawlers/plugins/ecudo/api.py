@@ -2,6 +2,8 @@
 Ecudo API Client.
 """
 
+# pylint: disable=duplicate-code
+
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -10,6 +12,8 @@ from dataclasses import dataclass
 from typing import AsyncIterator, TypedDict
 
 from crawlers.core.abc.api import ApiClient
+from crawlers.core.errors import ApiError, MatchError
+from crawlers.core.result import Err, Ok, Result
 from crawlers.core.ui import console
 
 
@@ -54,25 +58,33 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
 
         while True:
             offset = page * opts.page_size + 1
-            ids = await self.list_dataset_ids(opts.org_id, offset, opts.page_size)
+            result = await self.list_dataset_ids(opts.org_id, offset, opts.page_size)
 
-            if not ids:
-                break
+            match result:
+                case Ok(value=ids) if not ids:
+                    break
+                case Ok(value=ids):
+                    for dataset_id in ids:
+                        yield dataset_id
+                        yielded += 1
 
-            for dataset_id in ids:
-                yield dataset_id
-                yielded += 1
-
-                if opts.max_datasets and yielded >= opts.max_datasets:
-                    console.info(f"Reached max_datasets limit: {opts.max_datasets}")
-                    return
+                        if opts.max_datasets and yielded >= opts.max_datasets:
+                            console.info(
+                                f"Reached max_datasets limit: {opts.max_datasets}"
+                            )
+                            return
+                case Err(value=err):
+                    console.error(str(err))
+                    break
+                case other:
+                    raise MatchError(other)
 
             page += 1
             console.info(f"📄 Page {page} | {yielded} IDs fetched")
 
-        console.info(f"ID iteration complete. Total: {yielded}")
-
-    async def list_dataset_ids(self, org_id: str, offset: int, limit: int) -> list[str]:
+    async def list_dataset_ids(
+        self, org_id: str, offset: int, limit: int
+    ) -> Result[list[str], ApiError]:
         """
         Fetch a page of dataset IDs.
 
@@ -82,15 +94,14 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
             limit: Number of items per page
 
         Returns:
-            List of dataset IDs
+            Ok(list[str]) of dataset IDs, or Err(ApiError)
         """
         url = (
             f"{self.base_url}/organizations/{org_id}/data?offset={offset}&limit={limit}"
         )
-        data = await self.get_json(url)
-        return data.get("metadata", [])
+        return (await self.get_json(url)).map(lambda d: d.get("metadata", []))
 
-    async def get_dataset_metadata(self, dataset_id: str) -> dict:
+    async def get_dataset_metadata(self, dataset_id: str) -> Result[dict, ApiError]:
         """
         Fetch full JSON-LD metadata for a dataset.
 
@@ -98,17 +109,17 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
             dataset_id: Dataset ID
 
         Returns:
-            Dictionary with JSON-LD metadata
+            Ok(dict) with JSON-LD metadata, or Err(ApiError)
         """
         url = f"{self.base_url}/metadata/{dataset_id}/json-ld"
         return await self.get_json(url)
 
-    async def get_organizations(self) -> list[EcudoOrganization]:
+    async def get_organizations(self) -> Result[list[EcudoOrganization], ApiError]:
         """
         Fetch list of all available organizations.
 
         Returns:
-            List of organization dicts with 'id', 'name', 'link' keys
+            Ok(list) of organization dicts, or Err(ApiError)
         """
-        data = await self.get_json(f"{self.base_url}/organizations")
-        return data.get("organizations", [])
+        result = await self.get_json(f"{self.base_url}/organizations")
+        return result.map(lambda d: d.get("organizations", []))

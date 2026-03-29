@@ -2,21 +2,21 @@
 
 ## Overview
 
-The crawlers framework provides a declarative configuration system that 
+The crawlers framework provides a declarative configuration system that
 automatically generates:
 - CLI arguments from config field definitions
 - Environment variable bindings
 - YAML file loading with hierarchical structure
 - Type validation and coercion
 
-Configuration is defined using Python dataclasses with a custom `opt()` field 
+Configuration is defined using Python dataclasses with a custom `opt()` field
 wrapper that specifies CLI, ENV, and YAML metadata.
 
 ## Core Components
 
 ### ConfigBase
 
-Base class for all configuration classes. Automatically applies `@dataclass` 
+Base class for all configuration classes. Automatically applies `@dataclass`
 decorator and builds configuration schema via `__init_subclass__`.
 
 ```python
@@ -29,7 +29,7 @@ class MyConfig(ConfigBase):
 
 ### opt() Field Wrapper
 
-The `opt()` function wraps `dataclasses.field()` with additional metadata for 
+The `opt()` function wraps `dataclasses.field()` with additional metadata for
 CLI/ENV/YAML bindings:
 
 ```python
@@ -62,7 +62,7 @@ def opt(
 
 ## Configuration Sources
 
-The framework supports multiple configuration sources with the following 
+The framework supports multiple configuration sources with the following
 priority (highest first):
 
 ```
@@ -86,7 +86,7 @@ plugins:
   ecudo:
     # Plugin-level defaults
     base_url: "http://central.ecudo.pl"
-    
+
     commands:
       crawl:
         # Command-specific settings
@@ -95,6 +95,34 @@ plugins:
           url_validator:
             enabled: true
 ```
+
+## Built-in Config Classes
+
+The following base config classes are defined in `crawlers.core.default.config`:
+
+```python
+class ApiConfig(ConfigBase):
+    base_url: str = opt(..., description="API base URL")
+    timeout: int = opt(15, description="Request timeout in seconds")
+    max_retries: int = opt(3, description="Maximum retry attempts")
+
+class OutputConfig(ConfigBase):
+    output_dir: str = opt("./data", cli=("-o", "--output-dir"),
+                          description="Output directory for crawled data")
+
+class ProcessingConfig(ConfigBase):
+    concurrency: int = opt(128, description="Number of concurrent workers")
+    queue_size: int = opt(1000, description="Size of the processing queue")
+
+class DefaultCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig, kw_only=True):
+    page_size: int = opt(100, description="Items per API page")
+    max_records: int | None = opt(None, cli=("-n", "--max-records"),
+                                  description="Maximum number of items to fetch")
+    no_url_validation: bool = opt(False, description="Disable URL validation")
+```
+
+Plugin-specific config classes should inherit from `DefaultCrawlConfig` (or
+its components) and add source-specific fields.
 
 ## Field Types
 
@@ -118,31 +146,31 @@ class MyConfig(ConfigBase):
 class MyConfig(ConfigBase):
     # Required field (no default)
     organization: str = opt(..., description="Must be provided")
-    
+
     # Optional with None default
     max_records: int | None = opt(None, description="No limit if None")
 ```
 
 ### Nested Configurations
 
-Configurations can contain nested config objects. Nested configs are loaded 
+Configurations can contain nested config objects. Nested configs are loaded
 from YAML only (not CLI):
 
 ```python
 class URLValidatorConfig(ConfigBase):
     enabled: bool = opt(True)
-    invalid_url_log: str | None = opt("invalid_urls.jsonl")
+
+class DiversityFilterConfig(ConfigBase):
+    enabled: bool = opt(True)
+    max_similar: int = opt(10)
+    similarity_threshold: float = opt(0.85)
 
 class ProcessorsConfig(ConfigBase):
-    url_validator: URLValidatorConfig = opt(
-        default_factory=URLValidatorConfig,
-        yaml_key="url_validator",
-    )
+    url_validator: URLValidatorConfig = opt(default_factory=URLValidatorConfig)
+    diversity_filter: DiversityFilterConfig = opt(default_factory=DiversityFilterConfig)
 
-class CrawlConfig(ConfigBase):
-    processors: ProcessorsConfig = opt(
-        default_factory=ProcessorsConfig,
-    )
+class CrawlConfig(DefaultCrawlConfig, kw_only=True):
+    processors: ProcessorsConfig = opt(default_factory=ProcessorsConfig)
 ```
 
 **YAML representation:**
@@ -153,7 +181,9 @@ plugins:
     processors:
       url_validator:
         enabled: true
-        invalid_url_log: "invalid.jsonl"
+      diversity_filter:
+        enabled: true
+        max_similar: 5
 ```
 
 ## CLI Argument Patterns
@@ -187,14 +217,14 @@ max_records: int | None = opt(
 ### Flag Arguments (Boolean)
 
 ```python
-verbose: bool = opt(False, description="Enable verbose output")
+no_url_validation: bool = opt(False, description="Disable URL validation")
 ```
 
-**Generated CLI:** `--verbose` (store_true action)
+**Generated CLI:** `--no-url-validation` (store_true action)
 
 ### Disabling CLI
 
-For complex fields (nested objects, GeoJSON, etc.) that should only be 
+For complex fields (nested objects, GeoJSON, etc.) that should only be
 configured via YAML:
 
 ```python
@@ -211,25 +241,15 @@ intersects: dict | None = opt(
 Config classes support inheritance through Python class hierarchy:
 
 ```python
-# Base configs in crawlers.core.config
-class ApiConfig(ConfigBase):
-    base_url: str = opt(..., description="API base URL")
-    timeout: int = opt(15, description="Timeout in seconds")
-    max_retries: int = opt(3, description="Max retry attempts")
+from crawlers.core.default.config import ApiConfig, DefaultCrawlConfig
+from crawlers.core.abc.config import ConfigBase, opt
 
-class OutputConfig(ConfigBase):
-    output_dir: str = opt("./data", cli=("-o", "--output-dir"))
+class EcudoApiConfig(ApiConfig):
+    base_url: str = opt("http://central.ecudo.pl", description="Ecudo API URL")
 
-class ProcessingConfig(ConfigBase):
-    concurrency: int = opt(128, description="Concurrent workers")
-
-class BaseCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig):
-    """Base for all crawl commands - combines all base configs."""
-
-# Plugin-specific config
-class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig, kw_only=True):
-    organization: str = opt(..., cli="organization")
-    max_records: int | None = opt(None, cli=("-n", "--max-records"))
+class EcudoCrawlConfig(EcudoApiConfig, DefaultCrawlConfig, kw_only=True):
+    organization: str = opt(..., cli="organization", description="Organization ID")
+    processors: EcudoProcessorsConfig = opt(default_factory=EcudoProcessorsConfig)
 ```
 
 **CLI Help Output (grouped by inheritance):**
@@ -237,7 +257,10 @@ class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig, kw_only=True):
 ```
 EcudoCrawlConfig:
   organization          Organization ID
+
+DefaultCrawlConfig:
   -n, --max-records     Maximum records
+  --no-url-validation   Disable URL validation
 
 EcudoApiConfig:
   --base-url            Ecudo API base URL
@@ -259,14 +282,12 @@ ProcessingConfig:
 Use `__post_init__` for validation and transformation:
 
 ```python
-class EcudoCrawlConfig(BaseCrawlConfig):
+class EcudoCrawlConfig(DefaultCrawlConfig, kw_only=True):
     organization: str = opt(..., cli="organization")
-    
+
     def __post_init__(self):
         if not self.organization or self.organization.isspace():
             raise ValueError("Organization cannot be empty")
-        
-        # Normalize
         self.organization = self.organization.strip().lower()
 ```
 
@@ -275,26 +296,27 @@ class EcudoCrawlConfig(BaseCrawlConfig):
 Add methods to configs for derived values:
 
 ```python
-class EcudoCrawlConfig(BaseCrawlConfig):
-    no_url_validation: bool = opt(False, description="Disable URL validation")
-    processors: ProcessorsConfig = opt(default_factory=ProcessorsConfig)
-    
+class EcudoCrawlConfig(DefaultCrawlConfig, kw_only=True):
+    processors: EcudoProcessorsConfig = opt(default_factory=EcudoProcessorsConfig)
+
     def get_url_validator_enabled(self) -> bool:
         """CLI flag overrides nested config."""
         if self.no_url_validation:
             return False
         return self.processors.url_validator.enabled
+
+    def get_diversity_filter_enabled(self) -> bool:
+        return self.processors.diversity_filter.enabled
 ```
 
 ## Schema Introspection
 
-The framework builds a `ConfigSchema` at class definition time, accessible 
+The framework builds a `ConfigSchema` at class definition time, accessible
 via `__config_schema__`:
 
 ```python
 schema = MyConfig.__config_schema__
 
-# Iterate all fields
 for field_info in schema.all_fields():
     print(f"{field_info.name}: {field_info.field_type}")
     print(f"  CLI: {field_info.cli}")
@@ -302,75 +324,52 @@ for field_info in schema.all_fields():
     print(f"  Required: {field_info.required}")
 ```
 
-**ConfigFieldInfo attributes:**
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `name` | `str` | Field name |
-| `field_type` | `type` | Actual type (unwrapped from Optional) |
-| `description` | `str` | Help text |
-| `default` | `Any` | Default value or factory |
-| `required` | `bool` | True if no default |
-| `cli` | `CliInfo \| None` | CLI argument info |
-| `env_var` | `str \| None` | Full ENV var name |
-| `yaml_key` | `str \| None` | YAML key |
-| `nested_schema` | `ConfigSchema \| None` | Schema for nested configs |
-
 ## Complete Example
 
 ```python
-from crawlers.core.config import ApiConfig, BaseCrawlConfig, ConfigBase, opt
+from crawlers.core.abc.config import ConfigBase, opt
+from crawlers.core.default.config import ApiConfig, DefaultCrawlConfig
 
 
-class EcudoApiConfig(ApiConfig):
-    """Ecudo API configuration."""
-    base_url: str = opt("http://central.ecudo.pl", description="Ecudo API URL")
+class EODCApiConfig(ApiConfig):
+    """EODC API configuration."""
+    base_url: str = opt("https://services.sentinel-hub.com", description="EODC API URL")
 
 
-class URLValidatorConfig(ConfigBase):
-    """URL validator settings."""
-    enabled: bool = opt(True)
-    invalid_url_log: str | None = opt("invalid_urls.jsonl")
+class EODCCrawlConfig(EODCApiConfig, DefaultCrawlConfig, kw_only=True):
+    """Full crawl configuration for EODC."""
 
-
-class ProcessorsConfig(ConfigBase):
-    """Processor configurations."""
-    url_validator: URLValidatorConfig = opt(default_factory=URLValidatorConfig)
-
-
-class EcudoCrawlConfig(EcudoApiConfig, BaseCrawlConfig, kw_only=True):
-    """Full crawl configuration."""
-    
     # Positional argument
-    organization: str = opt(..., cli="organization", description="Organization ID")
-    
+    collections: list[str] = opt(..., cli="collections", description="Collection IDs to crawl")
+
     # Optional with aliases
-    max_records: int | None = opt(None, cli=("-n", "--max-records"))
-    
-    # CLI flag to override nested config
-    no_url_validation: bool = opt(False, description="Disable URL validation")
-    
-    # Nested config (YAML only)
-    processors: ProcessorsConfig = opt(default_factory=ProcessorsConfig)
-    
+    datetime: str | None = opt(
+        None,
+        cli="--datetime",
+        description="Date range filter (ISO 8601 interval)",
+    )
+
+    # YAML-only (complex type)
+    intersects: dict | None = opt(
+        None,
+        cli=False,
+        description="GeoJSON geometry filter",
+    )
+
     def __post_init__(self):
-        self.organization = self.organization.strip().lower()
-    
-    def get_url_validator_enabled(self) -> bool:
-        if self.no_url_validation:
-            return False
-        return self.processors.url_validator.enabled
+        if not self.collections:
+            raise ValueError("At least one collection required")
 ```
 
 **Usage:**
 
 ```bash
 # CLI only
-crawlers ecudo crawl iopan -n 100 --output-dir ./out
+crawlers eodc crawl s1-grd,s2-l1c -n 100 -o ./out
 
 # With config file
-crawlers ecudo -c config.yaml crawl iopan
+crawlers -c config.yaml eodc crawl s1-grd
 
 # Environment variable
-CRAWLER_TIMEOUT=30 crawlers ecudo crawl iopan
+CRAWLER_TIMEOUT=30 crawlers eodc crawl s1-grd
 ```
