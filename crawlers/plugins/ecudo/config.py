@@ -10,7 +10,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core.default.config import ApiConfig, ConfigBase, DefaultCrawlConfig, opt
+from crawlers.default.config import ApiConfig, ConfigBase, DefaultCrawlConfig, opt
 
 
 class EcudoApiConfig(ApiConfig):
@@ -21,12 +21,6 @@ class EcudoApiConfig(ApiConfig):
     """
 
     base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
-
-
-class URLValidatorConfig(ConfigBase):
-    """Configuration for URL Validator processor."""
-
-    enabled: bool = opt(True, yaml_key="enabled")
 
 
 class DiversityFilterConfig(ConfigBase):
@@ -42,19 +36,6 @@ class DiversityFilterConfig(ConfigBase):
         0.85,
         yaml_key="similarity_threshold",
         description="Similarity threshold (0.0-1.0)",
-    )
-
-
-class EcudoProcessorsConfig(ConfigBase):
-    """Configuration for Ecudo processors."""
-
-    url_validator: URLValidatorConfig = opt(
-        default_factory=URLValidatorConfig,
-        yaml_key="url_validator",
-    )
-    diversity_filter: DiversityFilterConfig = opt(
-        default_factory=DiversityFilterConfig,
-        yaml_key="diversity_filter",
     )
 
 
@@ -74,22 +55,13 @@ class EcudoCrawlConfig(EcudoApiConfig, DefaultCrawlConfig, kw_only=True):
         description="Organization ID (e.g. iopan)",
     )
 
-    # Optional crawl settings
-    max_records: int | None = opt(
-        None,
-        cli=("-n", "--max-records"),  # Keep alias
-        description="Maximum number of datasets to fetch",
-    )
-    page_size: int = opt(200, description="API page size for pagination")
-
     # CLI flags for disabling processors
-    no_url_validation: bool = opt(False, description="Disable URL validation")
     no_diversity_filter: bool = opt(False, description="Disable diversity filter")
 
     # Nested processor configuration (YAML only)
-    processors: EcudoProcessorsConfig = opt(
-        default_factory=EcudoProcessorsConfig,
-        # cli=False,  # Disable CLI for nested config
+    diversity_filter: DiversityFilterConfig = opt(
+        default_factory=DiversityFilterConfig,
+        yaml_key="diversity_filter",
     )
 
     def __post_init__(self):
@@ -99,14 +71,9 @@ class EcudoCrawlConfig(EcudoApiConfig, DefaultCrawlConfig, kw_only=True):
 
         self.organization = self.organization.strip().lower()
 
-    def get_url_validator_enabled(self) -> bool:
-        """Check if URL validator should be enabled."""
-        if self.no_url_validation:
-            return False
-        return self.processors.url_validator.enabled  # pylint: disable=no-member
-
     def get_diversity_filter_enabled(self) -> bool:
         """Check if diversity filter should be enabled."""
         if self.no_diversity_filter:
             return False
-        return self.processors.diversity_filter.enabled  # pylint: disable=no-member
+
+        return self.diversity_filter.enabled  # pylint: disable=no-member

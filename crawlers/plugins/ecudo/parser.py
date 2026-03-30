@@ -7,11 +7,12 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from contextlib import suppress
+from dataclasses import dataclass, field
+from typing import Sequence
 from urllib.parse import urlparse
 
-from crawlers.core.processors.fetchers import Parser
-from crawlers.core.ui import console
-from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
+from crawlers.processors.fetchers import Parser
+from crawlers.ui import console
 
 # Expected @type values for structure validation
 EXPECTED_TYPES = {
@@ -43,6 +44,44 @@ KNOWN_ROOT_FIELDS = {
 
 # Known accessLevel values
 KNOWN_ACCESS_LEVELS = {"public"}
+
+
+@dataclass
+class EcudoFile:
+    """File from Ecudo dataset."""
+
+    name: str
+    url: str
+
+
+# pylint: disable=too-many-instance-attributes
+@dataclass
+class EcudoDataset:
+    """Ecudo Dataset model."""
+
+    identifier: str
+    title: str
+    description: str
+    publisher: str
+    issued: str  # publication date
+    files: Sequence[EcudoFile]
+
+    # Optional but common fields
+    language: str = "en"
+    keywords: list[str] = field(default_factory=list)
+    modified: str | None = None
+    access_level: str = "public"
+
+    # Geographic/temporal metadata
+    spatial: str | None = None
+    temporal: str | None = None
+
+    # Raw JSON-LD data from API
+    _raw: dict = field(default_factory=dict, repr=False, compare=False)
+
+    def to_json(self) -> dict:
+        """Return the raw JSON-LD data."""
+        return self._raw
 
 
 # pylint: disable=too-few-public-methods

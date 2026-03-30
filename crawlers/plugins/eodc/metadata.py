@@ -8,7 +8,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.core.metadata.datacite import DataCiteBuilder
+from crawlers.metadata.datacite import DataCiteBuilder
 
 
 ## TODO defaults suited only for sentinel-1 gdr collection - not adequate for others?

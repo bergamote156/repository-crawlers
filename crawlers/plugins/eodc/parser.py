@@ -11,8 +11,8 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from crawlers.core.processors.fetchers import Parser
-from crawlers.core.ui import console
+from crawlers.processors.fetchers import Parser
+from crawlers.ui import console
 
 # MIME type to file extension mapping
 MIME_EXTENSIONS = {

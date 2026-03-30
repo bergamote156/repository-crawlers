@@ -9,12 +9,11 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
-from typing import AsyncIterator, TypedDict
+from typing import AsyncIterator, TypedDict, assert_never
 
-from crawlers.core.abc.api import ApiClient
-from crawlers.core.errors import ApiError, MatchError
+from crawlers.core.api import ApiClient, ApiFailure
 from crawlers.core.result import Err, Ok, Result
-from crawlers.core.ui import console
+from crawlers.ui import console
 
 
 @dataclass
@@ -62,7 +61,7 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
 
             match result:
                 case Ok(value=ids) if not ids:
-                    break
+                    return
                 case Ok(value=ids):
                     for dataset_id in ids:
                         yield dataset_id
@@ -75,16 +74,16 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
                             return
                 case Err(value=err):
                     console.error(str(err))
-                    break
+                    return
                 case other:
-                    raise MatchError(other)
+                    assert_never(other)
 
             page += 1
             console.info(f"📄 Page {page} | {yielded} IDs fetched")
 
     async def list_dataset_ids(
         self, org_id: str, offset: int, limit: int
-    ) -> Result[list[str], ApiError]:
+    ) -> Result[list[str], ApiFailure]:
         """
         Fetch a page of dataset IDs.
 
@@ -94,14 +93,14 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
             limit: Number of items per page
 
         Returns:
-            Ok(list[str]) of dataset IDs, or Err(ApiError)
+            Ok(list[str]) of dataset IDs, or Err(ApiFailure)
         """
         url = (
             f"{self.base_url}/organizations/{org_id}/data?offset={offset}&limit={limit}"
         )
         return (await self.get_json(url)).map(lambda d: d.get("metadata", []))
 
-    async def get_dataset_metadata(self, dataset_id: str) -> Result[dict, ApiError]:
+    async def get_dataset_metadata(self, dataset_id: str) -> Result[dict, ApiFailure]:
         """
         Fetch full JSON-LD metadata for a dataset.
 
@@ -109,17 +108,17 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
             dataset_id: Dataset ID
 
         Returns:
-            Ok(dict) with JSON-LD metadata, or Err(ApiError)
+            Ok(dict) with JSON-LD metadata, or Err(ApiFailure)
         """
         url = f"{self.base_url}/metadata/{dataset_id}/json-ld"
         return await self.get_json(url)
 
-    async def get_organizations(self) -> Result[list[EcudoOrganization], ApiError]:
+    async def get_organizations(self) -> Result[list[EcudoOrganization], ApiFailure]:
         """
         Fetch list of all available organizations.
 
         Returns:
-            Ok(list) of organization dicts, or Err(ApiError)
+            Ok(list) of organization dicts, or Err(ApiFailure)
         """
         result = await self.get_json(f"{self.base_url}/organizations")
         return result.map(lambda d: d.get("organizations", []))

@@ -15,8 +15,8 @@ import traceback
 
 from rich.table import Table
 
-from crawlers.core.ui import console
 from crawlers.plugins import REGISTERED_PLUGINS
+from crawlers.ui import console
 
 
 def main() -> int:

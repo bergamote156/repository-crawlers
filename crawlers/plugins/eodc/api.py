@@ -9,12 +9,11 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, assert_never
 
-from crawlers.core.abc.api import ApiClient
-from crawlers.core.errors import ApiError, MatchError
+from crawlers.core.api import ApiClient, ApiFailure
 from crawlers.core.result import Err, Ok, Result
-from crawlers.core.ui import console
+from crawlers.ui import console
 
 
 @dataclass
@@ -62,7 +61,7 @@ class EODCClient(ApiClient[EODCSearchOpts, dict]):
                     features = data.get("features", [])
                     if not features:
                         console.debug(f"No features in response from {next_url}")
-                        break
+                        return
 
                     for item in features:
                         yield item
@@ -80,16 +79,16 @@ class EODCClient(ApiClient[EODCSearchOpts, dict]):
 
                 case Err(value=err):
                     console.error(str(err))
-                    break
+                    return
                 case other:
-                    raise MatchError(other)
+                    assert_never(other)
 
-    async def get_collections(self) -> Result[list[dict], ApiError]:
+    async def get_collections(self) -> Result[list[dict], ApiFailure]:
         """
         Fetch list of available STAC collections.
 
         Returns:
-            Ok(list[dict]) of collections, or Err(ApiError)
+            Ok(list[dict]) of collections, or Err(ApiFailure)
         """
         result = await self.get_json(f"{self.base_url}/collections")
         return result.map(lambda d: d.get("collections", []))

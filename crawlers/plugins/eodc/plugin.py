@@ -12,14 +12,15 @@ from typing import cast
 
 from rich.table import Table
 
-from crawlers.core.abc.plugin import command
-from crawlers.core.default.config import DefaultCrawlConfig
-from crawlers.core.default.plugin import CrawlSpec, DefaultCrawlerPlugin
-from crawlers.core.ui import console
+from crawlers.core.plugin import command
+from crawlers.core.result import Err
+from crawlers.default.config import DefaultCrawlConfig
+from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
 from crawlers.plugins.eodc.api import EODCClient, EODCSearchOpts
 from crawlers.plugins.eodc.config import EODCApiConfig, EODCCrawlConfig
 from crawlers.plugins.eodc.metadata import EODCDataCiteBuilder
 from crawlers.plugins.eodc.parser import EODCParser
+from crawlers.ui import console
 
 
 class EODCPlugin(DefaultCrawlerPlugin):
@@ -31,31 +32,30 @@ class EODCPlugin(DefaultCrawlerPlugin):
     description = "Crawler for EODC STAC API (default architecture)"
     config_class = EODCCrawlConfig
 
-    def prepare_crawl(self, config: DefaultCrawlConfig) -> CrawlSpec:
+    def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
         cfg = cast(EODCCrawlConfig, config)
         api_client = EODCClient(
             base_url=cfg.base_url,
             timeout=cfg.timeout,
             max_retries=cfg.max_retries,
         )
+
+        collections = cfg.get_collections_list()
         iterator_opts = EODCSearchOpts(
-            collections=cfg.get_collections_list(),
+            collections=collections,
             intersects=cfg.intersects,
             datetime=cfg.datetime_range,
             limit=cfg.page_size,
             max_items=cfg.max_records,
         )
-        collections = cfg.get_collections_list()
 
-        return CrawlSpec(
+        return DefaultCrawlSpec(
             client=api_client,
             iterator_opts=iterator_opts,
             parser=EODCParser(),
             metadata_builder=EODCDataCiteBuilder(),
             run_context_name=collections[0] if collections else "eodc",
             banner_subtitle=f"Collections: {', '.join(collections)}",
-            max_items=cfg.max_records,
-            url_validation=not cfg.no_url_validation,
         )
 
     @command("list-collections", EODCApiConfig, help="List available STAC collections")
@@ -69,11 +69,11 @@ class EODCPlugin(DefaultCrawlerPlugin):
             with console.status("Fetching collections..."):
                 result = await client.get_collections()
 
-            if result.is_err():
-                console.error(f"Failed to fetch collections: {result.err()}")
+            if isinstance(result, Err):
+                console.error(f"Failed to fetch collections: {result.value}")
                 return
 
-            collections = result.unwrap()
+            collections = result.value
 
             table = Table(
                 title=f"Available Collections ({len(collections)})",
