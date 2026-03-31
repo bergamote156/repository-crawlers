@@ -14,18 +14,21 @@ from rdflib.term import Node
 
 @dataclass
 class BgeeRawRecord:
-    """A schema:Dataset node extracted from a Bgee page's JSON-LD."""
+    """A `schema:Dataset` node extracted from a Bgee page's JSON-LD."""
 
-    raw: str  # The raw JSON-LD text (combined from all scripts on the page)
-    graph: Dataset  # rdflib Dataset with all JSON-LD from the page loaded
-    node: Node  # The specific schema:Dataset node in the graph
+    raw: str
+    """The raw JSON-LD text (combined from all scripts on the page)"""
+    graph: Dataset
+    """RDFLib `Dataset` with all JSON-LD from the page loaded"""
+    node: Node
+    """The specific `schema:Dataset` node in the graph"""
 
 
 @dataclass
 class BgeeFile:
-    """A downloadable file linked from a Bgee dataset.
+    """A downloadable file linked from a `BgeeDataset`.
 
-    Satisfies both DatasetFile and DataCiteFile protocols via duck typing.
+    Satisfies both `DatasetFile` and `DataCiteFile` protocols via duck typing.
     """
 
     name: str
@@ -36,10 +39,10 @@ class BgeeFile:
 class BgeeDataset:
     """Bgee gene expression dataset.
 
-    Satisfies both Dataset and DataCiteDataset protocols via duck typing:
-    - Dataset protocol: identifier, title, files
-    - DataCiteDataset protocol: identifier, title, datetime, geometry, files, self_link
-    - Serializable protocol: to_json()
+    Satisfies both `Dataset` and `DataCiteDataset` protocols via duck typing:
+    - `Dataset` protocol: identifier, title, files
+    - `DataCiteDataset` protocol: identifier, title, datetime, geometry, files, self_link
+    - `Serializable` protocol: to_json()
     """
 
     identifier: str
@@ -49,6 +52,8 @@ class BgeeDataset:
     datetime: str | None = None
     geometry: dict | None = None
     self_link: str | None = None
+    keywords: list[str] = field(default_factory=list)
+    citations: list[str] = field(default_factory=list)  # DOIs/URLs from schema:citation
 
     _raw: BgeeRawRecord | None = field(default=None, repr=False, compare=False)
 

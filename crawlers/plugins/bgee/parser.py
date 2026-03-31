@@ -1,12 +1,14 @@
-"""Bgee Parser - converts schema.org JSON-LD records to BgeeDataset."""
+"""Bgee Parser - converts `schema:Dataset` JSON-LD records to `BgeeDataset`."""
 
 __author__ = "Vincent Emonet"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+import json
+
 from crawlers.core.processors.parsers import Parser
 from crawlers.core.ui import console
-from crawlers.plugins.bgee.api import _SDO, _val
+from crawlers.plugins.bgee.api import _SDO, _val, _vals
 from crawlers.plugins.bgee.models import BgeeDataset, BgeeFile, BgeeRawRecord
 
 
@@ -32,6 +34,19 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
             console.debug(f"Skipping {identifier}: no downloadable files found")
             return None
 
+        keywords = _vals(g, node, "keywords")
+        # schema:citation values may be DOI URLs or JSON-encoded lists
+        citations: list[str] = []
+        for raw_citation in _vals(g, node, "citation"):
+            try:
+                parsed = json.loads(raw_citation)
+                if isinstance(parsed, list):
+                    citations.extend(parsed)
+                else:
+                    citations.append(raw_citation)
+            except (json.JSONDecodeError, ValueError):
+                citations.append(raw_citation)
+
         return BgeeDataset(
             identifier=identifier,
             title=title,
@@ -39,11 +54,13 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
             description=_val(g, node, "description"),
             datetime=_val(g, node, "dateModified") or _val(g, node, "datePublished"),
             self_link=identifier,
+            keywords=keywords,
+            citations=citations,
             _raw=raw,
         )
 
     def _extract_files(self, g, node) -> list[BgeeFile]:
-        """Extract downloadable files from a schema:Dataset node."""
+        """Extract downloadable files from a `schema:Dataset` node."""
         files: list[BgeeFile] = []
         seen_urls: set[str] = set()
         for ns in _SDO:
