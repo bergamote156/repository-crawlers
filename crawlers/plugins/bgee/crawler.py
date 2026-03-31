@@ -108,16 +108,21 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
         for kw in subjects:
             ET.SubElement(subjects_el, "subject").text = kw
 
+    def build_identifier_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+        """Use URL identifier type since Bgee datasets have no DOI."""
+        el = ET.SubElement(root, "identifier", {"identifierType": "URL"})
+        el.text = ctx.dataset.identifier
+
     def build_related_identifiers_section(
         self, root: ET.Element, ctx: DataCiteContext
     ) -> None:
-        """Add self_link + citation DOIs as related identifiers."""
+        """Add citation DOIs/URLs as related identifiers."""
         entries: list[tuple[str, str, str]] = []  # (identifier, type, relation)
-        if ctx.dataset.self_link:
-            entries.append((ctx.dataset.self_link, "URL", "IsSupplementTo"))
         for citation in getattr(ctx.dataset, "citations", []):
-            id_type = "DOI" if "doi.org" in citation else "URL"
-            entries.append((citation, id_type, "IsReferencedBy"))
+            if "doi.org" in citation:
+                entries.append((citation.split("doi.org/", 1)[-1], "DOI", "IsReferencedBy"))
+            else:
+                entries.append((citation, "URL", "IsReferencedBy"))
         if not entries:
             return
         related = ET.SubElement(root, "relatedIdentifiers")
@@ -128,6 +133,23 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
                 {"relatedIdentifierType": id_type, "relationType": relation},
             )
             el.text = identifier
+
+    def build_publication_year_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+        """Use year from dataset datetime if available, fall back to current year."""
+        year = ctx.publication_year
+        if ctx.dataset.datetime:
+            try:
+                year = int(ctx.dataset.datetime[:4])
+            except (ValueError, IndexError):
+                pass
+        ET.SubElement(root, "publicationYear").text = str(year)
+
+    def build_dates_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+        """Use `Updated` date type since the date comes from schema:dateModified/datePublished."""
+        if not ctx.dataset.datetime:
+            return
+        dates = ET.SubElement(root, "dates")
+        ET.SubElement(dates, "date", {"dateType": "Updated"}).text = ctx.dataset.datetime
 
     def build_descriptions_section(
         self, root: ET.Element, ctx: DataCiteContext
