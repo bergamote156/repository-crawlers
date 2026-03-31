@@ -5,7 +5,6 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
-from dataclasses import dataclass
 from typing import AsyncIterator
 from urllib.parse import urljoin
 
@@ -17,24 +16,16 @@ from rdflib.term import Node
 from crawlers.core.abc.api import ApiClient
 from crawlers.core.processors.parsers import Parser
 from crawlers.core.ui import console
-from crawlers.plugins.bgee.models import BgeeDataset, BgeeFile, BgeeRawRecord
-
-
-# --- Client ---
-
-@dataclass
-class BgeeIteratorOpts:
-    """Options for Bgee dataset iteration."""
-
-    start_url: str
-    max_records: int | None = None
+from crawlers.plugins.bgee.models import BgeeDataset, BgeeFile, BgeeIteratorOpts, BgeeRawRecord
 
 
 class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
     """Crawls Bgee species pages and extracts schema.org JSON-LD Dataset records."""
 
     # pylint: disable=invalid-overridden-method
-    async def iterate_datasets(self, opts: BgeeIteratorOpts) -> AsyncIterator[BgeeRawRecord]:
+    async def iterate_datasets(
+        self, opts: BgeeIteratorOpts
+    ) -> AsyncIterator[BgeeRawRecord]:
         """Fetch start URL, discover species page links, yield `BgeeRawRecord` per dataset."""
         yielded = 0
         try:
@@ -65,7 +56,9 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
                     return
         console.info(f"Total datasets extracted: {yielded}")
 
-    def _parse_page(self, html: str, page_url: str) -> tuple[list[BgeeRawRecord], list[str]]:
+    def _parse_page(
+        self, html: str, page_url: str
+    ) -> tuple[list[BgeeRawRecord], list[str]]:
         """Load all JSON-LD from a page into one rdflib Dataset, return records + discover links."""
         soup = BeautifulSoup(html, "lxml")
         discover_urls = [
@@ -95,8 +88,6 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
         return records, discover_urls
 
 
-# --- Parser ---
-
 class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
     """Converts a `BgeeRawRecord` (rdflib graph + node) into a `BgeeDataset`."""
 
@@ -124,7 +115,11 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
         for raw_citation in _vals(g, node, "citation"):
             try:
                 parsed = json.loads(raw_citation)
-                citations.extend(parsed) if isinstance(parsed, list) else citations.append(raw_citation)
+                (
+                    citations.extend(parsed)
+                    if isinstance(parsed, list)
+                    else citations.append(raw_citation)
+                )
             except (json.JSONDecodeError, ValueError):
                 citations.append(raw_citation)
 
@@ -155,15 +150,15 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
                 if not url or url in seen_urls:
                     continue
                 seen_urls.add(url)
-                name = _val(g, dist, "name") or url.split("/")[-1].split("?")[0]
+                name = _val(g, dist, "name") or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
                 files.append(BgeeFile(name=name, url=url))
         return files
 
 
-# --- RDF helpers ---
-
+# RDF helpers
 _SDO = (Namespace("https://schema.org/"), Namespace("http://schema.org/"))
 """Support both https and http schema.org namespace variants."""
+
 
 def _vals(g: Dataset, subject: Node, prop: str) -> list[str]:
     """All string values for `schema:prop` on subject, deduplicated across both SDO namespaces."""

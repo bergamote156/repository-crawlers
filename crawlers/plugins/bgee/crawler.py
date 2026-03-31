@@ -18,11 +18,9 @@ from crawlers.core.processors.parsers import ParserProcessor
 from crawlers.core.processors.pipeline import ProcessorPipeline
 from crawlers.core.processors.writers import JSONLWriter
 from crawlers.core.ui import console
-from crawlers.plugins.bgee.api import BgeeClient, BgeeIteratorOpts, BgeeParser
-from crawlers.plugins.bgee.plugin import BgeeCrawlConfig
+from crawlers.plugins.bgee.api import BgeeClient, BgeeParser
+from crawlers.plugins.bgee.models import BgeeCrawlConfig, BgeeIteratorOpts
 
-
-# --- Crawler ---
 
 class BgeeCrawler(BaseCrawler[BgeeCrawlConfig]):
     """Crawls Bgee species pages extracting schema.org JSON-LD dataset records."""
@@ -54,12 +52,17 @@ class BgeeCrawler(BaseCrawler[BgeeCrawlConfig]):
     def create_iterator(self, client: ApiClient) -> AsyncIterable[Any]:
         bgee_client = cast(BgeeClient, client)
         return bgee_client.iterate_datasets(
-            BgeeIteratorOpts(start_url=self.config.base_url, max_records=self.config.max_records)
+            BgeeIteratorOpts(
+                start_url=self.config.base_url, max_records=self.config.max_records
+            )
         )
 
     async def after_crawl(self) -> None:
         """Print first record's DataCite XML for conformity check."""
-        if not (self._processed_output_path.exists() and self._processed_output_path.stat().st_size > 0):
+        if not (
+            self._processed_output_path.exists()
+            and self._processed_output_path.stat().st_size > 0
+        ):
             return
         try:
             with open(self._processed_output_path, encoding="utf-8") as f:
@@ -71,7 +74,8 @@ class BgeeCrawler(BaseCrawler[BgeeCrawlConfig]):
                 console.section("First Record DataCite XML (Conformity Check)")
                 dom = minidom.parseString(metadata_xml)
                 pretty_xml = "\n".join(
-                    line for line in dom.toprettyxml(indent="  ").split("\n")
+                    line
+                    for line in dom.toprettyxml(indent="  ").split("\n")
                     if line.strip() and not line.startswith("<?xml")
                 )
                 console.print(pretty_xml)
@@ -84,8 +88,6 @@ class BgeeCrawler(BaseCrawler[BgeeCrawlConfig]):
     def _get_banner_subtitle(self) -> str | None:
         return f"Start URL: {self.config.base_url}"
 
-
-# --- Metadata builder ---
 
 class BgeeDataCiteBuilder(DataCiteBuilder):
     """DataCite builder customized for Bgee gene expression datasets."""
@@ -106,7 +108,9 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
         for kw in subjects:
             ET.SubElement(subjects_el, "subject").text = kw
 
-    def build_related_identifiers_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+    def build_related_identifiers_section(
+        self, root: ET.Element, ctx: DataCiteContext
+    ) -> None:
         """Add self_link + citation DOIs as related identifiers."""
         entries: list[tuple[str, str, str]] = []  # (identifier, type, relation)
         if ctx.dataset.self_link:
@@ -125,10 +129,14 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
             )
             el.text = identifier
 
-    def build_descriptions_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+    def build_descriptions_section(
+        self, root: ET.Element, ctx: DataCiteContext
+    ) -> None:
         """Use dataset-specific description if available, fall back to default."""
         desc = getattr(ctx.dataset, "description", None) or self.default_description
         if not desc:
             return
         descriptions = ET.SubElement(root, "descriptions")
-        ET.SubElement(descriptions, "description", {"descriptionType": "Abstract"}).text = desc
+        ET.SubElement(
+            descriptions, "description", {"descriptionType": "Abstract"}
+        ).text = desc
