@@ -90,7 +90,7 @@ class BgeeCrawler(BaseCrawler[BgeeCrawlConfig]):
 
 
 class BgeeDataCiteBuilder(DataCiteBuilder):
-    """DataCite builder customized for Bgee gene expression datasets."""
+    """DataCite XML builder customized for Bgee gene expression datasets."""
 
     creator_name = "Bgee"
     publisher_name = "Bgee"
@@ -98,6 +98,26 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
     resource_type_value = "Gene expression data"
     default_subjects = ["gene expression", "Bgee", "genomics", "transcriptomics"]
     default_rights = "CC0 1.0 Universal (CC0 1.0) Public Domain Dedication"
+
+    def get_sections(self):  # type: ignore[override]
+        """Add version section to the standard pipeline."""
+        return [*super().get_sections(), self.build_version_section]
+
+    def build_creators_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+        """Use creator name and URL from the dataset, falling back to class defaults."""
+        name = getattr(ctx.dataset, "creator_name", None) or self.creator_name
+        url = getattr(ctx.dataset, "creator_url", None)
+        creators = ET.SubElement(root, "creators")
+        creator = ET.SubElement(creators, "creator")
+        ET.SubElement(creator, "creatorName", {"nameType": "Organizational"}).text = name
+        if url:
+            ET.SubElement(creator, "nameIdentifier", {"nameIdentifierScheme": "URL"}).text = url
+
+    def build_version_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+        """Emit dataset version if available."""
+        version = getattr(ctx.dataset, "version", None)
+        if version:
+            ET.SubElement(root, "version").text = version
 
     def build_subjects_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
         """Use per-dataset keywords, falling back to default subjects."""

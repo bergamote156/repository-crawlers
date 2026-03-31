@@ -81,6 +81,9 @@ class BgeeDataset:
     datetime: str | None = None
     geometry: dict | None = None
     self_link: str | None = None
+    version: str | None = None
+    creator_name: str | None = None
+    creator_url: str | None = None
     keywords: list[str] = field(default_factory=list)
     citations: list[str] = field(default_factory=list)  # DOIs/URLs from schema:citation
 

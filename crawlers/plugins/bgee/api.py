@@ -123,6 +123,12 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
             except (json.JSONDecodeError, ValueError):
                 citations.append(raw_citation)
 
+        creator_name = creator_url = None
+        for ns in _SDO:
+            for creator_node in g.objects(node, ns["creator"]):
+                creator_name = creator_name or _val(g, creator_node, "name")
+                creator_url = creator_url or _val(g, creator_node, "url")
+
         return BgeeDataset(
             identifier=identifier,
             title=title,
@@ -130,6 +136,9 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
             description=_val(g, node, "description"),
             datetime=_val(g, node, "dateModified") or _val(g, node, "datePublished"),
             self_link=identifier,
+            version=_val(g, node, "version"),
+            creator_name=creator_name,
+            creator_url=creator_url,
             keywords=keywords,
             citations=citations,
             _raw=raw,
