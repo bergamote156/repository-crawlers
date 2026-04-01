@@ -59,8 +59,8 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
     def _parse_page(
         self, html: str, page_url: str
     ) -> tuple[list[BgeeRawRecord], list[str]]:
-        """Load all JSON-LD from a page into one rdflib Dataset, return records + discover links."""
-        soup = BeautifulSoup(html, "lxml")
+        """Load all JSON-LD from a page into one rdflib `Dataset`, return records + discover links."""
+        soup = BeautifulSoup(html, "html.parser")
         discover_urls = [
             urljoin(page_url, str(a["href"]))
             for a in soup.find_all("a", attrs={"data-discover": "true", "href": True})

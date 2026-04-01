@@ -5,7 +5,6 @@ PyYAML>=6.0.0
 rich>=13.0.0
 rdflib>=7.6.0
 beautifulsoup4>=4.14.3
-lxml>=6.0.2
 
 # HTTP client (for dataset_registrar)
 requests>=2.31.0
