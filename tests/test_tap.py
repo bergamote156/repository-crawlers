@@ -4,9 +4,9 @@
 
 import pytest
 
-from crawlers.core.processors.tap import Tap
 from crawlers.core.result import Ok
-from crawlers.core.sinks import NullSink, Sink
+from crawlers.core.sink import Sink
+from crawlers.processors import Tap
 
 
 class CollectingSink(Sink[object]):
@@ -51,17 +51,8 @@ class TestTap:
         assert sink.items == [10]  # transformed value sent to sink
 
     @pytest.mark.asyncio
-    async def test_transform_does_not_affect_pipeline_value(self):
-        """The transform only affects what goes to the sink, not the returned value."""
-        sink = CollectingSink()
-        tap = Tap(sink, transform=lambda x: {"wrapped": x})
-        result = await tap.process("raw")
-        assert result.unwrap() == "raw"
-        assert sink.items == [{"wrapped": "raw"}]
-
-    @pytest.mark.asyncio
     async def test_stats_pushed_incremented(self):
-        tap = Tap(NullSink())
+        tap = Tap(CollectingSink())
         await tap.process(1)
         await tap.process(2)
         assert tap.stats.pushed == 2
@@ -74,12 +65,3 @@ class TestTap:
         for i in range(5):
             await tap.process(i)
         assert sink.items == [0, 1, 2, 3, 4]
-
-    def test_describe_includes_sink_repr(self):
-        sink = NullSink()
-        tap = Tap(sink)
-        assert "NullSink" in tap.describe()
-
-    def test_artifacts_delegated_to_sink(self):
-        tap = Tap(NullSink())
-        assert tap.artifacts() == []

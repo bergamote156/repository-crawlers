@@ -4,8 +4,8 @@
 
 import pytest
 
-from crawlers.core.processors.fetchers import DatasetFetcher
 from crawlers.core.result import Err, Ok
+from crawlers.processors.fetchers import DatasetFetcher
 
 
 class SimpleParser:  # pylint: disable=too-few-public-methods
@@ -36,27 +36,25 @@ class TestDatasetFetcher:
     async def test_returns_ok_on_success(self):
         fetcher = DatasetFetcher(fetch_ok, SimpleParser())
         result = await fetcher.process("ds-1")
-        assert result.is_ok()
-        assert result.unwrap()["id"] == "ds-1"
+        assert isinstance(result, Ok)
+        assert result.value["id"] == "ds-1"
 
     @pytest.mark.asyncio
     async def test_returns_err_when_fetch_fails(self):
         fetcher = DatasetFetcher(fetch_fail, SimpleParser())
         result = await fetcher.process("ds-999")
-        assert result.is_err()
-        err = result.err()
-        assert err["reason"] == "fetch_failed"
-        assert err["dataset_id"] == "ds-999"
-        assert err["processor"] == "DatasetFetcher"
+        assert isinstance(result, Err)
+        assert result.value["reason"] == "fetch_failed"
+        assert result.value["dataset_id"] == "ds-999"
+        assert result.value["processor"] == "DatasetFetcher"
 
     @pytest.mark.asyncio
     async def test_returns_err_when_parse_fails(self):
         fetcher = DatasetFetcher(fetch_unparseable, SimpleParser())
         result = await fetcher.process("ds-2")
-        assert result.is_err()
-        err = result.err()
-        assert err["reason"] == "parse_failed"
-        assert err["dataset_id"] == "ds-2"
+        assert isinstance(result, Err)
+        assert result.value["reason"] == "parse_failed"
+        assert result.value["dataset_id"] == "ds-2"
 
     @pytest.mark.asyncio
     async def test_stats_on_success(self):

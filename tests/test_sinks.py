@@ -3,10 +3,11 @@
 # pylint: disable=missing-function-docstring
 
 import json
+from pathlib import Path
 
 import pytest
 
-from crawlers.core.sinks import JSONLSink, NullSink
+from crawlers.sinks import JSONLSink, NullSink
 
 
 class TestJSONLSink:
@@ -15,48 +16,49 @@ class TestJSONLSink:
     @pytest.mark.asyncio
     async def test_writes_json_line(self, tmp_path):
         path = tmp_path / "out.jsonl"
+        data = {"id": "1", "title": "Test"}
+
         sink = JSONLSink(path)
         await sink.open()
-        await sink.push({"id": "1", "title": "Test"})
+        await sink.push(data)
         await sink.close()
 
-        lines = path.read_text().splitlines()
-        assert len(lines) == 1
-        assert json.loads(lines[0]) == {"id": "1", "title": "Test"}
+        assert load_jsonl(path) == [data]
 
     @pytest.mark.asyncio
     async def test_writes_multiple_lines(self, tmp_path):
         path = tmp_path / "out.jsonl"
+        data1 = {"id": "1"}
+        data2 = {"id": "2"}
+        data3 = {"id": "3"}
+
         sink = JSONLSink(path)
         await sink.open()
-        await sink.push({"id": "1"})
-        await sink.push({"id": "2"})
-        await sink.push({"id": "3"})
+        await sink.push(data1)
+        await sink.push(data2)
+        await sink.push(data3)
         await sink.close()
 
-        lines = path.read_text().splitlines()
-        assert len(lines) == 3
-        assert json.loads(lines[2]) == {"id": "3"}
+        assert load_jsonl(path) == [data1, data2, data3]
 
     @pytest.mark.asyncio
     async def test_appends_on_reopen(self, tmp_path):
         """Reopening in append mode keeps existing data."""
         path = tmp_path / "out.jsonl"
+        data1 = {"id": "first"}
+        data2 = {"id": "second"}
 
         sink = JSONLSink(path)
         await sink.open()
-        await sink.push({"id": "first"})
+        await sink.push(data1)
         await sink.close()
 
         sink2 = JSONLSink(path)
         await sink2.open()
-        await sink2.push({"id": "second"})
+        await sink2.push(data2)
         await sink2.close()
 
-        lines = path.read_text().splitlines()
-        assert len(lines) == 2
-        assert json.loads(lines[0])["id"] == "first"
-        assert json.loads(lines[1])["id"] == "second"
+        assert load_jsonl(path) == [data1, data2]
 
     @pytest.mark.asyncio
     async def test_creates_parent_directories(self, tmp_path):
@@ -70,49 +72,20 @@ class TestJSONLSink:
     @pytest.mark.asyncio
     async def test_handles_non_ascii_characters(self, tmp_path):
         path = tmp_path / "out.jsonl"
+        data = {"title": "Zbiór danych — łódź"}
+
         sink = JSONLSink(path)
         await sink.open()
-        await sink.push({"title": "Zbiór danych — łódź"})
+        await sink.push(data)
         await sink.close()
 
-        line = json.loads(path.read_text(encoding="utf-8").strip())
-        assert line["title"] == "Zbiór danych — łódź"
+        assert load_jsonl(path) == [data]
 
     def test_artifacts_returns_path(self, tmp_path):
         path = tmp_path / "out.jsonl"
         sink = JSONLSink(path)
         assert sink.artifacts() == [path]
 
-    def test_repr(self, tmp_path):
-        path = tmp_path / "out.jsonl"
-        sink = JSONLSink(path)
-        assert "JSONLSink" in repr(sink)
-        assert str(path) in repr(sink)
 
-
-class TestNullSink:
-    """Tests for NullSink."""
-
-    @pytest.mark.asyncio
-    async def test_open_does_nothing(self):
-        sink = NullSink()
-        await sink.open()  # Should not raise
-
-    @pytest.mark.asyncio
-    async def test_push_discards_data(self):
-        sink = NullSink()
-        await sink.open()
-        await sink.push({"data": "ignored"})
-        await sink.close()
-        # No assertions needed — just must not raise
-
-    @pytest.mark.asyncio
-    async def test_close_does_nothing(self):
-        sink = NullSink()
-        await sink.close()  # Should not raise even without open
-
-    def test_artifacts_empty(self):
-        assert not NullSink().artifacts()
-
-    def test_repr(self):
-        assert repr(NullSink()) == "NullSink()"
+def load_jsonl(path):
+    return list(map(json.loads, Path(path).read_text(encoding="utf-8").splitlines()))

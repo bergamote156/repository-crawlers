@@ -4,8 +4,9 @@
 
 import pytest
 
-from crawlers.core.processors.filters import DiversityFilter
-from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
+from crawlers.core.result import Err, Ok
+from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
+from crawlers.processors.filters import DiversityFilter
 
 
 def make_record(identifier: str, title: str) -> EcudoDataset:
@@ -33,8 +34,8 @@ class TestDiversityFilter:
         record = make_record("id1", "Unique Dataset Title")
         result = await diversity_filter.process(record)
 
-        assert result.is_ok()
-        assert result.unwrap().identifier == "id1"
+        assert isinstance(result, Ok)
+        assert result.value.identifier == "id1"
         assert diversity_filter.stats.processed == 1
         assert diversity_filter.stats.filtered == 0
 
@@ -47,9 +48,9 @@ class TestDiversityFilter:
         r2 = make_record("id2", "Satellite Imagery Collection")
         r3 = make_record("id3", "Weather Station Readings")
 
-        assert (await diversity_filter.process(r1)).is_ok()
-        assert (await diversity_filter.process(r2)).is_ok()
-        assert (await diversity_filter.process(r3)).is_ok()
+        assert isinstance(await diversity_filter.process(r1), Ok)
+        assert isinstance(await diversity_filter.process(r2), Ok)
+        assert isinstance(await diversity_filter.process(r3), Ok)
 
         assert diversity_filter.stats.processed == 3
         assert diversity_filter.stats.filtered == 0
@@ -69,9 +70,9 @@ class TestDiversityFilter:
         result2 = await diversity_filter.process(r2)
         result3 = await diversity_filter.process(r3)
 
-        assert result1.is_ok()  # First accepted
-        assert result2.is_ok()  # Second accepted (limit=2)
-        assert result3.is_err()  # Third rejected
+        assert isinstance(result1, Ok)  # First accepted
+        assert isinstance(result2, Ok)  # Second accepted (limit=2)
+        assert isinstance(result3, Err)  # Third rejected
 
         assert diversity_filter.stats.processed == 2
         assert diversity_filter.stats.filtered == 1
@@ -85,8 +86,8 @@ class TestDiversityFilter:
         r1 = make_record("id1", "Ocean Data 2024")
         r2 = make_record("id2", "Ocean Data 2023")
 
-        assert (await filter_strict.process(r1)).is_ok()
-        assert (await filter_strict.process(r2)).is_ok()  # Different enough
+        assert isinstance(await filter_strict.process(r1), Ok)
+        assert isinstance(await filter_strict.process(r2), Ok)  # Different enough
 
         # Low threshold - more lenient
         filter_lenient = DiversityFilter(max_similar=1, similarity_threshold=0.5)
@@ -94,8 +95,8 @@ class TestDiversityFilter:
         r3 = make_record("id3", "Ocean Data 2024")
         r4 = make_record("id4", "Ocean Data 2023")
 
-        assert (await filter_lenient.process(r3)).is_ok()
-        assert (await filter_lenient.process(r4)).is_err()  # Too similar
+        assert isinstance(await filter_lenient.process(r3), Ok)
+        assert isinstance(await filter_lenient.process(r4), Err)  # Too similar
 
     @pytest.mark.asyncio
     async def test_multiple_groups(self):
@@ -113,12 +114,12 @@ class TestDiversityFilter:
         ctd3 = make_record("ctd3", "CTD Measurements Station C")
 
         # Process interleaved
-        assert (await diversity_filter.process(vdr1)).is_ok()
-        assert (await diversity_filter.process(ctd1)).is_ok()
-        assert (await diversity_filter.process(vdr2)).is_ok()
-        assert (await diversity_filter.process(ctd2)).is_ok()
-        assert (await diversity_filter.process(vdr3)).is_err()  # VDR group full
-        assert (await diversity_filter.process(ctd3)).is_err()  # CTD group full
+        assert isinstance(await diversity_filter.process(vdr1), Ok)
+        assert isinstance(await diversity_filter.process(ctd1), Ok)
+        assert isinstance(await diversity_filter.process(vdr2), Ok)
+        assert isinstance(await diversity_filter.process(ctd2), Ok)
+        assert isinstance(await diversity_filter.process(vdr3), Err)  # VDR group full
+        assert isinstance(await diversity_filter.process(ctd3), Err)  # CTD group full
 
         assert diversity_filter.stats.processed == 4
         assert diversity_filter.stats.filtered == 2

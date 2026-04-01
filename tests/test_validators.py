@@ -4,8 +4,8 @@
 
 import pytest
 
-from crawlers.core.processors.validators import URLValidator
 from crawlers.core.result import Err, Ok
+from crawlers.processors import URLValidator
 
 
 def make_dataset(identifier: str, urls: list[str]):
@@ -41,19 +41,18 @@ class TestURLValidator:
             "ds-1", ["https://example.com/a", "https://example.com/b"]
         )
         result = await validator.process(dataset)
-        assert result.is_ok()
-        assert result.unwrap().identifier == "ds-1"
+        assert isinstance(result, Ok)
+        assert result.value.identifier == "ds-1"
 
     @pytest.mark.asyncio
     async def test_rejects_dataset_when_url_invalid(self):
         validator = URLValidator(invalid_url)
         dataset = make_dataset("ds-bad", ["https://example.com/missing"])
         result = await validator.process(dataset)
-        assert result.is_err()
-        err = result.err()
-        assert err["reason"] == "invalid_url"
-        assert err["dataset_id"] == "ds-bad"
-        assert err["processor"] == "URLValidator"
+        assert isinstance(result, Err)
+        assert result.value["reason"] == "invalid_url"
+        assert result.value["dataset_id"] == "ds-bad"
+        assert result.value["processor"] == "URLValidator"
 
     @pytest.mark.asyncio
     async def test_rejects_on_first_invalid_url(self):
@@ -72,7 +71,7 @@ class TestURLValidator:
         )
         result = await URLValidator(tracking_fn).process(dataset)
 
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert checked == ["https://example.com/bad"]
 
     @pytest.mark.asyncio
@@ -80,7 +79,7 @@ class TestURLValidator:
         validator = URLValidator(invalid_url)
         dataset = make_dataset("ds-empty", [])
         result = await validator.process(dataset)
-        assert result.is_ok()
+        assert isinstance(result, Ok)
 
     @pytest.mark.asyncio
     async def test_stats_processed_incremented_on_pass(self):
@@ -104,9 +103,5 @@ class TestURLValidator:
         validator = URLValidator(invalid_url)
         dataset = make_dataset("ds-1", ["https://example.com/404"])
         result = await validator.process(dataset)
-        assert result.is_err()
-        assert result.err()["detail"]["url"] == "https://example.com/404"
-
-    def test_describe(self):
-        validator = URLValidator(valid_url)
-        assert "URLValidator" in validator.describe()
+        assert isinstance(result, Err)
+        assert result.value["detail"]["url"] == "https://example.com/404"

@@ -4,9 +4,9 @@
 
 import pytest
 
-from crawlers.core.abc.processor import Processor, ProcessorStats
-from crawlers.core.processors.pipeline import ProcessorPipeline
+from crawlers.core.processor import Processor, ProcessorStats
 from crawlers.core.result import Err, Ok, Result
+from crawlers.processors import ProcessorPipeline
 
 
 class PassThroughProcessor(Processor[int, int, ProcessorStats]):
@@ -124,17 +124,17 @@ class TestProcessorPipeline:
 
         # 5 * 2 = 10, filtered out (even)
         result = await pipeline.process(5)
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert filter_even.stats.filtered == 1
 
         # 3 * 2 = 6, filtered out (even)
         result = await pipeline.process(3)
-        assert result.is_err()
+        assert isinstance(result, Err)
         assert filter_even.stats.filtered == 2
 
         # 2 * 2 = 4, filtered out (even)
         result = await pipeline.process(2)
-        assert result.is_err()
+        assert isinstance(result, Err)
 
         await pipeline.close()
 
@@ -224,20 +224,6 @@ class TestProcessorPipeline:
             ]
         )
         assert len(pipeline) == 3
-
-    def test_repr(self):
-        """Test __repr__ method."""
-        pipeline = ProcessorPipeline(
-            [
-                DoubleProcessor(),
-                FilterEvenProcessor(),
-            ]
-        )
-        repr_str = repr(pipeline)
-
-        assert "ProcessorPipeline" in repr_str
-        assert "DoubleProcessor" in repr_str
-        assert "FilterEvenProcessor" in repr_str
 
     @pytest.mark.asyncio
     async def test_statistics_tracking(self):

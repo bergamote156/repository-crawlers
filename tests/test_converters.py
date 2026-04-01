@@ -4,9 +4,9 @@
 
 import pytest
 
-from crawlers.core.metadata.openaire import OpenAIREBuilder
-from crawlers.core.processors.converters import OnedataConverter
-from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
+from crawlers.metadata.openaire import OpenAIREBuilder
+from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
+from crawlers.processors.converters import OnedataConverter
 
 
 @pytest.fixture
@@ -40,7 +40,7 @@ class TestOnedataConverter:
     async def test_converts_record(self, converter, sample_record):
         """Test basic conversion."""
         result = await converter.process(sample_record)
-        dataset = result.unwrap()
+        dataset = result.value
 
         assert dataset.name == "Test Dataset / With Slash"
         assert dataset.location == "Test Dataset - With Slash"  # Slash replaced
@@ -49,7 +49,7 @@ class TestOnedataConverter:
     @pytest.mark.asyncio
     async def test_generates_metadata_xml(self, converter, sample_record):
         """Test that metadata XML is generated."""
-        dataset = (await converter.process(sample_record)).unwrap()
+        dataset = (await converter.process(sample_record)).value
 
         assert dataset.metadata_xml.startswith('<?xml version="1.0"')
         assert "Test Dataset" in dataset.metadata_xml
@@ -57,7 +57,7 @@ class TestOnedataConverter:
     @pytest.mark.asyncio
     async def test_converts_files(self, converter, sample_record):
         """Test file conversion."""
-        dataset = (await converter.process(sample_record)).unwrap()
+        dataset = (await converter.process(sample_record)).value
 
         assert len(dataset.files) == 2
         assert dataset.files[0].name == "data.csv"
@@ -67,7 +67,7 @@ class TestOnedataConverter:
     @pytest.mark.asyncio
     async def test_to_json(self, converter, sample_record):
         """Test to_json method."""
-        d = (await converter.process(sample_record)).unwrap().to_json()
+        d = (await converter.process(sample_record)).value.to_json()
 
         assert d["name"] == "Test Dataset / With Slash"
         assert d["location"] == "Test Dataset - With Slash"
@@ -99,7 +99,7 @@ class TestOnedataConverter:
             ],
         )
 
-        dataset = (await converter.process(record)).unwrap()
+        dataset = (await converter.process(record)).value
 
         assert len(dataset.files) == 2
         # Paths should be resolved with enough segments to be unique

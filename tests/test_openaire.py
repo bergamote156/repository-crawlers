@@ -4,8 +4,8 @@
 
 import pytest
 
-from crawlers.core.metadata.openaire import OpenAIREBuilder
-from crawlers.plugins.ecudo.models import EcudoDataset, EcudoFile
+from crawlers.metadata.openaire import OpenAIREBuilder
+from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
 
 
 @pytest.fixture
