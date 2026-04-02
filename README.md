@@ -90,6 +90,17 @@ python -m crawlers eodc crawl SENTINEL1_GRD --datetime 2025-01-01/2025-01-31
 python -m crawlers eodc crawl SENTINEL1_GRD -n 50
 ```
 
+### Bgee Crawler
+
+Crawl species gene expression datasets from the SIB Bgee database, crawling schema.org JSON-LD embedded in HTML pages:
+
+```sh
+python -m crawlers bgee crawl
+
+# Crawl from a given base URL
+python -m crawlers bgee crawl https://bgee.org/search/species -n 200
+```
+
 ### Configuration
 
 Crawlers support configuration from multiple sources (in priority order):
