@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from crawlers.sinks import JSONLSink, NullSink
+from crawlers.sinks import JSONLSink
 
 
 class TestJSONLSink:

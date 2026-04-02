@@ -10,8 +10,9 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from pathlib import Path
 
-from crawlers.core.sink import Sink
 from crawlers.core.workspace import RunContext
+from crawlers.default.config import DefaultCrawlConfig
+from crawlers.default.crawl_spec import DefaultCrawlSpec
 from crawlers.sinks import JSONLSink, NullSink
 
 
@@ -24,7 +25,13 @@ class DefaultRunContext(RunContext):
     with rejection tracking.
     """
 
-    def __init__(self, run_dir: Path, rejection_enabled: bool = True):
+    def __init__(
+        self,
+        run_dir: Path,
+        config: DefaultCrawlConfig,
+        spec: DefaultCrawlSpec,
+        rejection_enabled: bool = True,
+    ):
         """
         Initialize with standard sinks.
 
@@ -33,9 +40,11 @@ class DefaultRunContext(RunContext):
             rejection_enabled: Whether to create rejected.jsonl
         """
         super().__init__(run_dir)
-        self.raw_sink: Sink = JSONLSink(run_dir / "raw.jsonl")
-        self.processed_sink: Sink = JSONLSink(run_dir / "processed.jsonl")
-        self.rejection_sink: Sink = (
+        self.config: DefaultCrawlConfig = config
+        self.crawl_spec: DefaultCrawlSpec = spec
+        self.raw_sink: JSONLSink = JSONLSink(run_dir / "raw.jsonl")
+        self.processed_sink: JSONLSink = JSONLSink(run_dir / "processed.jsonl")
+        self.rejection_sink: NullSink | JSONLSink = (
             JSONLSink(run_dir / "rejected.jsonl") if rejection_enabled else NullSink()
         )
 

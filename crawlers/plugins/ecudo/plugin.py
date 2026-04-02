@@ -68,18 +68,16 @@ class EcudoPlugin(DefaultCrawlerPlugin):
             banner_subtitle=f"Organization: {cfg.organization}",
         )
 
-    def build_pipeline(
-        self, config: DefaultCrawlConfig, spec: DefaultCrawlSpec, ctx: DefaultRunContext
-    ) -> ProcessorPipeline:
-        ecudo_client = cast(EcudoClient, spec.client)
-        cfg = cast(EcudoCrawlConfig, config)
+    def build_pipeline(self, ctx: DefaultRunContext) -> ProcessorPipeline:
+        ecudo_client = cast(EcudoClient, ctx.crawl_spec.client)
+        cfg = cast(EcudoCrawlConfig, ctx.config)
         df_cfg = cfg.diversity_filter
 
         return ProcessorPipeline(
             processors=[
                 DatasetFetcher[dict, EcudoDataset](
                     fetch_fn=ecudo_client.get_dataset_metadata,
-                    parser=spec.parser,
+                    parser=ctx.crawl_spec.parser,
                 ),
                 URLValidator[EcudoDataset](  # type: ignore[type-var]
                     validate_fn=ecudo_client.validate_url,
@@ -92,16 +90,16 @@ class EcudoPlugin(DefaultCrawlerPlugin):
                 ),
                 Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
                 OnedataConverter[EcudoDataset](  # type: ignore[type-var]
-                    metadata_builder=spec.metadata_builder,
+                    metadata_builder=ctx.crawl_spec.metadata_builder,
                 ),
                 Tap(ctx.processed_sink, transform=lambda d: d.to_json()),
             ],
             rejection_sink=ctx.rejection_sink,
         )
 
-    async def before_crawl(self, spec: DefaultCrawlSpec) -> None:
+    async def before_crawl(self, ctx: DefaultRunContext) -> None:
         """Validate that the requested organization exists."""
-        ecudo_client = cast(EcudoClient, spec.client)
+        ecudo_client = cast(EcudoClient, ctx.crawl_spec.client)
 
         with console.status("Validating organization..."):
             result = await ecudo_client.get_organizations()

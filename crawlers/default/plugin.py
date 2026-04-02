@@ -11,7 +11,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 import asyncio
 from abc import abstractmethod
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
 from typing import Any
@@ -20,49 +20,16 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.tree import Tree
 
-from crawlers.core.api import ApiClient
-from crawlers.core.metadata import MetadataBuilder
 from crawlers.core.orchestration import CrawlStats, run_parallel_pipeline
 from crawlers.core.plugin import CrawlerPlugin
 from crawlers.core.processor import Processor
 from crawlers.core.workspace import RunContext, make_run_dir
 from crawlers.default.config import DefaultCrawlConfig
+from crawlers.default.crawl_spec import DefaultCrawlSpec
 from crawlers.default.workspace import DefaultRunContext
 from crawlers.processors import OnedataConverter, ProcessorPipeline, Tap, URLValidator
-from crawlers.processors.parsers import Parser, ParserProcessor
+from crawlers.processors.parsers import ParserProcessor
 from crawlers.ui import console
-
-
-@dataclass
-class DefaultCrawlSpec:
-    """
-    Everything needed to execute a crawl run.
-
-    Returned by prepare_crawl() and consumed by DefaultCrawlerPlugin.
-    The framework opens the client session, builds the pipeline, and
-    drives iteration — the plugin only needs to describe what to run.
-
-    Fields:
-        client: API client (session opened by the framework via async with)
-        iterator_opts: Options passed to client.iterate_datasets(opts, state)
-        parser: Transforms raw API items to dataset models
-        metadata_builder: Produces metadata XML for each dataset
-
-    Optional fields:
-        run_context_name: Used in the run directory name (default: "default")
-        banner_subtitle: Shown under the class name in the startup banner
-        url_validation: Whether to run URLValidator (default: True)
-    """
-
-    # pylint: disable=too-many-instance-attributes
-
-    client: ApiClient
-    iterator_opts: object
-    parser: Parser
-    metadata_builder: MetadataBuilder
-
-    run_context_name: str = "default"
-    banner_subtitle: str | None = None
 
 
 class DefaultCrawlerPlugin(CrawlerPlugin):
@@ -134,7 +101,7 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
         """
         raise NotImplementedError
 
-    async def before_crawl(self, spec: DefaultCrawlSpec) -> None:
+    async def before_crawl(self, ctx: DefaultRunContext) -> None:
         """
         Hook called after client session is opened, before crawling starts.
 
@@ -142,7 +109,7 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
         credentials). spec.client is open and ready for requests.
         """
 
-    async def after_crawl(self) -> None:
+    async def after_crawl(self, ctx: DefaultRunContext) -> None:
         """Hook called after successful crawl completion."""
 
     # --- Main execution ---
@@ -159,7 +126,7 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
             }
         )
 
-        self._print_banner(config, spec, ctx)
+        self._print_banner(ctx)
 
         status = "pending"
         pipeline: ProcessorPipeline | None = None
@@ -167,9 +134,9 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
 
         try:
             async with spec.client:
-                await self.before_crawl(spec)
+                await self.before_crawl(ctx)
 
-                pipeline = self.build_pipeline(config, spec, ctx)
+                pipeline = self.build_pipeline(ctx)
                 self._print_pipeline(pipeline)
                 await pipeline.open()
 
@@ -188,7 +155,7 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
                 finally:
                     await pipeline.close()
 
-                await self.after_crawl()
+                await self.after_crawl(ctx)
                 status = "completed"
 
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -203,18 +170,16 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
             await ctx.close(status)
             self._print_summary(status, pipeline, stats, ctx)
 
-    def build_pipeline(
-        self, config: DefaultCrawlConfig, spec: DefaultCrawlSpec, ctx: DefaultRunContext
-    ) -> ProcessorPipeline:
+    def build_pipeline(self, ctx: DefaultRunContext) -> ProcessorPipeline:
         """Build the default processor pipeline."""
         processors: list[Processor] = [
-            ParserProcessor(parser=spec.parser),
+            ParserProcessor(parser=ctx.crawl_spec.parser),
             URLValidator(
-                validate_fn=spec.client.validate_url,
-                enabled=not config.no_url_validation,
+                validate_fn=ctx.crawl_spec.client.validate_url,
+                enabled=not ctx.config.no_url_validation,
             ),
             Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
-            OnedataConverter(metadata_builder=spec.metadata_builder),
+            OnedataConverter(metadata_builder=ctx.crawl_spec.metadata_builder),
             Tap(ctx.processed_sink, transform=lambda d: d.to_json()),
         ]
         return ProcessorPipeline(
@@ -232,25 +197,20 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
             plugin=self.name,
             context=spec.run_context_name,
         )
-        return DefaultRunContext(run_dir=run_dir)
+        return DefaultRunContext(run_dir=run_dir, config=config, spec=spec)
 
     # --- Display ---
 
-    def _print_banner(
-        self,
-        config: DefaultCrawlConfig,
-        spec: DefaultCrawlSpec,
-        ctx: RunContext,
-    ) -> None:
+    def _print_banner(self, ctx: DefaultRunContext) -> None:
         title = type(self).__name__
         content = f"[header]{title}[/]"
-        if spec.banner_subtitle:
-            content += f"\n[muted]{spec.banner_subtitle}[/]"
+        if ctx.crawl_spec.banner_subtitle:
+            content += f"\n[muted]{ctx.crawl_spec.banner_subtitle}[/]"
         content += f"\n[muted]Run: {ctx.run_dir}[/]"
 
         console.print(Panel(content, expand=False, border_style="cyan"))
         console.newline()
-        console.debug(pformat(config))
+        console.debug(pformat(ctx.config))
 
     def _print_pipeline(self, pipeline: ProcessorPipeline) -> None:
         tree = Tree("[highlight]Processing Pipeline[/]")
