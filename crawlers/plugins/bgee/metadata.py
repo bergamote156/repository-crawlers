@@ -4,89 +4,9 @@ __author__ = "Vincent Emonet"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-import json
 import xml.etree.ElementTree as ET
-from pathlib import Path
-from typing import Any, AsyncIterable, cast
-from xml.dom import minidom
 
-from crawlers.core.abc.api import ApiClient
-from crawlers.core.crawler import BaseCrawler
-from crawlers.core.metadata.datacite import DataCiteBuilder, DataCiteContext
-from crawlers.core.processors.converters import OnedataConverter
-from crawlers.core.processors.parsers import ParserProcessor
-from crawlers.core.processors.pipeline import ProcessorPipeline
-from crawlers.core.processors.writers import JSONLWriter
-from crawlers.core.ui import console
-from crawlers.plugins.bgee.api import BgeeClient, BgeeParser
-from crawlers.plugins.bgee.models import BgeeCrawlConfig, BgeeIteratorOpts
-
-
-class BgeeCrawler(BaseCrawler[BgeeCrawlConfig]):
-    """Crawls Bgee species pages extracting schema.org JSON-LD dataset records."""
-
-    def __init__(self, config: BgeeCrawlConfig):
-        super().__init__(config)
-        output_dir = Path(config.output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        self._raw_output_path = output_dir / "bgee_raw.jsonl"
-        self._processed_output_path = output_dir / "bgee_processed.jsonl"
-
-    def build_pipeline(self, client: ApiClient) -> ProcessorPipeline:  # noqa: ARG002
-        return ProcessorPipeline(
-            [
-                ParserProcessor(parser=BgeeParser()),
-                JSONLWriter(output_path=self._raw_output_path),
-                OnedataConverter(metadata_builder=BgeeDataCiteBuilder()),  # type: ignore[type-arg]
-                JSONLWriter(output_path=self._processed_output_path),
-            ]
-        )
-
-    def create_client(self) -> BgeeClient:
-        return BgeeClient(
-            base_url=self.config.base_url,
-            timeout=self.config.timeout,
-            max_retries=self.config.max_retries,
-        )
-
-    def create_iterator(self, client: ApiClient) -> AsyncIterable[Any]:
-        bgee_client = cast(BgeeClient, client)
-        return bgee_client.iterate_datasets(
-            BgeeIteratorOpts(
-                start_url=self.config.base_url, max_records=self.config.max_records
-            )
-        )
-
-    async def after_crawl(self) -> None:
-        """Print first record's DataCite XML for conformity check."""
-        if not (
-            self._processed_output_path.exists()
-            and self._processed_output_path.stat().st_size > 0
-        ):
-            return
-        try:
-            with open(self._processed_output_path, encoding="utf-8") as f:
-                first_line = f.readline()
-            record = json.loads(first_line)
-            metadata_xml = record.get("metadata_xml", "")
-            if metadata_xml:
-                console.newline()
-                console.section("First Record DataCite XML (Conformity Check)")
-                dom = minidom.parseString(metadata_xml)
-                pretty_xml = "\n".join(
-                    line
-                    for line in dom.toprettyxml(indent="  ").split("\n")
-                    if line.strip() and not line.startswith("<?xml")
-                )
-                console.print(pretty_xml)
-        except Exception as e:  # pylint: disable=broad-except
-            console.debug(f"Could not print first record DataCite XML: {e}")
-
-    def get_max_items(self) -> int | None:
-        return self.config.max_records
-
-    def _get_banner_subtitle(self) -> str | None:
-        return f"Start URL: {self.config.base_url}"
+from crawlers.metadata.datacite import DataCiteBuilder, DataCiteContext
 
 
 class BgeeDataCiteBuilder(DataCiteBuilder):
@@ -109,9 +29,13 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
         url = getattr(ctx.dataset, "creator_url", None)
         creators = ET.SubElement(root, "creators")
         creator = ET.SubElement(creators, "creator")
-        ET.SubElement(creator, "creatorName", {"nameType": "Organizational"}).text = name
+        ET.SubElement(creator, "creatorName", {"nameType": "Organizational"}).text = (
+            name
+        )
         if url:
-            ET.SubElement(creator, "nameIdentifier", {"nameIdentifierScheme": "URL"}).text = url
+            ET.SubElement(
+                creator, "nameIdentifier", {"nameIdentifierScheme": "URL"}
+            ).text = url
 
     def build_version_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
         """Emit dataset version if available."""
@@ -140,7 +64,9 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
         entries: list[tuple[str, str, str]] = []  # (identifier, type, relation)
         for citation in getattr(ctx.dataset, "citations", []):
             if "doi.org" in citation:
-                entries.append((citation.split("doi.org/", 1)[-1], "DOI", "IsReferencedBy"))
+                entries.append(
+                    (citation.split("doi.org/", 1)[-1], "DOI", "IsReferencedBy")
+                )
             else:
                 entries.append((citation, "URL", "IsReferencedBy"))
         if not entries:
@@ -154,7 +80,9 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
             )
             el.text = identifier
 
-    def build_publication_year_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
+    def build_publication_year_section(
+        self, root: ET.Element, ctx: DataCiteContext
+    ) -> None:
         """Use year from dataset datetime if available, fall back to current year."""
         year = ctx.publication_year
         if ctx.dataset.datetime:
@@ -169,7 +97,9 @@ class BgeeDataCiteBuilder(DataCiteBuilder):
         if not ctx.dataset.datetime:
             return
         dates = ET.SubElement(root, "dates")
-        ET.SubElement(dates, "date", {"dateType": "Updated"}).text = ctx.dataset.datetime
+        ET.SubElement(dates, "date", {"dateType": "Updated"}).text = (
+            ctx.dataset.datetime
+        )
 
     def build_descriptions_section(
         self, root: ET.Element, ctx: DataCiteContext

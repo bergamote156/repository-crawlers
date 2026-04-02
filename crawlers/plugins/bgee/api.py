@@ -13,10 +13,15 @@ from rdflib import Dataset, Namespace
 from rdflib.namespace import RDF
 from rdflib.term import Node
 
-from crawlers.core.abc.api import ApiClient
-from crawlers.core.processors.parsers import Parser
-from crawlers.core.ui import console
-from crawlers.plugins.bgee.models import BgeeDataset, BgeeFile, BgeeIteratorOpts, BgeeRawRecord
+from crawlers.core.api import ApiClient
+from crawlers.plugins.bgee.models import (
+    BgeeDataset,
+    BgeeFile,
+    BgeeIteratorOpts,
+    BgeeRawRecord,
+)
+from crawlers.processors.parsers import Parser
+from crawlers.ui import console
 
 
 class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
@@ -59,7 +64,7 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
     def _parse_page(
         self, html: str, page_url: str
     ) -> tuple[list[BgeeRawRecord], list[str]]:
-        """Load all JSON-LD from a page into one rdflib `Dataset`, return records + discover links."""
+        """Load JSON-LD into one rdflib Dataset; return records and discover URLs."""
         soup = BeautifulSoup(html, "html.parser")
         discover_urls = [
             urljoin(page_url, str(a["href"]))
@@ -88,9 +93,11 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
         return records, discover_urls
 
 
+# pylint: disable=too-few-public-methods
 class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
     """Converts a `BgeeRawRecord` (rdflib graph + node) into a `BgeeDataset`."""
 
+    # pylint: disable=too-many-locals
     def parse(self, raw: BgeeRawRecord) -> BgeeDataset | None:  # noqa: A002
         """Parse `schema:Dataset` record from rdflib graph."""
         g = raw.graph
@@ -115,11 +122,10 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
         for raw_citation in _vals(g, node, "citation"):
             try:
                 parsed = json.loads(raw_citation)
-                (
+                if isinstance(parsed, list):
                     citations.extend(parsed)
-                    if isinstance(parsed, list)
-                    else citations.append(raw_citation)
-                )
+                else:
+                    citations.append(raw_citation)
             except (json.JSONDecodeError, ValueError):
                 citations.append(raw_citation)
 
@@ -159,7 +165,10 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
                 if not url or url in seen_urls:
                     continue
                 seen_urls.add(url)
-                name = _val(g, dist, "name") or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
+                name = (
+                    _val(g, dist, "name")
+                    or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
+                )
                 files.append(BgeeFile(name=name, url=url))
         return files
 

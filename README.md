@@ -98,7 +98,7 @@ Crawl species gene expression datasets from the SIB Bgee database, crawling sche
 python -m crawlers bgee crawl
 
 # Crawl from a given base URL
-python -m crawlers bgee crawl https://bgee.org/search/species -n 200
+python -m crawlers bgee crawl --base-url https://bgee.org/search/species -n 200
 ```
 
 ### Configuration

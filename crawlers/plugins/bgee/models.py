@@ -1,5 +1,7 @@
 """Bgee Data Models."""
 
+# pylint: disable=too-few-public-methods
+
 __author__ = "Vincent Emonet"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -11,7 +13,7 @@ from typing import Sequence
 from rdflib import Dataset
 from rdflib.term import Node
 
-from crawlers.core.config import ApiConfig, BaseCrawlConfig, opt
+from crawlers.default.config import ApiConfig, DefaultCrawlConfig, opt
 
 
 class BgeeApiConfig(ApiConfig):
@@ -23,14 +25,8 @@ class BgeeApiConfig(ApiConfig):
     )
 
 
-class BgeeCrawlConfig(BgeeApiConfig, BaseCrawlConfig, kw_only=True):
+class BgeeCrawlConfig(BgeeApiConfig, DefaultCrawlConfig, kw_only=True):
     """Full configuration for Bgee schema.org JSON-LD crawling."""
-
-    max_records: int | None = opt(
-        None,
-        cli=("-n", "--max-records"),
-        description="Maximum number of datasets to fetch",
-    )
 
 
 @dataclass
@@ -65,7 +61,7 @@ class BgeeFile:
 
 
 @dataclass
-class BgeeDataset:
+class BgeeDataset:  # pylint: disable=too-many-instance-attributes
     """Bgee gene expression dataset.
 
     Satisfies both `Dataset` and `DataCiteDataset` protocols via duck typing:
