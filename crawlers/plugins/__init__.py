@@ -11,10 +11,12 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from crawlers.plugins.bgee.plugin import BgeePlugin
 from crawlers.plugins.ecudo.plugin import EcudoPlugin
 from crawlers.plugins.eodc.plugin import EODCPlugin
+from crawlers.plugins.vip.plugin import VipPlugin
 
 # List of all available plugins
 REGISTERED_PLUGINS = [
     EcudoPlugin(),
     EODCPlugin(),
     BgeePlugin(),
+    VipPlugin(),
 ]
