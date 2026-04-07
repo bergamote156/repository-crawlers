@@ -37,11 +37,7 @@ class VipPlugin(DefaultCrawlerPlugin):
     def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
         cfg = cast(VipCrawlConfig, config)
 
-        client = VipClient(
-            base_url=cfg.base_url,
-            timeout=cfg.timeout,
-            max_retries=cfg.max_retries,
-        )
+        client = VipClient.from_config(cfg)
 
         return DefaultCrawlSpec(
             client=client,
@@ -59,11 +55,7 @@ class VipPlugin(DefaultCrawlerPlugin):
     @command("list-collections", VipApiConfig, help="List available VIP collections")
     async def list_collections(self, config: VipApiConfig) -> None:
         """List all collections available in the VIP Girder instance."""
-        async with VipClient(
-            base_url=config.base_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries,
-        ) as client:
+        async with VipClient.from_config(config) as client:
             with console.status("Fetching collections..."):
                 result = await client.list_collections()
 

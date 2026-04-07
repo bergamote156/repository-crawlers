@@ -9,10 +9,11 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
-from typing import AsyncIterator, assert_never
+from typing import AsyncIterator, Self, assert_never
 
 from crawlers.core.api import ApiClient, ApiFailure
 from crawlers.core.result import Err, Ok, Result
+from crawlers.plugins.eodc.config import EODCApiConfig
 from crawlers.ui import console
 
 
@@ -34,6 +35,15 @@ class EODCClient(ApiClient[EODCSearchOpts, dict]):
     Iterates over STAC items (dict) using POST /search endpoint.
     Handles pagination via 'next' links.
     """
+
+    @classmethod
+    def from_config(cls, config: EODCApiConfig) -> Self:
+        """Construct client object."""
+        return cls(
+            base_url=config.base_url,
+            timeout=config.timeout,
+            max_retries=config.max_retries,
+        )
 
     # pylint: disable=invalid-overridden-method
     async def iterate_datasets(self, opts: EODCSearchOpts) -> AsyncIterator[dict]:

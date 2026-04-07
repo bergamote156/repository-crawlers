@@ -9,10 +9,11 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
-from typing import AsyncIterator, assert_never
+from typing import AsyncIterator, Self, assert_never
 
 from crawlers.core.api import ApiClient, ApiFailure
 from crawlers.core.result import Err, Ok, Result
+from crawlers.plugins.vip.config import VipApiConfig
 from crawlers.ui import console
 
 
@@ -46,6 +47,15 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
 
     _COLLECTION_PAGE_SIZE = 100
     _DEFAULT_PAGE_SIZE = 100
+
+    @classmethod
+    def from_config(cls, config: VipApiConfig) -> Self:
+        """Construct client object."""
+        return cls(
+            base_url=config.base_url,
+            timeout=config.timeout,
+            max_retries=config.max_retries,
+        )
 
     async def list_collections(self) -> Result[list[dict], ApiFailure]:
         """

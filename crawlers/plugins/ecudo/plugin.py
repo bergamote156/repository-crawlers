@@ -51,11 +51,7 @@ class EcudoPlugin(DefaultCrawlerPlugin):
         self._crawl_config = cfg
 
         return DefaultCrawlSpec(
-            client=EcudoClient(
-                base_url=cfg.base_url,
-                timeout=cfg.timeout,
-                max_retries=cfg.max_retries,
-            ),
+            client=EcudoClient.from_config(cfg),
             iterator_opts=EcudoIteratorOpts(
                 org_id=cfg.organization,
                 page_size=cfg.page_size,
@@ -118,11 +114,7 @@ class EcudoPlugin(DefaultCrawlerPlugin):
     @command("list-orgs", EcudoApiConfig, help="List available organizations")
     async def list_organizations(self, config: EcudoApiConfig) -> None:
         """List all available organizations from Ecudo."""
-        async with EcudoClient(
-            base_url=config.base_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries,
-        ) as client:
+        async with EcudoClient.from_config(config) as client:
             with console.status("Fetching organizations..."):
                 result = await client.get_organizations()
 

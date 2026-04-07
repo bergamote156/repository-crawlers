@@ -9,10 +9,11 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
-from typing import AsyncIterator, TypedDict, assert_never
+from typing import AsyncIterator, Self, TypedDict, assert_never
 
 from crawlers.core.api import ApiClient, ApiFailure
 from crawlers.core.result import Err, Ok, Result
+from crawlers.plugins.ecudo.config import EcudoApiConfig
 from crawlers.ui import console
 
 
@@ -40,6 +41,15 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
     Iterates over dataset IDs (str).
     Provides method to fetch full metadata for a given ID.
     """
+
+    @classmethod
+    def from_config(cls, config: EcudoApiConfig) -> Self:
+        """Construct client object."""
+        return cls(
+            base_url=config.base_url,
+            timeout=config.timeout,
+            max_retries=config.max_retries,
+        )
 
     # pylint: disable=invalid-overridden-method
     async def iterate_datasets(self, opts: EcudoIteratorOpts) -> AsyncIterator[str]:

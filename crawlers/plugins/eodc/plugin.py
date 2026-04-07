@@ -33,11 +33,6 @@ class EODCPlugin(DefaultCrawlerPlugin):
 
     def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
         cfg = cast(EODCCrawlConfig, config)
-        api_client = EODCClient(
-            base_url=cfg.base_url,
-            timeout=cfg.timeout,
-            max_retries=cfg.max_retries,
-        )
 
         collections = cfg.get_collections_list()
         iterator_opts = EODCSearchOpts(
@@ -49,7 +44,7 @@ class EODCPlugin(DefaultCrawlerPlugin):
         )
 
         return DefaultCrawlSpec(
-            client=api_client,
+            client=EODCClient.from_config(cfg),
             iterator_opts=iterator_opts,
             parser=EODCParser(),
             run_context_name=collections[0] if collections else "eodc",
@@ -59,11 +54,7 @@ class EODCPlugin(DefaultCrawlerPlugin):
     @command("list-collections", EODCApiConfig, help="List available STAC collections")
     async def list_collections(self, config: EODCApiConfig) -> None:
         """List all available STAC collections from EODC."""
-        async with EODCClient(
-            base_url=config.base_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries,
-        ) as client:
+        async with EODCClient.from_config(config) as client:
             with console.status("Fetching collections..."):
                 result = await client.get_collections()
 
