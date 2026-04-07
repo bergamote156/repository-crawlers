@@ -8,7 +8,6 @@ from crawlers.metadata.openaire import (
     AccessRights,
     BoundingBox,
     FileLocation,
-    OpenAIREBuilder,
     OpenAIRERecord,
     ResourceType,
 )
@@ -41,44 +40,44 @@ class TestOpenAIREBuilder:
     """Tests for `OpenAIREBuilder.build`."""
 
     def test_produces_valid_xml_envelope(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert result.startswith("<?xml")
         assert "oaire:resource" in result
         assert result.rstrip().endswith("</oaire:resource>")
 
     def test_contains_title(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "Test Ocean Dataset" in result
         assert "datacite:title" in result
 
     def test_contains_identifier(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "urn:SDN:CDI:iopan.pl:uuid:test-123" in result
         assert "datacite:identifier" in result
 
     def test_contains_publisher(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "Institute of Oceanology" in result
         assert "dc:publisher" in result
 
     def test_contains_description(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "Oceanographic data from research vessel" in result
         assert "dc:description" in result
 
     def test_contains_subjects(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         for keyword in ("ocean", "temperature", "salinity"):
             assert f"<datacite:subject>{keyword}</datacite:subject>" in result
 
     def test_contains_file_location(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "https://example.com/data.zip" in result
         assert "oaire:file" in result
         assert 'mimeType="application/zip"' in result
 
     def test_contains_geo_location(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "datacite:geoLocationBox" in result
         assert (
             "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
@@ -88,12 +87,12 @@ class TestOpenAIREBuilder:
         )
 
     def test_contains_temporal_coverage(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert "2024-01-01/2024-01-31" in result
         assert "dc:coverage" in result
 
     def test_contains_access_rights(self, sample_record):
-        result = OpenAIREBuilder().build(sample_record)
+        result = sample_record.to_xml()
         assert AccessRights.OPEN.uri in result
         assert "open access" in result
 
@@ -105,7 +104,7 @@ class TestOpenAIREBuilder:
             publication_date="2024-01-01",
             access_rights=AccessRights.OPEN,
         )
-        result = OpenAIREBuilder().build(record)
+        result = record.to_xml()
         assert "&lt;special&gt;" in result
         assert "&amp;" in result
         # ElementTree escapes apostrophes only inside attribute values, not text.
@@ -119,7 +118,7 @@ class TestOpenAIREBuilder:
             publication_date="2024-01-01",
             access_rights=AccessRights.OPEN,
         )
-        result = OpenAIREBuilder().build(record)
+        result = record.to_xml()
 
         assert "Minimal Dataset" in result
         # Optional sections must be absent.

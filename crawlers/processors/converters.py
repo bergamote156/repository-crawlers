@@ -12,7 +12,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol, Sequence
 
-from crawlers.core.metadata import MetadataBuilder
+from crawlers.core.metadata import MetadataRecord
 from crawlers.core.onedata import OnedataDataset, OnedataFile
 from crawlers.core.processor import Processor, ProcessorStats
 from crawlers.core.result import Err, Ok, Result
@@ -26,14 +26,14 @@ class DatasetFile(Protocol):
     url: str
 
 
-class Dataset[RecordT](Protocol):
+class Dataset(Protocol):
     # pylint: disable=too-few-public-methods
     """Pipeline carrier exposing a typed metadata record to the converter."""
 
     identifier: str
     title: str
     files: Sequence[DatasetFile]
-    metadata_record: RecordT
+    metadata_record: MetadataRecord
 
 
 @dataclass
@@ -44,7 +44,7 @@ class ConverterStats(ProcessorStats):
         return f"converted: {self.processed}"
 
 
-class OnedataConverter[RecordT, DatasetT: Dataset](
+class OnedataConverter[DatasetT: Dataset](
     Processor[DatasetT, OnedataDataset, ConverterStats]
 ):
     """
@@ -59,19 +59,6 @@ class OnedataConverter[RecordT, DatasetT: Dataset](
     use 'crawlers.plugins.utils.paths.resolve_path_collisions' to derive
     paths.
     """
-
-    def __init__(
-        self,
-        metadata_builder: MetadataBuilder[RecordT],
-        enabled: bool = True,
-    ):
-        super().__init__(enabled=enabled)
-        self.metadata_builder = metadata_builder
-
-    def describe(self) -> str:
-        """Return description with metadata builder name."""
-        builder_name = type(self.metadata_builder).__name__
-        return f"OnedataConverter: build Onedata dataset with {builder_name}"
 
     def _create_stats(self) -> ConverterStats:
         return ConverterStats()
@@ -100,7 +87,7 @@ class OnedataConverter[RecordT, DatasetT: Dataset](
             name=item.title,
             location=item.title.replace("/", "-"),
             pid=item.identifier,
-            metadata_xml=self.metadata_builder.build(item.metadata_record),
+            metadata_xml=item.metadata_record.to_xml(),
             files=[OnedataFile(path=f.path, url=f.url) for f in item.files],
         )
 

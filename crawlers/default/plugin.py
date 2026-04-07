@@ -200,7 +200,7 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
                 enabled=not ctx.config.no_url_validation,
             ),
             Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
-            OnedataConverter(metadata_builder=spec.metadata_builder),
+            OnedataConverter(),
             Tap(ctx.processed_sink, transform=lambda d: d.to_json()),
         ]
         return ProcessorPipeline(

@@ -5,12 +5,7 @@
 import pytest
 
 from crawlers.core.result import Err
-from crawlers.metadata.openaire import (
-    AccessRights,
-    OpenAIREBuilder,
-    OpenAIRERecord,
-    ResourceType,
-)
+from crawlers.metadata.openaire import AccessRights, OpenAIRERecord, ResourceType
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
 from crawlers.processors.converters import OnedataConverter
 
@@ -46,7 +41,7 @@ def _make_record(
 
 @pytest.fixture
 def converter():
-    return OnedataConverter(OpenAIREBuilder())
+    return OnedataConverter()
 
 
 @pytest.fixture

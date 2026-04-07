@@ -16,7 +16,6 @@ from crawlers.core.plugin import command
 from crawlers.core.result import Err
 from crawlers.default.config import DefaultCrawlConfig
 from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
-from crawlers.metadata.datacite import DataCiteBuilder
 from crawlers.plugins.vip.api import VipClient, VipIteratorOpts
 from crawlers.plugins.vip.config import VipApiConfig, VipCrawlConfig
 from crawlers.plugins.vip.parser import VipParser
@@ -53,7 +52,6 @@ class VipPlugin(DefaultCrawlerPlugin):
             ),
             resolve_fn=client.resolve_dataset,
             parser=VipParser(),
-            metadata_builder=DataCiteBuilder(),
             run_context_name=cfg.collection,
             banner_subtitle=f"Collection: {cfg.collection}",
         )

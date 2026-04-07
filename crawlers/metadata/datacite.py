@@ -18,8 +18,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from enum import Enum
 
-from crawlers.core.metadata import MetadataBuilder
-
 # --- Namespaces ---------------------------------------------------------------
 
 NS_DATACITE = "http://datacite.org/schema/kernel-4"
@@ -148,7 +146,7 @@ class Rights:
 # pylint: disable=too-many-instance-attributes
 class DataCiteRecord:
     """
-    Structured input for `DataCiteBuilder`.
+    Structured record for building DataCite XML.
 
     Mandatory properties (M in DataCite Kernel 4.5) have no default — the
     dataclass constructor enforces their presence. Recommended/Optional fields
@@ -175,38 +173,38 @@ class DataCiteRecord:
     rights_list: list[Rights] = field(default_factory=list)
     version: str | None = None
 
+    def to_xml(self) -> str:
+        """Build DataCite XML."""
+        return _build(self)
+
 
 # --- Builder ------------------------------------------------------------------
 
 
-# pylint: disable=too-few-public-methods
-class DataCiteBuilder(MetadataBuilder[DataCiteRecord]):
-    """Render a `DataCiteRecord` to a DataCite Kernel 4.5 XML string."""
+def _build(record: DataCiteRecord) -> str:
+    root = ET.Element(
+        _q(NS_DATACITE, "resource"),
+        {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
+    )
 
-    def build(self, record: DataCiteRecord) -> str:
-        root = ET.Element(
-            _q(NS_DATACITE, "resource"),
-            {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
-        )
+    _add_identifier(root, record)
+    _add_creators(root, record)
+    _add_titles(root, record)
+    _add_publisher(root, record)
+    _add_publication_year(root, record)
+    _add_resource_type(root, record)
+    _add_subjects(root, record)
+    _add_dates(root, record)
+    _add_geo_locations(root, record)
+    _add_descriptions(root, record)
+    _add_related_identifiers(root, record)
+    _add_rights_list(root, record)
+    _add_version(root, record)
 
-        _add_identifier(root, record)
-        _add_creators(root, record)
-        _add_titles(root, record)
-        _add_publisher(root, record)
-        _add_publication_year(root, record)
-        _add_resource_type(root, record)
-        _add_subjects(root, record)
-        _add_dates(root, record)
-        _add_geo_locations(root, record)
-        _add_descriptions(root, record)
-        _add_related_identifiers(root, record)
-        _add_rights_list(root, record)
-        _add_version(root, record)
-
-        ET.indent(root, space="  ")
-        return ET.tostring(
-            root, encoding="unicode", xml_declaration=True, short_empty_elements=False
-        )
+    ET.indent(root, space="  ")
+    return ET.tostring(
+        root, encoding="unicode", xml_declaration=True, short_empty_elements=False
+    )
 
 
 # --- Section builders (private) ----------------------------------------------

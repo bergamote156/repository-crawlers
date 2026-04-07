@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from crawlers.core.api import ApiClient
-from crawlers.core.metadata import MetadataBuilder
 from crawlers.core.result import Result
 from crawlers.processors.parsers import Parser
 
@@ -26,7 +25,6 @@ class DefaultCrawlSpec:
         client: API client (session opened by the framework via async with)
         iterator_opts: Options passed to client.iterate_datasets(opts, state)
         parser: Transforms raw API items to dataset models
-        metadata_builder: Produces metadata XML for each dataset
 
     Optional fields:
         resolve_fn: If provided, the pipeline starts with a DatasetResolver
@@ -42,7 +40,6 @@ class DefaultCrawlSpec:
     client: ApiClient
     iterator_opts: object
     parser: Parser
-    metadata_builder: MetadataBuilder
 
     resolve_fn: Callable[[Any], Awaitable[Result[Any, Any]]] | None = None
     run_context_name: str = "default"

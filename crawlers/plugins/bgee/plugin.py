@@ -14,7 +14,6 @@ from crawlers.default.plugin import (
     DefaultCrawlSpec,
     DefaultRunContext,
 )
-from crawlers.metadata.datacite import DataCiteBuilder
 from crawlers.plugins.bgee.api import BgeeClient, BgeeParser
 from crawlers.plugins.bgee.models import BgeeCrawlConfig, BgeeIteratorOpts
 from crawlers.ui import console
@@ -40,7 +39,6 @@ class BgeePlugin(DefaultCrawlerPlugin):
                 start_url=cfg.base_url, max_records=cfg.max_records
             ),
             parser=BgeeParser(),
-            metadata_builder=DataCiteBuilder(),
             run_context_name=self.name,
             banner_subtitle=f"Start URL: {cfg.base_url}",
         )

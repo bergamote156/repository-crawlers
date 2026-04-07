@@ -19,8 +19,6 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from enum import Enum
 
-from crawlers.core.metadata import MetadataBuilder
-
 # --- Namespaces ---------------------------------------------------------------
 
 NS_XSI = "http://www.w3.org/2001/XMLSchema-instance"
@@ -35,20 +33,15 @@ _SCHEMA_LOCATION = (
     "https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd"
 )
 
-
-def _register_namespaces() -> None:
-    """Bind our preferred prefixes in ElementTree's global namespace map."""
-    ET.register_namespace("xsi", NS_XSI)
-    ET.register_namespace("dc", NS_DC)
-    ET.register_namespace("dcterms", NS_DCTERMS)
-    ET.register_namespace("datacite", NS_DATACITE)
-    ET.register_namespace("oaire", NS_OAIRE)
-    ET.register_namespace("rdf", NS_RDF)
-
-
-_register_namespaces()
-
 _XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
+
+# Bind our preferred prefixes in ElementTree's global namespace map.
+ET.register_namespace("xsi", NS_XSI)
+ET.register_namespace("dc", NS_DC)
+ET.register_namespace("dcterms", NS_DCTERMS)
+ET.register_namespace("datacite", NS_DATACITE)
+ET.register_namespace("oaire", NS_OAIRE)
+ET.register_namespace("rdf", NS_RDF)
 
 
 def _q(ns: str, tag: str) -> str:
@@ -121,7 +114,7 @@ class FileLocation:
 # pylint: disable=too-many-instance-attributes
 class OpenAIRERecord:
     """
-    Structured input for `OpenAIREBuilder`.
+    Structured record for building OpenAIRE XML.
 
     Required fields (M / "Mandatory" in OpenAIRE Guidelines v4.0) have no
     default — the dataclass constructor enforces their presence. Optional
@@ -148,41 +141,41 @@ class OpenAIRERecord:
     temporal_coverage: str | None = None
     spatial_coverage: BoundingBox | None = None
 
+    def to_xml(self) -> str:
+        """Build OpenAIRE XML."""
+        return _build(self)
+
 
 # --- Builder ------------------------------------------------------------------
 
 
-# pylint: disable=too-few-public-methods
-class OpenAIREBuilder(MetadataBuilder[OpenAIRERecord]):
-    """Render an `OpenAIRERecord` to an OpenAIRE v4.0 XML string."""
+def _build(record: OpenAIRERecord) -> str:
+    root = ET.Element(
+        _q(NS_OAIRE, "resource"),
+        {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
+    )
 
-    def build(self, record: OpenAIRERecord) -> str:
-        root = ET.Element(
-            _q(NS_OAIRE, "resource"),
-            {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
-        )
+    # Order matches the OpenAIRE Guidelines section numbering for
+    # readability. Sections that depend on optional fields no-op when
+    # the field is unset.
+    _add_title(root, record)
+    _add_creator(root, record)
+    _add_language(root, record)
+    _add_publisher(root, record)
+    _add_publication_date(root, record)
+    _add_resource_type(root, record)
+    _add_description(root, record)
+    _add_identifier(root, record)
+    _add_access_rights(root, record)
+    _add_subjects(root, record)
+    _add_temporal_coverage(root, record)
+    _add_spatial_coverage(root, record)
+    _add_files(root, record)
 
-        # Order matches the OpenAIRE Guidelines section numbering for
-        # readability. Sections that depend on optional fields no-op when
-        # the field is unset.
-        _add_title(root, record)
-        _add_creator(root, record)
-        _add_language(root, record)
-        _add_publisher(root, record)
-        _add_publication_date(root, record)
-        _add_resource_type(root, record)
-        _add_description(root, record)
-        _add_identifier(root, record)
-        _add_access_rights(root, record)
-        _add_subjects(root, record)
-        _add_temporal_coverage(root, record)
-        _add_spatial_coverage(root, record)
-        _add_files(root, record)
-
-        ET.indent(root, space="  ")
-        return ET.tostring(
-            root, encoding="unicode", xml_declaration=True, short_empty_elements=False
-        )
+    ET.indent(root, space="  ")
+    return ET.tostring(
+        root, encoding="unicode", xml_declaration=True, short_empty_elements=False
+    )
 
 
 # --- Section builders (private) ----------------------------------------------
