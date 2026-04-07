@@ -20,9 +20,9 @@ from crawlers.core.result import Err, Ok
 from crawlers.default.config import DefaultCrawlConfig
 from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
 from crawlers.default.workspace import DefaultRunContext
-from crawlers.metadata.openaire import OpenAIREBuilder
 from crawlers.plugins.ecudo.api import EcudoClient, EcudoIteratorOpts
 from crawlers.plugins.ecudo.config import EcudoApiConfig, EcudoCrawlConfig
+from crawlers.plugins.ecudo.metadata import EcudoOpenAIREBuilder
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoParser
 from crawlers.processors.converters import OnedataConverter
 from crawlers.processors.filters import DiversityFilter
@@ -63,7 +63,7 @@ class EcudoPlugin(DefaultCrawlerPlugin):
                 max_datasets=cfg.max_records,
             ),
             parser=EcudoParser(),
-            metadata_builder=OpenAIREBuilder(),
+            metadata_builder=EcudoOpenAIREBuilder(),
             run_context_name=cfg.organization,
             banner_subtitle=f"Organization: {cfg.organization}",
         )

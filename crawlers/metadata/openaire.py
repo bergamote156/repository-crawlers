@@ -1,414 +1,316 @@
 """
-OpenAIRE Metadata Generator
+OpenAIRE Metadata Builder.
 
 Generates OpenAIRE-compliant XML metadata based on:
 OpenAIRE Guidelines for Literature Repository Managers v4.0.0
 https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/
+
+The builder consumes a structured :class:`OpenAIRERecord` describing a single
+resource. Plugins are responsible for converting their domain dataset into a
+record — keeping the builder ignorant of source-specific quirks (defaults,
+fallbacks, ad-hoc parsing).
 """
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Callable, Protocol, Sequence, Tuple
+import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field
+from enum import Enum
 
 from crawlers.core.metadata import MetadataBuilder
-from crawlers.ui import console
 
-# COAR Access Rights vocabulary mapping
-# https://vocabularies.coar-repositories.org/access_rights/
-ACCESS_RIGHTS_MAP = {
-    "public": ("http://purl.org/coar/access_right/c_abf2", "open access"),
-}
-DEFAULT_ACCESS_RIGHTS = ACCESS_RIGHTS_MAP["public"]
+# --- Namespaces ---------------------------------------------------------------
 
-# MIME type inference from file extensions
-MIME_TYPES = {
-    ".zip": "application/zip",
-    ".tar": "application/x-tar",
-    ".gz": "application/gzip",
-    ".tar.gz": "application/gzip",
-    ".tgz": "application/gzip",
-    ".pdf": "application/pdf",
-    ".csv": "text/csv",
-    ".json": "application/json",
-    ".xml": "application/xml",
-    ".nc": "application/x-netcdf",
-    ".hdf": "application/x-hdf",
-    ".hdf5": "application/x-hdf5",
-    ".h5": "application/x-hdf5",
-    ".txt": "text/plain",
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".tif": "image/tiff",
-    ".tiff": "image/tiff",
-    ".geojson": "application/geo+json",
-}
+NS_XSI = "http://www.w3.org/2001/XMLSchema-instance"
+NS_DC = "http://purl.org/dc/elements/1.1/"
+NS_DCTERMS = "http://purl.org/dc/terms/"
+NS_DATACITE = "http://datacite.org/schema/kernel-4"
+NS_OAIRE = "http://namespace.openaire.eu/schema/oaire/"
+NS_RDF = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 
-# XML namespace declarations
-XML_NAMESPACES = (
-    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-    'xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
-    'xmlns:dc="http://purl.org/dc/elements/1.1/" '
-    'xmlns:dcterms="http://purl.org/dc/terms/" '
-    'xmlns:datacite="http://datacite.org/schema/kernel-4" '
-    'xmlns:oaire="http://namespace.openaire.eu/schema/oaire/" '
-    'xsi:schemaLocation="http://namespace.openaire.eu/schema/oaire/ '
-    'https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd"'
+_SCHEMA_LOCATION = (
+    "http://namespace.openaire.eu/schema/oaire/ "
+    "https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd"
 )
 
+def _register_namespaces() -> None:
+    """Bind our preferred prefixes in ElementTree's global namespace map."""
+    ET.register_namespace("xsi", NS_XSI)
+    ET.register_namespace("dc", NS_DC)
+    ET.register_namespace("dcterms", NS_DCTERMS)
+    ET.register_namespace("datacite", NS_DATACITE)
+    ET.register_namespace("oaire", NS_OAIRE)
+    ET.register_namespace("rdf", NS_RDF)
 
-class DatasetFile(Protocol):
-    # pylint: disable=too-few-public-methods
-    """Dataset file object required properties by OpenAIREBuilder."""
 
-    url: str
+_register_namespaces()
+
+_XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
-class Dataset(Protocol):
-    """Dataset object required properties by OpenAIREBuilder."""
+def _q(ns: str, tag: str) -> str:
+    """Build an ElementTree Clark-notation tag."""
+    return f"{{{ns}}}{tag}"
 
-    # pylint: disable=duplicate-code, too-few-public-methods
 
-    identifier: str
-    title: str
-    description: str
-    publisher: str
-    issued: str  # publication date
-    files: Sequence[DatasetFile]
-    language: str
-    keywords: list[str]
-    access_level: str
-    spatial: str | None
-    temporal: str | None
+# --- Vocabularies -------------------------------------------------------------
+
+
+class AccessRights(Enum):
+    """COAR Access Rights vocabulary (https://vocabularies.coar-repositories.org/access_rights/)."""
+
+    OPEN = ("http://purl.org/coar/access_right/c_abf2", "open access")
+    EMBARGOED = ("http://purl.org/coar/access_right/c_f1cf", "embargoed access")
+    RESTRICTED = ("http://purl.org/coar/access_right/c_16ec", "restricted access")
+    METADATA_ONLY = ("http://purl.org/coar/access_right/c_14cb", "metadata only access")
+
+    @property
+    def uri(self) -> str:
+        return self.value[0]
+
+    @property
+    def label(self) -> str:
+        return self.value[1]
+
+
+class ResourceType(Enum):
+    """COAR Resource Type vocabulary (subset)."""
+
+    DATASET = ("http://purl.org/coar/resource_type/c_ddb1", "dataset")
+    TEXT = ("http://purl.org/coar/resource_type/c_18cf", "text")
+    IMAGE = ("http://purl.org/coar/resource_type/c_c513", "image")
+
+    @property
+    def uri(self) -> str:
+        return self.value[0]
+
+    @property
+    def label(self) -> str:
+        return self.value[1]
+
+
+# --- Record model -------------------------------------------------------------
 
 
 @dataclass
-class OpenAIREContext:
-    """Context object passed to section builders."""
+class BoundingBox:
+    """Geographic bounding box in WGS84 decimal degrees."""
 
-    dataset: Dataset
-    language_code: str
-    rights_uri: str
-    rights_label: str
+    west: float
+    south: float
+    east: float
+    north: float
 
 
-class OpenAIREBuilder(MetadataBuilder[Dataset]):
+@dataclass
+class FileLocation:
+    """A downloadable file referenced by an OpenAIRE record."""
+
+    url: str
+    mime_type: str | None = None
+
+
+@dataclass
+class OpenAIRERecord:
     """
-    Base OpenAIRE v4.0 metadata generator.
+    Structured input for :class:`OpenAIREBuilder`.
 
-    Can be extended by plugins to add custom sections or modify existing ones.
+    Required fields (M / "Mandatory" in OpenAIRE Guidelines v4.0) have no
+    default — the dataclass constructor enforces their presence. Optional
+    fields default to ``None`` / empty collections; sections corresponding
+    to absent fields are not emitted.
     """
 
-    def build(self, dataset: Dataset) -> str:
-        """
-        Generate OpenAIRE-compliant XML metadata from EcudoDataset.
+    # Mandatory (M)
+    title: str
+    creator: str
+    identifier: str
+    publication_date: str  # ISO 8601 date string
+    access_rights: AccessRights
+    resource_type: ResourceType = ResourceType.DATASET
 
-        OpenAIRE Guidelines v4.0 Mandatory properties:
-            - datacite:title (M)
-            - datacite:creator (M)
-            - datacite:date - Publication Date (M)
-            - oaire:resourceType (M)
-            - datacite:identifier - Resource Identifier (M)
-            - datacite:rights - Access Rights (M)
+    # Mandatory if Applicable (MA)
+    language: str | None = None  # ISO 639-1/3 code; section omitted if None
+    publisher: str | None = None
+    description: str | None = None
+    subjects: list[str] = field(default_factory=list)
+    files: list[FileLocation] = field(default_factory=list)
 
-        Mandatory if Applicable (MA):
-            - dc:language
-            - dc:publisher
-            - dc:description
-            - datacite:subject
-            - oaire:file - File Location
+    # Recommended / Optional (R/O)
+    temporal_coverage: str | None = None
+    spatial_coverage: BoundingBox | None = None
 
-        Args:
-            dataset: Structured dataset
 
-        Returns:
-            OpenAIRE-compliant XML string
-        """
-        ctx = self._build_context(dataset)
+# --- Builder ------------------------------------------------------------------
 
-        xml_lines = [
-            '<?xml version="1.0" encoding="UTF-8"?>',
-            f"<oaire:resource {XML_NAMESPACES}>",
-        ]
 
-        for section_builder in self.get_sections():
-            section_lines = section_builder(ctx)
-            if section_lines:
-                # Add spacing between sections if previous one wasn't empty
-                if xml_lines and xml_lines[-1] != "":
-                    xml_lines.append("")
-                xml_lines.extend(section_lines)
+class OpenAIREBuilder(MetadataBuilder[OpenAIRERecord]):
+    """Render an :class:`OpenAIRERecord` to an OpenAIRE v4.0 XML string."""
 
-        xml_lines.append("")
-        xml_lines.append("</oaire:resource>")
+    def build(self, record: OpenAIRERecord) -> str:
+        # Re-assert prefixes defensively: ``ET.register_namespace`` mutates a
+        # process-global map and other modules (notably the legacy DataCite
+        # builder) bind these URIs to different prefixes at import time.
+        _register_namespaces()
 
-        return "\n".join(xml_lines)
-
-    def get_sections(self) -> list[Callable[[OpenAIREContext], list[str]]]:
-        """
-        Get the list of section builder methods.
-
-        Override specific methods or this list to customize generation.
-
-        Returns:
-            List of callables that take context and return list of XML lines
-        """
-        return [
-            self.build_title_section,
-            self.build_creator_section,
-            self.build_language_section,
-            self.build_publisher_section,
-            self.build_publication_date_section,
-            self.build_resource_type_section,
-            self.build_description_section,
-            self.build_identifier_section,
-            self.build_access_rights_section,
-            self.build_subjects_section,
-            self.build_temporal_section,
-            self.build_geo_location_section,
-            self.build_files_section,
-        ]
-
-    # --- Section Builders ---
-
-    def build_title_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build title section."""
-        return [
-            "  <!-- 1. Title (M) -->",
-            "  <datacite:titles>",
-            f'    <datacite:title xml:lang="{ctx.language_code}">',
-            f"      {self._escape_xml(ctx.dataset.title)}",
-            "    </datacite:title>",
-            "  </datacite:titles>",
-        ]
-
-    def build_creator_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build creator section."""
-        return [
-            "  <!-- 2. Creator (M) -->",
-            "  <datacite:creators>",
-            "    <datacite:creator>",
-            '      <datacite:creatorName nameType="Organizational">',
-            f"        {self._escape_xml(ctx.dataset.publisher)}",
-            "      </datacite:creatorName>",
-            "    </datacite:creator>",
-            "  </datacite:creators>",
-        ]
-
-    def build_language_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build language section."""
-        return [
-            "  <!-- 8. Language (MA) -->",
-            f"  <dc:language>{ctx.language_code}</dc:language>",
-        ]
-
-    def build_publisher_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build publisher section."""
-        return [
-            "  <!-- 9. Publisher (MA) -->",
-            f"  <dc:publisher>{self._escape_xml(ctx.dataset.publisher)}</dc:publisher>",
-        ]
-
-    def build_publication_date_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build publication date section."""
-        publication_date = ctx.dataset.issued or datetime.now().strftime("%Y-%m-%d")
-        return [
-            "  <!-- 10. Publication Date (M) -->",
-            "  <datacite:dates>",
-            f'    <datacite:date dateType="Issued">{publication_date}</datacite:date>',
-            "  </datacite:dates>",
-        ]
-
-    def build_resource_type_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build resource type section."""
-        resource_type_uri = self._infer_coar_resource_type(ctx.dataset)
-        return [
-            "  <!-- 11. Resource Type (M) - COAR Resource Type Vocabulary -->",
-            f'  <oaire:resourceType resourceTypeGeneral="dataset" uri="{resource_type_uri}">',
-            "    dataset",
-            "  </oaire:resourceType>",
-        ]
-
-    def build_description_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build description section."""
-        if not ctx.dataset.description:
-            return []
-        return [
-            "  <!-- 12. Description (MA) -->",
-            f'  <dc:description xml:lang="{ctx.language_code}">',
-            f"    {self._escape_xml(ctx.dataset.description)}",
-            "  </dc:description>",
-        ]
-
-    def build_identifier_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build identifier section."""
-        return [
-            "  <!-- 14. Resource Identifier (M) -->",
-            '  <datacite:identifier identifierType="URN">',
-            f"    {self._escape_xml(ctx.dataset.identifier)}",
-            "  </datacite:identifier>",
-        ]
-
-    def build_access_rights_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build access rights section."""
-        return [
-            "  <!-- 15. Access Rights (M) - COAR Access Rights Vocabulary -->",
-            f'  <datacite:rights rightsURI="{ctx.rights_uri}">',
-            f"    {ctx.rights_label}",
-            "  </datacite:rights>",
-        ]
-
-    def build_subjects_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build subject/keywords section."""
-        if not ctx.dataset.keywords:
-            return []
-
-        lines = [
-            "  <!-- 17. Subject (MA) -->",
-            "  <datacite:subjects>",
-        ]
-        for keyword in ctx.dataset.keywords[:20]:
-            lines.append(
-                f"    <datacite:subject>{self._escape_xml(keyword)}</datacite:subject>"
-            )
-        lines.append("  </datacite:subjects>")
-        return lines
-
-    def build_temporal_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build temporal coverage section."""
-        if not ctx.dataset.temporal:
-            return []
-        return [
-            "  <!-- 19. Coverage (R) - Temporal -->",
-            f"  <dc:coverage>{self._escape_xml(ctx.dataset.temporal)}</dc:coverage>",
-        ]
-
-    def build_geo_location_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build spatial coverage section."""
-        if not ctx.dataset.spatial:
-            return []
-        return self._build_geo_location_xml(ctx.dataset.spatial)
-
-    def build_files_section(self, ctx: OpenAIREContext) -> list[str]:
-        """Build file links section."""
-        if not ctx.dataset.files:
-            return []
-
-        lines = ["  <!-- 23. File Location (MA) -->"]
-        for file_info in ctx.dataset.files:
-            mime_type = self._infer_mime_type(file_info.url)
-            mime_attr = f' mimeType="{mime_type}"' if mime_type else ""
-            lines.extend(
-                [
-                    f'  <oaire:file accessRightsURI="{ctx.rights_uri}"{mime_attr}>',
-                    f"    {self._escape_xml(file_info.url)}",
-                    "  </oaire:file>",
-                ]
-            )
-        return lines
-
-    # --- Helpers ---
-
-    def _build_context(self, dataset: Dataset) -> OpenAIREContext:
-        language_code = self._normalize_language_code(dataset.language)
-        rights_uri, rights_label = self._get_access_rights(dataset.access_level)
-
-        return OpenAIREContext(
-            dataset=dataset,
-            language_code=language_code,
-            rights_uri=rights_uri,
-            rights_label=rights_label,
+        root = ET.Element(
+            _q(NS_OAIRE, "resource"),
+            {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
         )
 
-    def _escape_xml(self, text: str) -> str:
-        """Escape special XML characters."""
-        return (
-            text.replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&apos;")
+        # Order matches the OpenAIRE Guidelines section numbering for
+        # readability. Sections that depend on optional fields no-op when
+        # the field is unset.
+        _add_title(root, record)
+        _add_creator(root, record)
+        _add_language(root, record)
+        _add_publisher(root, record)
+        _add_publication_date(root, record)
+        _add_resource_type(root, record)
+        _add_description(root, record)
+        _add_identifier(root, record)
+        _add_access_rights(root, record)
+        _add_subjects(root, record)
+        _add_temporal_coverage(root, record)
+        _add_spatial_coverage(root, record)
+        _add_files(root, record)
+
+        ET.indent(root, space="  ")
+        return ET.tostring(
+            root, encoding="unicode", xml_declaration=True, short_empty_elements=False
         )
 
-    def _normalize_language_code(self, language: str) -> str:
-        """Normalize language to ISO 639-1 code."""
-        if not language:
-            return "en"
 
-        language_lower = language.lower().strip()
-        language_map = {
-            "english": "eng",
-            "polish": "pol",
-        }
+# --- Section builders (private) ----------------------------------------------
+#
+# Each function appends to ``root`` if its corresponding record field is
+# populated, and is a no-op otherwise. They intentionally use the
+# ElementTree imperative style — keeping each section to a handful of lines
+# is preferred over factoring out a more abstract section framework.
 
-        if language_lower in language_map:
-            return language_map[language_lower]
 
-        if len(language_lower) in (2, 3) and language_lower.isalpha():
-            return language_lower
+def _add_title(root: ET.Element, record: OpenAIRERecord) -> None:
+    """1. Title (M)."""
+    titles = ET.SubElement(root, _q(NS_DATACITE, "titles"))
+    title = ET.SubElement(titles, _q(NS_DATACITE, "title"))
+    if record.language:
+        title.set(_XML_LANG, record.language)
+    title.text = record.title
 
-        console.warning(
-            f"Unknown language '{language}', defaulting to 'en'. "
-            "Consider extending language_map."
-        )
-        return "en"
 
-    def _get_access_rights(self, access_level: str) -> Tuple[str, str]:
-        """Map access level to COAR Access Rights."""
-        if access_level in ACCESS_RIGHTS_MAP:
-            return ACCESS_RIGHTS_MAP[access_level]
+def _add_creator(root: ET.Element, record: OpenAIRERecord) -> None:
+    """2. Creator (M)."""
+    creators = ET.SubElement(root, _q(NS_DATACITE, "creators"))
+    creator = ET.SubElement(creators, _q(NS_DATACITE, "creator"))
+    name = ET.SubElement(
+        creator, _q(NS_DATACITE, "creatorName"), {"nameType": "Organizational"}
+    )
+    name.text = record.creator
 
-        console.warning(
-            f"Unknown access_level '{access_level}', defaulting to 'open access'."
-        )
-        return DEFAULT_ACCESS_RIGHTS
 
-    def _infer_coar_resource_type(self, dataset: Dataset) -> str:
-        """Infer COAR Resource Type URI from dataset."""
-        if dataset.files:
-            url_lower = dataset.files[0].url.lower()
-            if url_lower.endswith(".pdf"):
-                return "http://purl.org/coar/resource_type/c_18cf"  # text
-            if url_lower.endswith((".png", ".jpg", ".jpeg", ".tif", ".tiff")):
-                return "http://purl.org/coar/resource_type/c_c513"  # image
+def _add_language(root: ET.Element, record: OpenAIRERecord) -> None:
+    """8. Language (MA)."""
+    if not record.language:
+        return
+    el = ET.SubElement(root, _q(NS_DC, "language"))
+    el.text = record.language
 
-        return "http://purl.org/coar/resource_type/c_ddb1"  # dataset
 
-    def _infer_mime_type(self, url: str) -> str | None:
-        """Infer MIME type from file extension."""
-        url_lower = url.lower()
-        for ext, mime in MIME_TYPES.items():
-            if url_lower.endswith(ext):
-                return mime
-        return None
+def _add_publisher(root: ET.Element, record: OpenAIRERecord) -> None:
+    """9. Publisher (MA)."""
+    if not record.publisher:
+        return
+    el = ET.SubElement(root, _q(NS_DC, "publisher"))
+    el.text = record.publisher
 
-    def _build_geo_location_xml(self, spatial: str) -> list[str]:
-        """Build geo location XML from spatial string."""
-        try:
-            coords = [float(x.strip()) for x in spatial.split(",")]
-            if len(coords) == 4:
-                west_lon, south_lat, east_lon, north_lat = coords
-                return [
-                    "  <!-- 21. Geo Location (O) -->",
-                    "  <datacite:geoLocations>",
-                    "    <datacite:geoLocation>",
-                    "      <datacite:geoLocationBox>",
-                    f"        <datacite:westBoundLongitude>{west_lon}"
-                    "</datacite:westBoundLongitude>",
-                    f"        <datacite:eastBoundLongitude>{east_lon}"
-                    "</datacite:eastBoundLongitude>",
-                    f"        <datacite:southBoundLatitude>{south_lat}"
-                    "</datacite:southBoundLatitude>",
-                    f"        <datacite:northBoundLatitude>{north_lat}"
-                    "</datacite:northBoundLatitude>",
-                    "      </datacite:geoLocationBox>",
-                    "    </datacite:geoLocation>",
-                    "  </datacite:geoLocations>",
-                ]
-        except (ValueError, AttributeError):
-            pass
-        return []
+
+def _add_publication_date(root: ET.Element, record: OpenAIRERecord) -> None:
+    """10. Publication Date (M)."""
+    dates = ET.SubElement(root, _q(NS_DATACITE, "dates"))
+    date = ET.SubElement(dates, _q(NS_DATACITE, "date"), {"dateType": "Issued"})
+    date.text = record.publication_date
+
+
+def _add_resource_type(root: ET.Element, record: OpenAIRERecord) -> None:
+    """11. Resource Type (M) — COAR Resource Type Vocabulary."""
+    el = ET.SubElement(
+        root,
+        _q(NS_OAIRE, "resourceType"),
+        {
+            "resourceTypeGeneral": "dataset",
+            "uri": record.resource_type.uri,
+        },
+    )
+    el.text = record.resource_type.label
+
+
+def _add_description(root: ET.Element, record: OpenAIRERecord) -> None:
+    """12. Description (MA)."""
+    if not record.description:
+        return
+    el = ET.SubElement(root, _q(NS_DC, "description"))
+    if record.language:
+        el.set(_XML_LANG, record.language)
+    el.text = record.description
+
+
+def _add_identifier(root: ET.Element, record: OpenAIRERecord) -> None:
+    """14. Resource Identifier (M)."""
+    el = ET.SubElement(
+        root, _q(NS_DATACITE, "identifier"), {"identifierType": "URN"}
+    )
+    el.text = record.identifier
+
+
+def _add_access_rights(root: ET.Element, record: OpenAIRERecord) -> None:
+    """15. Access Rights (M) — COAR Access Rights Vocabulary."""
+    el = ET.SubElement(
+        root, _q(NS_DATACITE, "rights"), {"rightsURI": record.access_rights.uri}
+    )
+    el.text = record.access_rights.label
+
+
+def _add_subjects(root: ET.Element, record: OpenAIRERecord) -> None:
+    """17. Subject (MA). Capped at 20 entries to keep records compact."""
+    if not record.subjects:
+        return
+    subjects = ET.SubElement(root, _q(NS_DATACITE, "subjects"))
+    for keyword in record.subjects[:20]:
+        el = ET.SubElement(subjects, _q(NS_DATACITE, "subject"))
+        el.text = keyword
+
+
+def _add_temporal_coverage(root: ET.Element, record: OpenAIRERecord) -> None:
+    """19. Coverage (R) — temporal."""
+    if not record.temporal_coverage:
+        return
+    el = ET.SubElement(root, _q(NS_DC, "coverage"))
+    el.text = record.temporal_coverage
+
+
+def _add_spatial_coverage(root: ET.Element, record: OpenAIRERecord) -> None:
+    """21. Geo Location (O) — bounding box."""
+    bbox = record.spatial_coverage
+    if bbox is None:
+        return
+    locations = ET.SubElement(root, _q(NS_DATACITE, "geoLocations"))
+    location = ET.SubElement(locations, _q(NS_DATACITE, "geoLocation"))
+    box = ET.SubElement(location, _q(NS_DATACITE, "geoLocationBox"))
+    ET.SubElement(box, _q(NS_DATACITE, "westBoundLongitude")).text = str(bbox.west)
+    ET.SubElement(box, _q(NS_DATACITE, "eastBoundLongitude")).text = str(bbox.east)
+    ET.SubElement(box, _q(NS_DATACITE, "southBoundLatitude")).text = str(bbox.south)
+    ET.SubElement(box, _q(NS_DATACITE, "northBoundLatitude")).text = str(bbox.north)
+
+
+def _add_files(root: ET.Element, record: OpenAIRERecord) -> None:
+    """23. File Location (MA)."""
+    if not record.files:
+        return
+    for file_loc in record.files:
+        attrs = {"accessRightsURI": record.access_rights.uri}
+        if file_loc.mime_type:
+            attrs["mimeType"] = file_loc.mime_type
+        el = ET.SubElement(root, _q(NS_OAIRE, "file"), attrs)
+        el.text = file_loc.url

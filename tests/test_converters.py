@@ -5,7 +5,7 @@
 import pytest
 
 from crawlers.core.result import Err
-from crawlers.metadata.openaire import OpenAIREBuilder
+from crawlers.plugins.ecudo.metadata import EcudoOpenAIREBuilder
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
 from crawlers.processors.converters import OnedataConverter
 
@@ -13,7 +13,7 @@ from crawlers.processors.converters import OnedataConverter
 @pytest.fixture
 def converter():
     """Create converter instance."""
-    return OnedataConverter(OpenAIREBuilder())
+    return OnedataConverter(EcudoOpenAIREBuilder())
 
 
 @pytest.fixture

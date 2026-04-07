@@ -1,155 +1,122 @@
-"""Tests for OpenAIRE metadata generator."""
+"""Tests for the OpenAIRE metadata builder."""
 
-# pylint: disable=redefined-outer-name,protected-access,missing-function-docstring
+# pylint: disable=redefined-outer-name,missing-function-docstring
 
 import pytest
 
-from crawlers.metadata.openaire import OpenAIREBuilder
-from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
+from crawlers.metadata.openaire import (
+    AccessRights,
+    BoundingBox,
+    FileLocation,
+    OpenAIREBuilder,
+    OpenAIRERecord,
+    ResourceType,
+)
 
 
 @pytest.fixture
-def sample_record():
-    """Create a sample EcudoRecord for testing."""
-    return EcudoDataset(
-        identifier="urn:SDN:CDI:iopan.pl:uuid:test-123",
+def sample_record() -> OpenAIRERecord:
+    return OpenAIRERecord(
         title="Test Ocean Dataset",
-        description="Oceanographic data from research vessel",
+        creator="Institute of Oceanology",
+        identifier="urn:SDN:CDI:iopan.pl:uuid:test-123",
+        publication_date="2024-01-15",
+        access_rights=AccessRights.OPEN,
+        resource_type=ResourceType.DATASET,
+        language="eng",
         publisher="Institute of Oceanology",
-        issued="2024-01-15",
-        language="English",
-        keywords=["ocean", "temperature", "salinity"],
-        files=[
-            EcudoFile(
-                path="data.zip",
-                url="https://example.com/data.zip",
-            )
-        ],
-        spatial="18.0,54.0,19.0,55.0",
-        temporal="2024-01-01/2024-01-31",
+        description="Oceanographic data from research vessel",
+        subjects=["ocean", "temperature", "salinity"],
+        files=[FileLocation(url="https://example.com/data.zip", mime_type="application/zip")],
+        spatial_coverage=BoundingBox(west=18.0, south=54.0, east=19.0, north=55.0),
+        temporal_coverage="2024-01-01/2024-01-31",
     )
 
 
-class TestOpenAIREMetadata:
-    """Tests for OpenAIRE metadata generator."""
+class TestOpenAIREBuilder:
+    def test_produces_valid_xml_envelope(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
+        assert result.startswith("<?xml")
+        assert "oaire:resource" in result
+        assert result.rstrip().endswith("</oaire:resource>")
 
-    def test_generate_xml_produces_valid_xml(self, sample_record):
-        """Test that generate_xml produces valid XML."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
-
-        assert result.startswith('<?xml version="1.0" encoding="UTF-8"?>')
-        assert "<oaire:resource" in result
-        assert "</oaire:resource>" in result
-
-    def test_generate_xml_contains_title(self, sample_record):
-        """Test that XML contains title."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
+    def test_contains_title(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
         assert "Test Ocean Dataset" in result
-        assert "<datacite:title" in result
+        assert "datacite:title" in result
 
-    def test_generate_xml_contains_identifier(self, sample_record):
-        """Test that XML contains identifier."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
+    def test_contains_identifier(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
         assert "urn:SDN:CDI:iopan.pl:uuid:test-123" in result
-        assert "<datacite:identifier" in result
+        assert "datacite:identifier" in result
 
-    def test_generate_xml_contains_publisher(self, sample_record):
-        """Test that XML contains publisher."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
+    def test_contains_publisher(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
         assert "Institute of Oceanology" in result
-        assert "<dc:publisher>" in result
+        assert "dc:publisher" in result
 
-    def test_generate_xml_contains_description(self, sample_record):
-        """Test that XML contains description."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
+    def test_contains_description(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
         assert "Oceanographic data from research vessel" in result
-        assert "<dc:description" in result
+        assert "dc:description" in result
 
-    def test_generate_xml_contains_keywords(self, sample_record):
-        """Test that XML contains keywords as subjects."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
-        assert "<datacite:subject>ocean</datacite:subject>" in result
-        assert "<datacite:subject>temperature</datacite:subject>" in result
-        assert "<datacite:subject>salinity</datacite:subject>" in result
+    def test_contains_subjects(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
+        for keyword in ("ocean", "temperature", "salinity"):
+            assert f"<datacite:subject>{keyword}</datacite:subject>" in result
 
-    def test_generate_xml_contains_file_location(self, sample_record):
-        """Test that XML contains file location."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
+    def test_contains_file_location(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
         assert "https://example.com/data.zip" in result
-        assert "<oaire:file" in result
+        assert "oaire:file" in result
+        assert 'mimeType="application/zip"' in result
 
-    def test_generate_xml_contains_geo_location(self, sample_record):
-        """Test that XML contains geo location."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
-        assert "<datacite:geoLocationBox>" in result
-        assert (
-            "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
-        )
+    def test_contains_geo_location(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
+        assert "datacite:geoLocationBox" in result
+        assert "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
+        assert "<datacite:northBoundLatitude>55.0</datacite:northBoundLatitude>" in result
 
-    def test_generate_xml_contains_temporal_coverage(self, sample_record):
-        """Test that XML contains temporal coverage."""
-        builder = OpenAIREBuilder()
-        result = builder.build(sample_record)
+    def test_contains_temporal_coverage(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
         assert "2024-01-01/2024-01-31" in result
-        assert "<dc:coverage>" in result
+        assert "dc:coverage" in result
 
-    def test_normalize_language_code(self):
-        """Test language code normalization."""
-        builder = OpenAIREBuilder()
-        # Language names are mapped to ISO 639-3 codes
-        assert builder._normalize_language_code("English") == "eng"
-        assert builder._normalize_language_code("Polish") == "pol"
-        # Short codes are passed through as-is
-        assert builder._normalize_language_code("en") == "en"
-        assert builder._normalize_language_code("pl") == "pl"
-        assert builder._normalize_language_code("eng") == "eng"
-        # Empty/unknown defaults to "en"
-        assert builder._normalize_language_code("") == "en"
-        assert builder._normalize_language_code("unknown") == "en"
+    def test_contains_access_rights(self, sample_record):
+        result = OpenAIREBuilder().build(sample_record)
+        assert AccessRights.OPEN.uri in result
+        assert "open access" in result
 
-    def test_generate_xml_escapes_xml_characters(self):
-        """Test that special XML characters are escaped."""
-        record = EcudoDataset(
-            identifier="urn:test:123",
+    def test_escapes_special_characters(self):
+        record = OpenAIRERecord(
             title="Dataset with <special> & 'characters'",
-            description="",
-            publisher="Test & Co.",
-            issued="2024-01-01",
-            language="en",
-            keywords=[],
-            files=[EcudoFile(path="data.zip", url="https://example.com/data.zip")],
+            creator="Test & Co.",
+            identifier="urn:test:123",
+            publication_date="2024-01-01",
+            access_rights=AccessRights.OPEN,
         )
-        builder = OpenAIREBuilder()
-        result = builder.build(record)
-
+        result = OpenAIREBuilder().build(record)
         assert "&lt;special&gt;" in result
         assert "&amp;" in result
-        assert "&apos;characters&apos;" in result
+        # ElementTree escapes apostrophes only inside attribute values, not text.
+        assert "'characters'" in result or "&apos;characters&apos;" in result
 
-    def test_generate_xml_minimal_record(self):
-        """Test generating XML for a record with minimal fields."""
-        record = EcudoDataset(
-            identifier="urn:test:minimal",
+    def test_minimal_record_omits_optional_sections(self):
+        record = OpenAIRERecord(
             title="Minimal Dataset",
-            description="",
-            publisher="Unknown",
-            issued="",
-            language="en",
-            keywords=[],
-            files=[EcudoFile(path="data.bin", url="https://example.com/data")],
+            creator="Anon",
+            identifier="urn:test:minimal",
+            publication_date="2024-01-01",
+            access_rights=AccessRights.OPEN,
         )
-        builder = OpenAIREBuilder()
-        result = builder.build(record)
+        result = OpenAIREBuilder().build(record)
 
-        # Should still produce valid XML
-        assert '<?xml version="1.0"' in result
         assert "Minimal Dataset" in result
-        assert "</oaire:resource>" in result
+        # Optional sections must be absent.
+        assert "dc:description" not in result
+        assert "dc:publisher" not in result
+        assert "dc:language" not in result
+        assert "dc:coverage" not in result
+        assert "geoLocations" not in result
+        assert "datacite:subjects" not in result
+        assert "oaire:file" not in result
