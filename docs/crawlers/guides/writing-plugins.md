@@ -1,11 +1,18 @@
 ---
 title: Writing Plugins
+description: >
+  Step-by-step guide to creating a new crawler plugin — API client,
+  parser, configuration, plugin class, and registration. Includes
+  examples from the built-in plugins and covers custom pipelines,
+  commands, and validation hooks.
 topic: crawlers/guides/writing-plugins
+audience: external-plugin-author
 generated: 2026-04-01
-last_reviewed: 2026-04-01
+last_reviewed: 2026-04-04
 source_modules:
   - crawlers/default/plugin.py
   - crawlers/default/config.py
+  - crawlers/default/crawl_spec.py
   - crawlers/plugins/ecudo/plugin.py
   - crawlers/plugins/ecudo/config.py
   - crawlers/plugins/ecudo/api.py
@@ -16,19 +23,15 @@ source_modules:
   - crawlers/plugins/eodc/parser.py
   - crawlers/plugins/__init__.py
 source_commits:
-  public-data-crawlers: d8a4e8e
+  public-data-crawlers: bbd9be2e7
 status: draft
 ---
 
 # Writing Plugins
 
-This guide walks you through creating a new crawler plugin. You will
-implement an API client, a parser, a configuration, and a plugin
-class — then register it so the CLI can discover it.
-
-> For the architecture behind the plugin system, see
-> [Plugin System](../arch/plugin-system.md). For the pipeline
-> mechanics, see [Processing](../arch/processing.md).
+By the end of this guide, you'll have a working crawler that fetches
+from your API and produces Onedata-ready records — runnable as
+`crawlers myapi crawl <collection>`.
 
 ## Overview
 
@@ -64,12 +67,16 @@ crawlers/plugins/myapi/
 
 ## Step 1: Dataset Model and Parser
 
-Define a dataclass for your parsed dataset. It must satisfy the
-protocol expected by your chosen metadata builder — for OpenAIRE,
-this means `identifier`, `title`, `description`, `publisher`,
-`issued`, `files`, `language`, `keywords`, `access_level`,
-`spatial`, `temporal`. For DataCite, you need `identifier`, `title`,
-`datetime`, `geometry`, `files`, `self_link`.
+> [!TIP]
+> **Source:** `crawlers/processors/parsers.py:20-42`
+
+Define a dataclass for your parsed dataset. You'll need to choose
+between DataCite and OpenAIRE metadata — pick the one that matches
+your target standard. Your dataset model must satisfy the protocol of
+whichever builder you choose — see the
+[DataCite protocol](../arch/metadata.md#dataset-protocol) or
+[OpenAIRE protocol](../arch/metadata.md#dataset-protocol-1) class
+diagrams for the required attributes.
 
 ```python
 @dataclass
@@ -107,8 +114,19 @@ for unexpected failures.
 
 ## Step 2: API Client
 
+> [!TIP]
+> **Source:** `crawlers/core/api.py:56-229`
+
 Subclass `ApiClient` with your API's iterator options type and the
 type yielded by the iterator:
+
+```python
+from dataclasses import dataclass
+from collections.abc import AsyncIterator
+
+from crawlers.core.api import ApiClient
+from crawlers.core.result import Ok, Err
+```
 
 ```python
 @dataclass
@@ -152,9 +170,12 @@ backoff.
 - If the API returns full items in listing calls, yield `dict` and
   use `ParserProcessor` in the pipeline (like EODC).
 - If the API returns IDs that need a separate detail fetch, yield
-  `str` and use `DatasetFetcher` in the pipeline (like Ecudo).
+  `str` and use `DatasetResolver` in the pipeline (like Ecudo).
 
 ## Step 3: Configuration
+
+> [!TIP]
+> **Source:** `crawlers/default/config.py:17-52`
 
 Build your config by composing base classes. The simplest approach
 extends `DefaultCrawlConfig` (which includes API, output, and
@@ -196,6 +217,9 @@ See [Configuration](../arch/configuration.md) for full details on
 
 ## Step 4: Plugin Class
 
+> [!TIP]
+> **Source:** `crawlers/default/plugin.py:41-93` · `crawlers/default/crawl_spec.py:16-50`
+
 The minimal plugin subclasses `DefaultCrawlerPlugin` and implements
 `prepare_crawl()`:
 
@@ -206,6 +230,8 @@ class MyPlugin(DefaultCrawlerPlugin):
     config_class = MyCrawlConfig
 
     def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
+        # The base class declares the generic signature; cast to your
+        # config type since Python doesn't support covariant overrides.
         cfg = cast(MyCrawlConfig, config)
         return DefaultCrawlSpec(
             client=MyClient(
@@ -233,38 +259,76 @@ construction, parallel execution, state persistence, and display.
 
 Add your plugin to `crawlers/plugins/__init__.py`:
 
+> [!TIP]
+> **Source:** `crawlers/plugins/__init__.py:11-23`
+
 ```python
 from crawlers.plugins.myapi.plugin import MyPlugin
 
 REGISTERED_PLUGINS = [
     EcudoPlugin(),
     EODCPlugin(),
+    BgeePlugin(),
+    VipPlugin(),
     MyPlugin(),       # <-- add here
 ]
 ```
 
 Your plugin is now available as `crawlers myapi crawl ...`.
 
+## Step 6: Verify
+
+Run `--help` to confirm your plugin is registered and your config
+fields appear:
+
+```bash
+crawlers myapi crawl --help
+```
+
+Then run a small test crawl to verify the pipeline works end-to-end:
+
+```bash
+crawlers myapi crawl my-collection --max-records 5
+```
+
+Check the run directory for `processed.jsonl` (your Onedata records)
+and `rejected.jsonl` (any failed items with reasons). A correct
+record in `processed.jsonl` looks like:
+
+```json
+{"name": "Dataset Title", "location": "/collection/dataset-title", "pid": "doi:10.1234/example", "metadata": "<resource xmlns=...>...</resource>", "files": [{"url": "https://...", "path": "data.csv"}]}
+```
+
+Each line is a self-contained JSON object with `name`, `location`,
+`pid`, `metadata` (XML string), and `files`.
+
 ## Custom Pipeline
 
+The default pipeline inspects `spec.resolve_fn` to choose between
+`DatasetResolver` (when set) and `ParserProcessor` (when `None`).
+For most APIs, setting `resolve_fn` in `DefaultCrawlSpec` is
+sufficient — no override needed.
+
 Override `build_pipeline()` when you need extra processing stages
-or a different processor order. Ecudo does this to add a
-`DatasetFetcher` (because the API returns IDs, not full items) and
-a `DiversityFilter`:
+or a different processor order. Note that there is no
+`pipeline.insert()` — you must rebuild the full chain. Ecudo does
+this to add a `DiversityFilter`:
+
+> [!TIP]
+> **Source:** `crawlers/default/plugin.py:179-209`
 
 ```python
-def build_pipeline(
-    self, config: DefaultCrawlConfig, spec: DefaultCrawlSpec, ctx: DefaultRunContext
-) -> ProcessorPipeline:
+def build_pipeline(self, ctx: DefaultRunContext) -> ProcessorPipeline:
+    spec = ctx.crawl_spec
     return ProcessorPipeline(
         processors=[
-            DatasetFetcher(
-                fetch_fn=cast(MyClient, spec.client).get_item,
+            DatasetResolver(
+                resolve_fn=cast(MyClient, spec.client).get_item,
                 parser=spec.parser,
             ),
             URLValidator(
                 validate_fn=spec.client.validate_url,
-                enabled=not config.no_url_validation,
+                enabled=not ctx.config.no_url_validation,
             ),
             DiversityFilter(max_similar=10, similarity_threshold=0.85),
             Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
@@ -277,8 +341,9 @@ def build_pipeline(
 
 If you do not override `build_pipeline()`, the default pipeline is:
 ```
-ParserProcessor → URLValidator → Tap(raw) → OnedataConverter → Tap(processed)
+ParserProcessor/DatasetResolver → URLValidator → Tap(raw) → OnedataConverter → Tap(processed)
 ```
+(The first processor depends on whether `resolve_fn` is set in the spec.)
 
 ## Custom Commands
 
@@ -302,49 +367,90 @@ This registers as `crawlers myapi list-collections`.
 
 ## Validation Hooks
 
+> [!TIP]
+> **Source:** `crawlers/default/plugin.py:110-117`
+
 Override `before_crawl()` to validate preconditions after the client
 session is open. Ecudo uses this to verify the requested
 organization exists:
 
 ```python
-async def before_crawl(self, spec: DefaultCrawlSpec) -> None:
-    client = cast(MyClient, spec.client)
+async def before_crawl(self, ctx: DefaultRunContext) -> None:
+    client = cast(MyClient, ctx.crawl_spec.client)
     result = await client.validate_collection(self._collection)
     if isinstance(result, Err):
         console.error(f"Collection not found: {self._collection}")
         sys.exit(1)
 ```
 
+> [!NOTE]
+> `sys.exit(1)` is the current convention for validation failures
+> in `before_crawl()` — the framework does not yet provide a
+> structured way to abort a crawl before the pipeline starts.
+
 Override `after_crawl()` for post-crawl actions (cleanup, summary
 reporting, etc.).
 
+## Custom Metadata Builder
+
+If the standard DataCite/OpenAIRE builders need adaptation, subclass
+the appropriate builder and override what you need:
+
+```python
+class MyDataCiteBuilder(DataCiteBuilder["MyDataset"]):
+    creator_name = "My Organization"
+    publisher_name = "My Publisher"
+    default_subjects = ["Earth Science", "Remote Sensing"]
+
+    def build_descriptions_section(self, root, ctx):
+        # Custom description logic
+        ...
+```
+
+For adding entirely new sections, override `get_sections()`:
+
+```python
+def get_sections(self):
+    sections = super().get_sections()
+    sections.append(self.build_custom_section)
+    return sections
+```
+
+See [Metadata — Extending](../arch/metadata.md#extending-metadata-builders)
+for the full extension point reference.
+
 ## Real Examples
 
-The two built-in plugins demonstrate different patterns:
+Use this decision tree to pick the right reference plugin:
 
-**EODC** (`crawlers/plugins/eodc/`) — the simpler case:
-- STAC API returns full items → uses default pipeline with
+- **API returns full items in listing calls?** → Follow **EODC**.
+  Uses the default pipeline with `ParserProcessor`, no
+  `build_pipeline()` override needed.
+- **API returns IDs that need a separate detail fetch?** → Follow
+  **Ecudo**. Sets `resolve_fn` in spec for `DatasetResolver`
+  behavior.
+- **Need deduplication of near-identical datasets?** → Look at
+  Ecudo's `DiversityFilter` and `DiversityFilterConfig`.
+- **Need custom metadata defaults?** → Look at EODC's
+  `EODCDataCiteBuilder` (subclasses `DataCiteBuilder` with
+  Sentinel-1 specific values).
+
+**EODC** (`crawlers/plugins/eodc/`) — the simpler pattern:
+- STAC API returns full items → default pipeline with
   `ParserProcessor`.
-- No `build_pipeline()` override needed.
 - Custom `DataCiteBuilder` subclass for Sentinel-1 metadata
   defaults.
 - `list-collections` extra command.
 
-**Ecudo** (`crawlers/plugins/ecudo/`) — the advanced case:
-- API returns IDs → overrides `build_pipeline()` with
-  `DatasetFetcher`.
-- Adds `DiversityFilter` for title deduplication.
+**Ecudo** (`crawlers/plugins/ecudo/`) — the advanced pattern:
+- API returns IDs → overrides `build_pipeline()` to add
+  `DiversityFilter`.
 - Nested `DiversityFilterConfig` for YAML-only tuning.
 - `before_crawl()` validates organization exists.
 - `list-orgs` extra command.
 
-## Related Documentation
+**Bgee** and **VIP** both use the default pipeline pattern (like
+EODC) — `ParserProcessor` with no `build_pipeline()` override. VIP
+additionally demonstrates a multi-step parser that combines
+metadata from several API endpoints.
 
-- **[Plugin System](../arch/plugin-system.md)** — architecture and
-  lifecycle details
-- **[Configuration](../arch/configuration.md)** — config system
-  deep-dive
-- **[Processing](../arch/processing.md)** — pipeline and processors
-- **[Metadata](../arch/metadata.md)** — metadata builder
-  extensibility
-- **[Glossary](../arch/glossary.md)** — quick definitions

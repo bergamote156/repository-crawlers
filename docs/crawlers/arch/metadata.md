@@ -1,34 +1,38 @@
 ---
 title: Metadata Generation
+description: >
+  How metadata builders produce standards-compliant XML (DataCite
+  Kernel 4.5, OpenAIRE v4.0) from parsed dataset models. Covers the
+  MetadataBuilder abstraction, the template method pattern, dataset
+  protocols, class-level defaults, and how to extend builders.
 topic: crawlers/arch/metadata
+audience: internal-developer-onboarding
 generated: 2026-04-01
-last_reviewed: 2026-04-01
+last_reviewed: 2026-04-04
 source_modules:
   - crawlers/core/metadata.py
   - crawlers/metadata/datacite.py
   - crawlers/metadata/openaire.py
   - crawlers/plugins/eodc/metadata.py
 source_commits:
-  public-data-crawlers: d8a4e8e
+  public-data-crawlers: bbd9be2e7
 status: draft
 ---
 
 # Metadata Generation
 
-Metadata builders produce standards-compliant XML from parsed dataset
-models. The framework provides two builders — DataCite Kernel 4.5
-and OpenAIRE v4.0 — both designed for extensibility via overridable
-section methods.
+<sub>📄 `crawlers/core/metadata.py:12-27`</sub>
 
-> For how metadata builders are wired into the pipeline, see
-> [Processing — OnedataConverter](processing.md#onedataconverter).
-> For practical usage in plugins, see
-> [Writing Plugins](../guides/writing-plugins.md).
+Crawled datasets need standards-compliant XML metadata embedded in
+their output records — Onedata uses this for discovery and
+interoperability. Metadata builders take a parsed dataset model and
+produce an XML string following either DataCite Kernel 4.5 or
+OpenAIRE v4.0. The
+[OnedataConverter](processing.md#onedataconverter) calls the builder
+as the final pipeline step.
 
-## MetadataBuilder Abstraction
-
-The base interface is minimal — a single generic abstract class in
-`crawlers/core/metadata.py`:
+The base interface is intentionally minimal — a single generic
+abstract class with one method:
 
 ```python
 class MetadataBuilder[DatasetT](ABC):
@@ -36,22 +40,76 @@ class MetadataBuilder[DatasetT](ABC):
     def build(self, dataset: DatasetT) -> str: ...
 ```
 
-The `OnedataConverter` processor calls `build()` for every dataset
-that reaches the conversion stage, embedding the resulting XML
-string into the `OnedataDataset` record.
+Both concrete builders extend this with a **template method pattern**
+that makes customization surgical: you override individual section
+builders rather than reimplementing the whole XML generation.
+
+```mermaid
+classDiagram
+    class MetadataBuilder~DatasetT~ {
+        <<ABC>>
+        +build(dataset: DatasetT) str
+    }
+
+    class DataCiteBuilder {
+        <<Kernel 4.5 · ElementTree>>
+        +build(dataset) str
+        +get_sections() list
+        +build_identifier_section()
+        +build_creators_section()
+        +build_titles_section()
+        +...other section builders()
+    }
+
+    class EODCDataCiteBuilder {
+        <<Sentinel-1 defaults>>
+        creator_name = "ESA"
+        publisher_name = "EODC"
+        default_subjects = [Sentinel-1, SAR, ...]
+    }
+
+    class OpenAIREBuilder {
+        <<v4.0 · string concat>>
+        +build(dataset) str
+        +get_sections() list
+        +build_title_section()
+        +build_creator_section()
+        +...other section builders()
+    }
+
+    class OnedataConverter {
+        +metadata_builder : MetadataBuilder
+        +process(dataset) Result
+    }
+
+    MetadataBuilder <|-- DataCiteBuilder
+    MetadataBuilder <|-- OpenAIREBuilder
+    DataCiteBuilder <|-- EODCDataCiteBuilder
+    OnedataConverter ..> MetadataBuilder : calls build()
+
+    style MetadataBuilder fill:#E6E6FA,stroke:#5B4B8A,color:#000
+    style DataCiteBuilder fill:#4ECDC4,stroke:#0B7285,color:#000
+    style OpenAIREBuilder fill:#4ECDC4,stroke:#0B7285,color:#000
+    style EODCDataCiteBuilder fill:#FFE4B5,stroke:#E8890C,color:#000
+    style OnedataConverter fill:#A8DADC,stroke:#1864AB,color:#000
+```
+
 
 ## Template Method Pattern
 
-Both concrete builders follow the same pattern:
+<sub>📄 `crawlers/metadata/datacite.py:79-137`</sub>
+
+Both `DataCiteBuilder` and `OpenAIREBuilder` follow the same
+structure:
 
 1. `build(dataset)` creates a context object from the dataset.
 2. `get_sections()` returns an ordered list of section builder
    methods.
 3. Each section builder receives the context and produces its output
-   (XML elements or string lines).
+   (XML elements for DataCite, string lines for OpenAIRE).
 4. The results are assembled into the final XML document.
 
-This design allows plugins to customize metadata in three ways:
+This design gives plugins three levels of customization:
 
 - **Override a section method** — change how a specific section is
   built (e.g. custom creator name, different subject terms).
@@ -62,17 +120,54 @@ This design allows plugins to customize metadata in three ways:
 
 ## DataCiteBuilder
 
+<sub>📄 `crawlers/metadata/datacite.py:62-296`</sub>
+
 Generates XML compliant with
 [DataCite Metadata Schema 4.5](https://schema.datacite.org/meta/kernel-4.5/).
 Uses `xml.etree.ElementTree` for structured XML construction.
 
-### Dataset protocol
+### Dataset Protocol
 
-`DataCiteDataset` requires: `identifier`, `title`, `datetime`,
-`geometry`, `files`, `self_link`. The protocol uses structural
-typing — any dataclass with these attributes works.
+<sub>📄 `crawlers/metadata/datacite.py:41-52`</sub>
+
+```mermaid
+classDiagram
+    direction LR
+
+    class DataCiteDataset {
+        <<Protocol>>
+        identifier : str
+        title : str
+        datetime : str | None
+        geometry : dict | None
+        files : Sequence~DataCiteFile~
+        self_link : str | None
+    }
+
+    class DataCiteFile {
+        <<Protocol>>
+        url : str
+    }
+
+    DataCiteDataset --> DataCiteFile : files
+
+    style DataCiteDataset fill:#4ECDC4,stroke:#0B7285,color:#000
+    style DataCiteFile fill:#A8DADC,stroke:#1864AB,color:#000
+```
+
+`DataCiteDataset` uses structural typing — any dataclass with the
+required attributes satisfies it. The protocol requires spatial data
+as GeoJSON geometry (for the `geoLocations` section) and a
+`self_link` for the `relatedIdentifiers` section.
 
 ### Sections
+
+DataCite defines 6 mandatory and 6 recommended sections. You'll
+typically override the defaults for creators, publisher, and
+subjects. Each section has a corresponding builder method:
+
+<details>
+<summary>Section reference table</summary>
 
 Mandatory (M) and recommended (R) per the DataCite schema:
 
@@ -91,9 +186,14 @@ Mandatory (M) and recommended (R) per the DataCite schema:
 | RelatedIdentifiers | R | `build_related_identifiers_section` |
 | Rights | R | `build_rights_section` |
 
-### Class-level defaults
+</details>
 
-Subclasses customize the builder by overriding these attributes:
+### Class-level Defaults
+
+<sub>📄 `crawlers/metadata/datacite.py:70-77`</sub>
+
+Subclasses customize the builder by overriding these attributes —
+no method changes needed for common cases:
 
 | Attribute | Default | Purpose |
 |-----------|---------|---------|
@@ -105,25 +205,76 @@ Subclasses customize the builder by overriding these attributes:
 | `default_description` | `""` | Fallback description |
 | `default_rights` | `""` | Rights statement |
 
+<sub>📄 `crawlers/plugins/eodc/metadata.py:16-51`</sub>
+
 For example, `EODCDataCiteBuilder` overrides these with
 Sentinel-1/Copernicus-specific values (creator: ESA, publisher:
 EODC, subjects: Sentinel-1, SAR, GRD, Copernicus).
 
+<!-- FLAG: EODCDataCiteBuilder has a TODO comment (line 14)
+     acknowledging that these defaults are specific to Sentinel-1
+     GRD and may not apply to other EODC collections. No mechanism
+     currently exists to select different defaults per collection. -->
+
 ## OpenAIREBuilder
+
+<sub>📄 `crawlers/metadata/openaire.py:99-415`</sub>
 
 Generates XML compliant with
 [OpenAIRE Guidelines v4.0](https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/).
-Uses string concatenation rather than ElementTree, building XML
-lines directly.
+Unlike DataCiteBuilder, it uses string concatenation rather than
+ElementTree — a legacy implementation choice. Plugin authors don't
+need to worry about this: escaping is handled internally, and the
+section-builder interface is identical to DataCiteBuilder.
 
-### Dataset protocol
+<!-- Q: Should we migrate OpenAIREBuilder to ElementTree for
+     consistency with DataCiteBuilder? -->
 
-`Dataset` requires a richer set of attributes than DataCite:
-`identifier`, `title`, `description`, `publisher`, `issued`,
-`files`, `language`, `keywords`, `access_level`, `spatial`,
-`temporal`.
+### Dataset Protocol
+
+<sub>📄 `crawlers/metadata/openaire.py:71-87`</sub>
+
+```mermaid
+classDiagram
+    direction LR
+
+    class Dataset {
+        <<Protocol · OpenAIRE>>
+        identifier : str
+        title : str
+        description : str
+        publisher : str
+        issued : str
+        files : Sequence~DatasetFile~
+        language : str
+        keywords : list~str~
+        access_level : str
+        spatial : str | None
+        temporal : str | None
+    }
+
+    class DatasetFile {
+        <<Protocol>>
+        url : str
+    }
+
+    Dataset --> DatasetFile : files
+
+    style Dataset fill:#4ECDC4,stroke:#0B7285,color:#000
+    style DatasetFile fill:#A8DADC,stroke:#1864AB,color:#000
+```
+
+OpenAIRE requires a richer set of attributes than DataCite — see the
+protocol diagram above. Like DataCite, the protocol uses structural
+typing.
 
 ### Sections
+
+OpenAIRE has a richer set of mandatory and conditionally mandatory
+(MA) sections than DataCite.
+
+<details>
+<summary>Section reference table</summary>
 
 | Section | Status | Method |
 |---------|--------|--------|
@@ -143,58 +294,20 @@ lines directly.
 
 (M = Mandatory, MA = Mandatory if Applicable, R = Recommended)
 
-### COAR vocabulary mapping
+</details>
 
-Access rights are mapped to COAR URIs. Currently only `"public"` is
-mapped (to `http://purl.org/coar/access_right/c_abf2`, "open
-access"). Resource types use COAR resource type vocabulary.
+### Implementation Notes
 
-### MIME type inference
+<sub>📄 `crawlers/metadata/openaire.py:22-49`</sub>
 
-The file section infers MIME types from file extensions using a
-built-in mapping (`.zip`, `.csv`, `.nc`, `.tiff`, `.geojson`, etc.).
-Unknown extensions fall back to no MIME type attribute.
-
-### GeoJSON conversion
-
-When `spatial` data is available, the geo location section extracts
-bounding boxes from GeoJSON geometry. Polygon coordinates are
-converted to `westBoundLongitude`, `eastBoundLongitude`,
-`southBoundLatitude`, `northBoundLatitude` bounds.
+The OpenAIRE builder handles several format-specific concerns:
+access rights are mapped to COAR URIs (currently only `"public"` →
+open access), file sections infer MIME types from extensions (`.zip`,
+`.csv`, `.nc`, `.tiff`, etc.), and geo location sections convert
+GeoJSON polygon coordinates to bounding box bounds.
 
 ## Extending Metadata Builders
 
-The recommended approach for custom metadata is to subclass the
-appropriate builder and override what you need:
+See [Writing Plugins](../guides/writing-plugins.md#custom-metadata-builder)
+for concrete code examples using the Ecudo and EODC plugins.
 
-```python
-class MyDataCiteBuilder(DataCiteBuilder["MyDataset"]):
-    creator_name = "My Organization"
-    publisher_name = "My Publisher"
-    default_subjects = ["Earth Science", "Remote Sensing"]
-
-    def build_descriptions_section(self, root, ctx):
-        # Custom description logic
-        ...
-```
-
-For adding entirely new sections, override `get_sections()` and
-append your builder method to the list:
-
-```python
-def get_sections(self):
-    sections = super().get_sections()
-    sections.append(self.build_custom_section)
-    return sections
-```
-
-## Related Documentation
-
-- **[Architecture Overview](_overview.md)** — system layers
-- **[Processing](processing.md#onedataconverter)** — how
-  OnedataConverter uses metadata builders
-- **[Plugin System](plugin-system.md#defaultcrawlspec)** — where
-  metadata builders are specified
-- **[Writing Plugins](../guides/writing-plugins.md)** — practical
-  examples
-- **[Glossary](glossary.md#metadatabuilder)** — quick definition

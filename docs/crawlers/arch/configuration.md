@@ -1,8 +1,14 @@
 ---
 title: Configuration System
+description: >
+  How config fields are declared once and resolved from multiple
+  sources (CLI, YAML, ENV) at runtime. Covers ConfigBase, opt(),
+  schema internals, resolution priority, config inheritance, and
+  nested configs.
 topic: crawlers/arch/configuration
+audience: internal-developer-onboarding
 generated: 2026-04-01
-last_reviewed: 2026-04-01
+last_reviewed: 2026-04-04
 source_modules:
   - crawlers/core/config.py
   - crawlers/core/plugin.py
@@ -10,41 +16,72 @@ source_modules:
   - crawlers/plugins/ecudo/config.py
   - crawlers/plugins/eodc/config.py
 source_commits:
-  public-data-crawlers: d8a4e8e
+  public-data-crawlers: bbd9be2e7
 status: draft
 ---
 
 # Configuration System
 
-The configuration system lets you declare config fields once — as
-annotated dataclass fields — and get CLI argument parsing, YAML file
-loading, environment variable support, and help text generation for
-free. Values from all sources merge at runtime according to a fixed
-priority order.
+<sub>📄 `crawlers/core/plugin.py:183-308`</sub>
 
-> This document covers the config machinery itself. For how configs
-> integrate with the plugin lifecycle, see
-> [Plugin System](plugin-system.md). For practical examples of writing
-> plugin configs, see [Writing Plugins](../guides/writing-plugins.md).
+Declare a config field once — as an annotated dataclass field with
+`opt()` — and the framework gives you CLI argument parsing, YAML
+file loading, environment variable support, and help text generation
+for free. At runtime, values from all sources merge according to a
+fixed [priority order](#resolution-priority): CLI wins over YAML,
+YAML wins over ENV, ENV wins over defaults. You never write argument
+parsing code or config-loading boilerplate.
 
-## Key Concepts
+```mermaid
+graph TB
+    field["📝 field declared with opt·&#41;"]
 
-- **[`ConfigBase`](#configbase-and-opt)** — base class that turns
-  any subclass into a dataclass with an auto-built schema.
-- **[`opt()`](#configbase-and-opt)** — field wrapper that attaches
-  CLI/ENV/YAML metadata to a dataclass field.
-- **[`ConfigSchema`](#schema-internals)** — pre-computed schema
-  with field groups, types, and CLI info. Built once per class at
-  import time.
-- **[Resolution priority](#resolution-priority)** — the fixed order
-  in which sources override each other.
+    field --> cli{"🖥️ CLI arg\nprovided?"}
+    cli -->|yes| cli_val["✅ use CLI value"]
+    cli -->|no| cmd_yaml{"📄 Command YAML\nprovided?"}
+
+    subgraph yaml_hierarchy["📄 YAML file structure"]
+        direction TB
+        global_sec["global.‹key›"]
+        plugin_sec["plugins.‹name›.‹key›"]
+        cmd_sec["plugins.‹name›.commands.‹cmd›.‹key›"]
+    end
+
+    cmd_yaml -->|yes| cmd_val["✅ use Command YAML value"]
+    cmd_yaml -->|no| plugin_yaml{"📄 Plugin YAML\nprovided?"}
+    plugin_yaml -->|yes| plugin_val["✅ use Plugin YAML value"]
+    plugin_yaml -->|no| global_yaml{"📄 Global YAML\nprovided?"}
+    global_yaml -->|yes| global_val["✅ use Global YAML value"]
+    global_yaml -->|no| env{"🌐 ENV var\nprovided?"}
+    env -->|yes| env_val["✅ use ENV value"]
+    env -->|no| default["⚙️ use opt·&#41; default"]
+
+    cmd_sec -.->|feeds| cmd_yaml
+    plugin_sec -.->|feeds| plugin_yaml
+    global_sec -.->|feeds| global_yaml
+
+    classDef decision fill:#FFD700,stroke:#F08C00,color:#000
+    classDef resolved fill:#95D5B2,stroke:#2D6A4F,color:#000
+    classDef source fill:#E6E6FA,stroke:#5B4B8A,color:#000
+    classDef start fill:#4ECDC4,stroke:#0B7285,color:#000
+
+    class cli,cmd_yaml,plugin_yaml,global_yaml,env decision
+    class cli_val,cmd_val,plugin_val,global_val,env_val,default resolved
+    class global_sec,plugin_sec,cmd_sec source
+    class field start
+```
 
 ## ConfigBase and opt()
 
-Every config class inherits from `ConfigBase`. The base class
-intercepts subclass creation via `__init_subclass__`: it applies
-`@dataclass` and builds a `ConfigSchema` automatically. You never
-call `@dataclass` yourself.
+<sub>📄 `crawlers/core/config.py:21-52`</sub>
+
+Every config class inherits from
+[**ConfigBase**](glossary.md#configbase). The base class intercepts
+subclass creation via `__init_subclass__`: it applies `@dataclass`
+and builds a `ConfigSchema` automatically. You never call
+`@dataclass` yourself.
+
+<sub>📄 `crawlers/core/config.py:54-111`</sub>
 
 Fields use `opt()` instead of `dataclasses.field()` to attach
 metadata describing how each value can be provided:
@@ -58,31 +95,35 @@ class ApiConfig(ConfigBase):
     max_retries: int = opt(3, description="Maximum retry attempts")
 ```
 
-### opt() parameters
+### opt() Parameters
 
 | Parameter | Type | Default | Effect |
 |-----------|------|---------|--------|
 | `default` | any | `...` (required) | Default value. `...` means the field is required. |
-| `cli` | `str \| tuple \| False \| None` | `None` | CLI flag name(s). `None` auto-generates from field name (`my_field` becomes `--my-field`). `False` disables CLI. |
-| `env` | `str \| False \| None` | `None` | ENV var suffix. `None` auto-generates (`my_field` becomes `CRAWLER_MY_FIELD`). `False` disables ENV. |
+| `cli` | `str \| tuple \| False \| None` | `None` | CLI flag name(s). `None` auto-generates from field name (`my_field` → `--my-field`). `False` disables CLI. |
+| `env` | `str \| False \| None` | `None` | ENV var suffix. `None` auto-generates (`my_field` → `CRAWLER_MY_FIELD`). `False` disables ENV. |
 | `yaml_key` | `str \| False \| None` | `None` | YAML key. `None` uses the field name. `False` disables YAML loading. |
 | `description` | `str` | `""` | Help text for CLI `--help` and documentation. |
 
-### Field type handling
+### Field Type Handling
 
-The schema builder inspects field type annotations:
+<sub>📄 `crawlers/core/config.py:272-283` · `crawlers/core/config.py:286-330`</sub>
 
-- **`bool`** — CLI generates `action="store_true"` (flag without
-  value).
-- **`int`, `float`, `str`** — CLI passes the corresponding
-  `type=` to argparse for automatic coercion.
+The schema builder inspects field type annotations to configure
+argparse correctly:
+
+- **`bool`** — generates `action="store_true"` (flag without value).
+- **`int`, `float`, `str`** — passes the corresponding `type=` to
+  argparse for automatic coercion.
 - **`Optional[X]`** / **`X | None`** — unwrapped to `X` for type
   handling; the field is not treated as required.
 - **Nested dataclass** — the field gets a recursive `ConfigSchema`.
   Nested configs are YAML-only (no CLI generation). See
   [Nested Configs](#nested-configs).
 
-### Positional arguments
+### Positional Arguments
+
+<sub>📄 `crawlers/core/config.py:303-305`</sub>
 
 To create a positional CLI argument (like `organization` in Ecudo),
 set `cli` to a bare name without dashes:
@@ -100,8 +141,10 @@ registers it as a positional argument.
 
 ## Resolution Priority
 
+<sub>📄 `crawlers/core/plugin.py:274-308`</sub>
+
 When multiple sources provide a value for the same field, the
-highest-priority source wins. The order, from highest to lowest:
+highest-priority source wins:
 
 1. **CLI arguments** — `--base-url https://...`
 2. **Command YAML** —
@@ -111,7 +154,9 @@ highest-priority source wins. The order, from highest to lowest:
 5. **Environment variables** — `CRAWLER_<SUFFIX>`
 6. **Default values** — from the `opt()` call
 
-### How YAML lookup works
+### How YAML Lookup Works
+
+<sub>📄 `crawlers/core/plugin.py:208-223`</sub>
 
 Given a config file loaded via `-c config.yaml`, the framework reads
 three sections and checks each field's `yaml_key` against them in
@@ -143,7 +188,9 @@ For the `page_size` field:
    Used.
 2. Lower levels not checked.
 
-### Environment variables
+### Environment Variables
+
+<sub>📄 `crawlers/core/config.py:249-252`</sub>
 
 Every field gets an env var named `CRAWLER_<SUFFIX>` where `SUFFIX`
 defaults to the uppercase field name. You can override the suffix
@@ -154,24 +201,38 @@ a fallback for values not provided via CLI or config file.
 
 ## Config Inheritance
 
+<sub>📄 `crawlers/default/config.py:17-52`</sub>
+
 Config classes compose via multiple inheritance, which maps cleanly
 to argparse argument groups in `--help` output:
 
+```mermaid
+graph TB
+    CB["🏗️ ConfigBase"]
+
+    CB --> AC["🌐 ApiConfig\nbase_url · timeout · max_retries"]
+    CB --> OC["💾 OutputConfig\noutput_dir"]
+    CB --> PC["⚙️ ProcessingConfig\nconcurrency · queue_size"]
+
+    AC --> DCC["📋 DefaultCrawlConfig\npage_size · max_records · no_url_validation"]
+    OC --> DCC
+    PC --> DCC
+
+    DCC --> ECC["🔌 EcudoCrawlConfig\norganization · no_diversity_filter\ndiversity_filter ·nested·"]
+    DCC --> EODC["🔌 EODCCrawlConfig\ncollections · intersects · datetime_range"]
+
+    classDef core fill:#E6E6FA,stroke:#5B4B8A,color:#000
+    classDef mixin fill:#A8DADC,stroke:#1864AB,color:#000
+    classDef framework fill:#4ECDC4,stroke:#0B7285,color:#000
+    classDef plugin fill:#FFE4B5,stroke:#E8890C,color:#000
+
+    class CB core
+    class AC,OC,PC mixin
+    class DCC framework
+    class ECC,EODC plugin
+```
+
 ```python
-class ApiConfig(ConfigBase):
-    """Base configuration for API connections."""
-    base_url: str = opt(..., description="API base URL")
-    timeout: int = opt(15, description="Request timeout in seconds")
-
-class OutputConfig(ConfigBase):
-    """Configuration for output settings."""
-    output_dir: str = opt("./data", cli=("-o", "--output-dir"))
-
-class ProcessingConfig(ConfigBase):
-    """Configuration for parallel processing."""
-    concurrency: int = opt(128, description="Number of concurrent workers")
-    queue_size: int = opt(1000, description="Size of the processing queue")
-
 class DefaultCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig, kw_only=True):
     """Standard crawl configuration."""
     page_size: int = opt(100, description="Items per API page")
@@ -184,7 +245,8 @@ class. Each group becomes an argparse argument group, so `--help`
 output is organized by concern (API settings, output settings,
 processing settings).
 
-Plugin configs extend further:
+Plugin configs extend further — adding source-specific fields while
+inheriting all the standard ones:
 
 ```python
 class EcudoCrawlConfig(EcudoApiConfig, DefaultCrawlConfig, kw_only=True):
@@ -225,12 +287,63 @@ plugins:
 This pattern works well for processor-specific tuning knobs that
 are too detailed for CLI flags but useful in config files.
 
-## Schema Internals
+## Schema Internals (Framework Maintainers)
+
+<sub>📄 `crawlers/core/config.py:116-165`</sub>
+
+> The following section is relevant if you're modifying the config
+> framework itself. Skip if you're writing plugins.
 
 The schema is built once per class at import time by
 `_build_schema()`. It walks the MRO from most specific to most
-general class, collecting fields into `ConfigGroup` instances. Each
-field becomes a `ConfigFieldInfo` with:
+general class, collecting fields into `ConfigGroup` instances.
+
+```mermaid
+classDiagram
+    class ConfigSchema {
+        config_class
+        groups : ConfigGroup[]
+    }
+
+    class ConfigGroup {
+        name
+        description
+        fields : ConfigFieldInfo[]
+    }
+
+    class ConfigFieldInfo {
+        name
+        field_type
+        description
+        default
+        required
+        cli : CliInfo | None
+        env_var : str | None
+        yaml_key : str | None
+        nested_schema : ConfigSchema | None
+    }
+
+    class CliInfo {
+        names
+        kwargs
+        is_positional
+        attr_name
+    }
+
+    ConfigSchema "1" --> "0..*" ConfigGroup : groups
+    ConfigGroup "1" --> "0..*" ConfigFieldInfo : fields
+    ConfigFieldInfo --> CliInfo : cli
+    ConfigFieldInfo --> ConfigSchema : nested_schema
+
+    style ConfigSchema fill:#4ECDC4,stroke:#0B7285,color:#000
+    style ConfigGroup fill:#A8DADC,stroke:#1864AB,color:#000
+    style ConfigFieldInfo fill:#E6E6FA,stroke:#5B4B8A,color:#000
+    style CliInfo fill:#FFE4B5,stroke:#E8890C,color:#000
+```
+
+<sub>📄 `crawlers/core/config.py:167-204`</sub>
+
+Each field becomes a `ConfigFieldInfo` with:
 
 - **`CliInfo`** — pre-computed argparse arguments (flag names,
   kwargs, positional flag, attribute name).
@@ -240,28 +353,10 @@ field becomes a `ConfigFieldInfo` with:
 - **`nested_schema`** — recursive `ConfigSchema` for nested
   dataclass fields.
 
+<sub>📄 `crawlers/core/plugin.py:111-161`</sub>
+
 The `CrawlerPlugin.register_args()` method iterates schema groups
 and adds argparse arguments. The `load_config()` method iterates
-fields and calls `_resolve_value()` per field, then `_coerce_type()`
+fields, calls `_resolve_value()` per field to apply the
+[resolution priority](#resolution-priority), then `_coerce_type()`
 to convert string values (from CLI or ENV) to the target type.
-
-<!-- DIAGRAM
-What to show: Resolution flow for a single config field — the
-  priority chain from CLI through YAML levels to ENV to default,
-  showing where each source is checked and the first non-None wins.
-Context: Follows the "Resolution Priority" section, visualizes the
-  waterfall logic in _resolve_value().
-Key participants: CLI args, command YAML, plugin YAML, global YAML,
-  ENV var, default value
-Related visuals in this doc: none (first diagram)
--->
-
-## Related Documentation
-
-- **[Architecture Overview](_overview.md)** — system layers and data
-  flow
-- **[Plugin System](plugin-system.md)** — how plugins use config
-  for command dispatch
-- **[Writing Plugins](../guides/writing-plugins.md)** — practical
-  config examples
-- **[Glossary](glossary.md#configbase)** — quick definitions
