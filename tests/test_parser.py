@@ -4,12 +4,7 @@
 
 import pytest
 
-from crawlers.plugins.ecudo.parser import (
-    EcudoParser,
-    extract_filename,
-    parse_files,
-    parse_publisher,
-)
+from crawlers.plugins.ecudo.parser import EcudoParser, parse_files, parse_publisher
 
 
 @pytest.fixture
@@ -52,7 +47,7 @@ class TestParseRecord:
         assert result.keywords == ["test", "sample", "data"]
         assert len(result.files) == 1
         assert result.files[0].url == "https://example.com/data/test.zip"
-        assert result.files[0].name == "test.zip"
+        assert result.files[0].path == "test.zip"
         assert result.spatial == "18.0,54.0,19.0,55.0"
         assert result.temporal == "2024-01-01/2024-01-31"
 
@@ -138,9 +133,9 @@ class TestParseRecord:
         result = parser.parse(record)
         assert result is not None
         assert len(result.files) == 3
-        assert result.files[0].name == "file1.csv"
-        assert result.files[1].name == "file2.csv"
-        assert result.files[2].name == "file3.csv"
+        assert result.files[0].path == "file1.csv"
+        assert result.files[1].path == "file2.csv"
+        assert result.files[2].path == "file3.csv"
 
     def test_parse_preserves_raw(self, valid_record):
         """Test that _raw field preserves original data."""
@@ -148,13 +143,6 @@ class TestParseRecord:
         result = parser.parse(valid_record)
         assert result is not None
         assert result._raw == valid_record
-
-    def test_extract_filename_from_url(self):
-        """Test filename extraction from various URLs."""
-        assert extract_filename("https://example.com/path/to/file.zip") == "file.zip"
-        assert extract_filename("https://example.com/file.csv") == "file.csv"
-        assert extract_filename("https://example.com/") == "data.bin"
-        assert extract_filename("") == "data.bin"
 
 
 class TestParseFiles:
@@ -168,7 +156,7 @@ class TestParseFiles:
         files = parse_files(distributions)
 
         assert len(files) == 1
-        assert files[0].name == "data.zip"
+        assert files[0].path == "data.zip"
         assert files[0].url == "https://example.com/data.zip"
 
     def test_parse_multiple_distributions(self):
@@ -181,9 +169,9 @@ class TestParseFiles:
         files = parse_files(distributions)
 
         assert len(files) == 3
-        assert files[0].name == "file1.csv"
-        assert files[1].name == "file2.csv"
-        assert files[2].name == "file3.csv"
+        assert files[0].path == "file1.csv"
+        assert files[1].path == "file2.csv"
+        assert files[2].path == "file3.csv"
 
     def test_skip_distributions_without_url(self):
         """Test that distributions without downloadURL are skipped."""
@@ -195,8 +183,8 @@ class TestParseFiles:
         files = parse_files(distributions)
 
         assert len(files) == 2
-        assert files[0].name == "valid.zip"
-        assert files[1].name == "another.zip"
+        assert files[0].path == "valid.zip"
+        assert files[1].path == "another.zip"
 
     def test_empty_distributions(self):
         """Test parsing empty distribution list."""
@@ -244,40 +232,3 @@ class TestParsePublisher:
         publisher_data = {"@type": "org:Organization"}
         result = parse_publisher(publisher_data)
         assert result == "Unknown Publisher"
-
-
-class TestExtractFilename:
-    """Extended tests for extract_filename() function."""
-
-    def test_simple_url(self):
-        """Test extracting filename from simple URL."""
-        assert extract_filename("https://example.com/data.csv") == "data.csv"
-
-    def test_deep_path(self):
-        """Test extracting filename from deep URL path."""
-        url = "https://databank.iopan.pl/data/raw/vdr/vdr_201307_201312_nmea-08895.zip"
-        assert extract_filename(url) == "vdr_201307_201312_nmea-08895.zip"
-
-    def test_url_with_query_string(self):
-        """Test extracting filename ignores query string."""
-        url = "https://example.com/path/file.zip?token=abc123"
-        result = extract_filename(url)
-        # The current implementation includes query string in filename
-        assert result == "file.zip"
-
-    def test_url_without_extension(self):
-        """Test extracting filename without extension."""
-        url = "https://example.com/api/data/23"
-        assert extract_filename(url) == "23"
-
-    def test_empty_url(self):
-        """Test fallback for empty URL."""
-        assert extract_filename("") == "data.bin"
-
-    def test_root_url(self):
-        """Test fallback for URL with just root path."""
-        assert extract_filename("https://example.com/") == "data.bin"
-
-    def test_url_ending_with_slash(self):
-        """Test URL ending with slash."""
-        assert extract_filename("https://example.com/path/") == "data.bin"

@@ -21,7 +21,7 @@ def sample_record():
         keywords=["ocean", "temperature", "salinity"],
         files=[
             EcudoFile(
-                name="data.zip",
+                path="data.zip",
                 url="https://example.com/data.zip",
             )
         ],
@@ -125,7 +125,7 @@ class TestOpenAIREMetadata:
             issued="2024-01-01",
             language="en",
             keywords=[],
-            files=[EcudoFile(name="data.zip", url="https://example.com/data.zip")],
+            files=[EcudoFile(path="data.zip", url="https://example.com/data.zip")],
         )
         builder = OpenAIREBuilder()
         result = builder.build(record)
@@ -144,7 +144,7 @@ class TestOpenAIREMetadata:
             issued="",
             language="en",
             keywords=[],
-            files=[EcudoFile(name="data.bin", url="https://example.com/data")],
+            files=[EcudoFile(path="data.bin", url="https://example.com/data")],
         )
         builder = OpenAIREBuilder()
         result = builder.build(record)

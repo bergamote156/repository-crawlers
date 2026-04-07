@@ -11,13 +11,8 @@ from dataclasses import asdict, dataclass, field
 class OnedataFile:
     """File ready for Onedata registration."""
 
-    name: str
+    path: str
     url: str
-    path: str = ""
-
-    def __post_init__(self):
-        if not self.path:
-            self.path = self.name
 
 
 @dataclass

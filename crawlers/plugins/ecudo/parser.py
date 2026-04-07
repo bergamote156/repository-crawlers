@@ -6,11 +6,10 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Sequence
-from urllib.parse import urlparse
 
+from crawlers.plugins.utils.paths import resolve_path_collisions
 from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
@@ -50,7 +49,7 @@ KNOWN_ACCESS_LEVELS = {"public"}
 class EcudoFile:
     """File from Ecudo dataset."""
 
-    name: str
+    path: str
     url: str
 
 
@@ -211,7 +210,7 @@ def parse_files(distributions: list, identifier: str = "") -> list[EcudoFile]:
     Returns:
         List of FileInfo objects (may be empty)
     """
-    files = []
+    urls: list[str] = []
     for dist in distributions:
         # Validate distribution @type
         dist_type = dist.get("@type")
@@ -225,14 +224,10 @@ def parse_files(distributions: list, identifier: str = "") -> list[EcudoFile]:
         if not url:
             continue
 
-        files.append(
-            EcudoFile(
-                name=extract_filename(url),
-                url=url,
-            )
-        )
+        urls.append(url)
 
-    return files
+    paths = resolve_path_collisions(urls)
+    return [EcudoFile(path=p, url=u) for p, u in zip(paths, urls)]
 
 
 def parse_publisher(publisher_data, identifier: str = "") -> str:
@@ -260,24 +255,3 @@ def parse_publisher(publisher_data, identifier: str = "") -> str:
         f" {identifier}"
     )
     return "Unknown Publisher"
-
-
-def extract_filename(url: str) -> str:
-    """
-    Extract filename from URL.
-
-    Args:
-        url: Download URL
-
-    Returns:
-        Extracted filename or "data.bin" as fallback
-    """
-    with suppress(ValueError, AttributeError, TypeError):
-        path = urlparse(url).path
-        if path:
-            filename = path.split("/")[-1]
-            if filename:
-                return filename
-
-    # Gracefully fall through to default filename
-    return "data.bin"

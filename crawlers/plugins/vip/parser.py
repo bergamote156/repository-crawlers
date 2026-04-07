@@ -51,7 +51,7 @@ class VipDataset:
             "datetime": self.datetime,
             "self_link": self.self_link,
             "meta": self.meta,
-            "files": [{"name": f.name, "url": f.url} for f in self.files],
+            "files": [{"path": f.path, "url": f.url} for f in self.files],
         }
 
 

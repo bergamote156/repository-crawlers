@@ -11,19 +11,18 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol, Sequence
-from urllib.parse import urlparse
 
 from crawlers.core.metadata import MetadataBuilder
 from crawlers.core.onedata import OnedataDataset, OnedataFile
 from crawlers.core.processor import Processor, ProcessorStats
-from crawlers.core.result import Ok
+from crawlers.core.result import Err, Ok, Result
 
 
 class DatasetFile(Protocol):
     # pylint: disable=too-few-public-methods
     """Dataset file object required properties by OnedataConverter."""
 
-    name: str
+    path: str
     url: str
 
 
@@ -48,10 +47,13 @@ class OnedataConverter[DatasetT: Dataset](
     Processor[DatasetT, OnedataDataset, ConverterStats]
 ):
     """
-    Converts InputDataset to OnedataDataset.
+    Converts an input dataset to OnedataDataset.
 
-    Uses a MetadataGenerator to produce XML metadata and prepares
-    file paths specifically for Onedata registration (resolving collisions).
+    Uses a MetadataBuilder to produce XML metadata. The plugin is responsible
+    for providing unique, human-readable ``path`` values on each file — this
+    converter only validates uniqueness and rejects datasets with duplicates.
+    Plugins whose source API exposes a flat URL list can use
+    ``crawlers.plugins.utils.paths.resolve_path_collisions`` to derive paths.
     """
 
     def __init__(
@@ -59,13 +61,6 @@ class OnedataConverter[DatasetT: Dataset](
         metadata_builder: MetadataBuilder[DatasetT],
         enabled: bool = True,
     ):
-        """
-        Initialize converter.
-
-        Args:
-            metadata_builder: Generator for producing metadata XML
-            enabled: Whether this processor is active
-        """
         super().__init__(enabled=enabled)
         self.metadata_builder = metadata_builder
 
@@ -78,108 +73,33 @@ class OnedataConverter[DatasetT: Dataset](
         """Create converter-specific stats."""
         return ConverterStats()
 
-    async def process(self, item: DatasetT) -> Ok[OnedataDataset]:
+    async def process(self, item: DatasetT) -> Result[OnedataDataset, dict]:
         """
         Convert input dataset to Onedata format.
 
-        Args:
-            item: Input dataset
-
-        Returns:
-            Ok(dataset) ready for registration
+        Rejects the dataset if file paths are not unique.
         """
-        # Resolve path collisions when multiple files have the same filename
-        paths = self._resolve_path_collisions(item.files)
+        duplicates = sorted(
+            {p for p, c in Counter(f.path for f in item.files).items() if c > 1}
+        )
+        if duplicates:
+            self._stats.failed += 1
+            return Err(
+                {
+                    "dataset_id": item.identifier,
+                    "reason": "duplicate_file_paths",
+                    "detail": {"paths": duplicates},
+                    "processor": "OnedataConverter",
+                }
+            )
 
         dataset = OnedataDataset(
             name=item.title,
             location=item.title.replace("/", "-"),
             pid=item.identifier,
             metadata_xml=self.metadata_builder.build(item),
-            files=[
-                OnedataFile(name=f.name, url=f.url, path=path)
-                for f, path in zip(item.files, paths)
-            ],
+            files=[OnedataFile(path=f.path, url=f.url) for f in item.files],
         )
 
         self._stats.processed += 1
         return Ok(dataset)
-
-    def _resolve_path_collisions(self, files: Sequence[DatasetFile]) -> list[str]:
-        """
-        Generate unique paths for files, resolving collisions using URL structure.
-
-        When multiple files have the same filename, progressively add more
-        path segments from the URL until all paths are unique.
-
-        Args:
-            files: List of file objects
-
-        Returns:
-            List of unique paths corresponding to each file
-        """
-        if not files:
-            return []
-
-        files_num = len(files)
-        max_segments = 1
-        segments_per_file = {}
-        used_segments_per_file = {}
-        unresolved = set()
-
-        for idx in range(files_num):
-            url_segments = self._get_path_segments(files[idx].url)
-            segments_per_file[idx] = url_segments
-            used_segments_per_file[idx] = 1
-            unresolved.add(idx)
-            max_segments = max(max_segments, len(url_segments))
-
-        for _ in range(max_segments):
-            counter: Counter[str] = Counter()
-            paths: dict[int, str] = {}
-
-            # Generate current paths for unresolved files
-            for idx in unresolved:
-                path = self._build_path(
-                    segments_per_file[idx], used_segments_per_file[idx]
-                )
-                paths[idx] = path
-                counter.update([path])
-
-            # Find collisions
-            colliding = {p for p, c in counter.items() if c > 1}
-
-            # Prepare next iteration
-            next_unresolved = set()
-            for idx in unresolved:
-                if paths[idx] in colliding:
-                    # Try more segments if available
-                    if used_segments_per_file[idx] < len(segments_per_file[idx]):
-                        used_segments_per_file[idx] += 1
-                        next_unresolved.add(idx)
-
-            if not next_unresolved:
-                break
-            unresolved = next_unresolved
-        else:
-            # If still unresolved loop finished
-            pass
-
-        # Build final paths
-        return [
-            self._build_path(segments_per_file[i], used_segments_per_file[i])
-            for i in range(files_num)
-        ]
-
-    def _get_path_segments(self, url: str) -> list[str]:
-        """Extract path segments from URL (reversed, filename first)."""
-        try:
-            path = urlparse(url).path
-            return [seg for seg in path.split("/") if seg][::-1]
-        except (ValueError, AttributeError):
-            return []
-
-    def _build_path(self, segments: list[str], count: int) -> str:
-        """Build path from last N segments."""
-        used = segments[:count]
-        return "/".join(reversed(used))

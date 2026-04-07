@@ -19,7 +19,7 @@ def make_record(identifier: str, title: str) -> EcudoDataset:
         issued="2024-01-01",
         language="English",
         keywords=[],
-        files=[EcudoFile(name="data.zip", url="https://example.com/data.zip")],
+        files=[EcudoFile(path="data.zip", url="https://example.com/data.zip")],
     )
 
 

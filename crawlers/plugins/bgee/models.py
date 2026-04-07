@@ -56,7 +56,7 @@ class BgeeFile:
     Satisfies both `DatasetFile` and `DataCiteFile` protocols via duck typing.
     """
 
-    name: str
+    path: str
     url: str
 
 
@@ -93,7 +93,7 @@ class BgeeDataset:  # pylint: disable=too-many-instance-attributes
             "description": self.description,
             "datetime": self.datetime,
             "self_link": self.self_link,
-            "files": [{"name": f.name, "url": f.url} for f in self.files],
+            "files": [{"path": f.path, "url": f.url} for f in self.files],
         }
         if self._raw:
             try:

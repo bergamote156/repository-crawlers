@@ -20,7 +20,7 @@ from crawlers.ui import console
 class VipFile:
     """A downloadable file within a VIP dataset folder."""
 
-    name: str
+    path: str
     """Relative path from the dataset root (e.g. 'subdir/file.txt')."""
     url: str
     """Direct download URL via Girder item download endpoint."""
@@ -280,7 +280,7 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
                     )
                     files.append(
                         VipFile(
-                            name=file_path,
+                            path=file_path,
                             url=f"{self.base_url}/item/{item_id}/download",
                         )
                     )

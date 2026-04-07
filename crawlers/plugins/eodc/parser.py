@@ -32,7 +32,7 @@ DEFAULT_EXTENSION = "tiff"
 class EODCFile:
     """Asset from STAC item."""
 
-    name: str
+    path: str
     url: str
 
 
@@ -186,7 +186,7 @@ class EODCParser(Parser[dict, EODCDataset]):
 
             files.append(
                 EODCFile(
-                    name=filename,
+                    path=filename,
                     url=href,
                 )
             )

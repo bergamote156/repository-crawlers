@@ -169,19 +169,15 @@ def register_dataset_files(  # pylint: disable=too-many-arguments,too-many-posit
     skipped = 0
 
     for file_info in files:
-        file_name = file_info.name
         file_path = file_info.path.strip("/") if file_info.path else ""
         file_url = file_info.url
 
         if not file_url:
-            output.warning(f"File '{file_name}' has no URL, skipping")
+            output.warning(f"File '{file_path}' has no URL, skipping")
             continue
 
         # Build destination path
-        if file_path:
-            dest_path = f"{location}/{file_path}"
-        else:
-            dest_path = f"{location}/{file_name}"
+        dest_path = f"{location}/{file_path}"
 
         # Check if file already exists
         file_id = oneprovider.lookup_file_id(space_name=space_name, path=dest_path)

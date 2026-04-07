@@ -169,7 +169,7 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
                     _val(g, dist, "name")
                     or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
                 )
-                files.append(BgeeFile(name=name, url=url))
+                files.append(BgeeFile(path=name, url=url))
         return files
 
 
