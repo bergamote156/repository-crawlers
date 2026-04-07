@@ -25,9 +25,9 @@ from crawlers.plugins.ecudo.api import EcudoClient, EcudoIteratorOpts
 from crawlers.plugins.ecudo.config import EcudoApiConfig, EcudoCrawlConfig
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoParser
 from crawlers.processors.converters import OnedataConverter
-from crawlers.processors.fetchers import DatasetFetcher
 from crawlers.processors.filters import DiversityFilter
 from crawlers.processors.pipeline import ProcessorPipeline
+from crawlers.processors.resolvers import DatasetResolver
 from crawlers.processors.tap import Tap
 from crawlers.processors.validators import URLValidator
 from crawlers.ui import console
@@ -75,8 +75,8 @@ class EcudoPlugin(DefaultCrawlerPlugin):
 
         return ProcessorPipeline(
             processors=[
-                DatasetFetcher[dict, EcudoDataset](
-                    fetch_fn=ecudo_client.get_dataset_metadata,
+                DatasetResolver[str, dict, EcudoDataset](
+                    resolve_fn=ecudo_client.get_dataset_metadata,
                     parser=ctx.crawl_spec.parser,
                 ),
                 URLValidator[EcudoDataset](  # type: ignore[type-var]

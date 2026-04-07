@@ -41,37 +41,59 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
     Girder REST API client for the VIP platform.
 
     Resolves a named collection to its ID, paginates the top-level
-    dataset folders, and recursively collects all nested files for
-    each dataset before yielding.
+    dataset folders, and provides file resolution for each folder.
     """
+
+    _COLLECTION_PAGE_SIZE = 100
+    _DEFAULT_PAGE_SIZE = 100
 
     async def list_collections(self) -> Result[list[dict], ApiFailure]:
         """
-        Fetch all available collections.
+        Fetch all available collections, paginating until exhausted.
 
         Returns:
             Ok(list[dict]) where each dict is a Girder collection object,
             or Err(ApiFailure) on HTTP/network error.
         """
-        url = f"{self.base_url}/collection?limit=250&offset=0&sort=name&sortdir=1"
-        result = await self.get_json(url)
-        if isinstance(result, Err):
-            return result
-        return Ok(_to_list(result.value))
+        all_collections: list[dict] = []
+        offset = 0
+
+        while True:
+            url = (
+                f"{self.base_url}/collection"
+                f"?limit={self._COLLECTION_PAGE_SIZE}&offset={offset}"
+                f"&sort=name&sortdir=1"
+            )
+            result = await self.get_json(url)
+            if isinstance(result, Err):
+                return result
+
+            page = _to_list(result.value)
+            if not page:
+                break
+
+            all_collections.extend(page)
+            if len(page) < self._COLLECTION_PAGE_SIZE:
+                break
+            offset += len(page)
+            console.debug(
+                f"Fetched {len(all_collections)} collections so far, "
+                f"fetching next page..."
+            )
+
+        console.info(f"Found {len(all_collections)} collection(s) total")
+        return Ok(all_collections)
 
     # pylint: disable=invalid-overridden-method
     async def iterate_datasets(self, opts: VipIteratorOpts) -> AsyncIterator[dict]:
         """
         Iterate over top-level dataset folders in the named collection.
 
-        Resolves the collection name to its Girder ID, then pages through
-        root-level folders. For each folder, all nested files are collected
-        recursively before yielding.
+        Yields raw Girder folder dicts. File resolution is done separately
+        via resolve_dataset() in the pipeline workers (parallel).
 
         Yields:
-            dict with keys:
-              - 'folder': raw Girder folder JSON
-              - 'files': list[VipFile] (all files, paths relative to folder root)
+            Girder folder dict (raw JSON object)
         """
         collection_id = await self._resolve_collection_id(opts.collection)
         if not collection_id:
@@ -99,22 +121,41 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
                     console.info(f"Reached max_records limit: {opts.max_records}")
                     return
 
-                folder_id = folder.get("_id", "")
-                folder_name = folder.get("name", folder_id)
-
-                console.info(f"📁 Collecting files for dataset: {folder_name}")
-                files = await self._collect_files(
-                    folder_id=folder_id,
-                    path_prefix="",
-                    page_size=opts.page_size,
-                )
-                yield {"folder": folder, "files": files}
+                yield folder
                 yielded += 1
-                console.info(
-                    f"✅ [{yielded}/{total}] {folder_name} — {len(files)} file(s)"
-                )
 
             offset += len(folders)
+
+    async def resolve_dataset(self, folder: dict) -> Result[dict, ApiFailure]:
+        """
+        Resolve a folder dict into a full dataset record with files.
+
+        Recursively collects all nested files under the folder and returns
+        a dict ready for parsing.
+
+        This is used as resolve_fn in the pipeline's DatasetResolver,
+        running in parallel workers.
+
+        Args:
+            folder: Girder folder dict (as yielded by iterate_datasets)
+
+        Returns:
+            Ok(dict) with 'folder' and 'files' keys, or Err on failure
+        """
+        folder_id = folder.get("_id", "")
+        folder_name = folder.get("name", folder_id)
+
+        console.debug(f"Resolving files for dataset: {folder_name}")
+        files = await self._collect_files(
+            folder_id=folder_id,
+            path_prefix="",
+            page_size=self._DEFAULT_PAGE_SIZE,
+        )
+        console.info(f"Resolved {folder_name}: {len(files)} file(s)")
+
+        return Ok({"folder": folder, "files": files})
+
+    # --- Internal helpers ---
 
     async def _resolve_collection_id(self, name: str) -> str | None:
         """Look up collection ID by name."""
@@ -148,6 +189,18 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
             case other:
                 assert_never(other)
 
+    async def _get_folder_details(self, folder_id: str) -> tuple[int, int]:
+        """Return (nFolders, nItems) for a folder."""
+        url = f"{self.base_url}/folder/{folder_id}/details"
+        match await self.get_json(url):
+            case Ok(value=data):
+                return data.get("nFolders", 0), data.get("nItems", 0)
+            case Err(value=err):
+                console.warning(f"Failed to get folder details for {folder_id}: {err}")
+                return 0, 0
+            case other:
+                assert_never(other)
+
     async def _list_folders(
         self,
         parent_type: str,
@@ -168,6 +221,27 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
                 console.warning(
                     f"Failed to list folders ({parent_type}/{parent_id}): {err}"
                 )
+                return []
+            case other:
+                assert_never(other)
+
+    async def _list_items(
+        self,
+        folder_id: str,
+        limit: int,
+        offset: int,
+    ) -> list[dict]:
+        """Fetch one page of items (files) inside a folder."""
+        url = (
+            f"{self.base_url}/item"
+            f"?limit={limit}&offset={offset}&sort=name&sortdir=1"
+            f"&folderId={folder_id}"
+        )
+        match await self.get_json(url):
+            case Ok(value=data):
+                return _to_list(data)
+            case Err(value=err):
+                console.warning(f"Failed to list items for folder {folder_id}: {err}")
                 return []
             case other:
                 assert_never(other)
@@ -235,39 +309,6 @@ class VipClient(ApiClient[VipIteratorOpts, dict]):
                     break
 
         return files
-
-    async def _get_folder_details(self, folder_id: str) -> tuple[int, int]:
-        """Return (nFolders, nItems) for a folder."""
-        url = f"{self.base_url}/folder/{folder_id}/details"
-        match await self.get_json(url):
-            case Ok(value=data):
-                return data.get("nFolders", 0), data.get("nItems", 0)
-            case Err(value=err):
-                console.warning(f"Failed to get folder details for {folder_id}: {err}")
-                return 0, 0
-            case other:
-                assert_never(other)
-
-    async def _list_items(
-        self,
-        folder_id: str,
-        limit: int,
-        offset: int,
-    ) -> list[dict]:
-        """Fetch one page of items (files) inside a folder."""
-        url = (
-            f"{self.base_url}/item"
-            f"?limit={limit}&offset={offset}&sort=name&sortdir=1"
-            f"&folderId={folder_id}"
-        )
-        match await self.get_json(url):
-            case Ok(value=data):
-                return _to_list(data)
-            case Err(value=err):
-                console.warning(f"Failed to list items for folder {folder_id}: {err}")
-                return []
-            case other:
-                assert_never(other)
 
 
 def _to_list(data: list | dict) -> list[dict]:

@@ -5,9 +5,11 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
+from typing import Any, Awaitable, Callable
 
 from crawlers.core.api import ApiClient
 from crawlers.core.metadata import MetadataBuilder
+from crawlers.core.result import Result
 from crawlers.processors.parsers import Parser
 
 
@@ -27,6 +29,10 @@ class DefaultCrawlSpec:
         metadata_builder: Produces metadata XML for each dataset
 
     Optional fields:
+        resolve_fn: If provided, the pipeline starts with a DatasetResolver
+            (resolve_fn + parser) instead of a plain ParserProcessor.
+            Use when the iterator yields partial data (IDs or references)
+            that need enrichment via API calls before parsing.
         run_context_name: Used in the run directory name (default: "default")
         banner_subtitle: Shown under the class name in the startup banner
     """
@@ -38,5 +44,6 @@ class DefaultCrawlSpec:
     parser: Parser
     metadata_builder: MetadataBuilder
 
+    resolve_fn: Callable[[Any], Awaitable[Result[Any, Any]]] | None = None
     run_context_name: str = "default"
     banner_subtitle: str | None = None

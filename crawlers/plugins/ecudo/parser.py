@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 from urllib.parse import urlparse
 
-from crawlers.processors.fetchers import Parser
+from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
 # Expected @type values for structure validation

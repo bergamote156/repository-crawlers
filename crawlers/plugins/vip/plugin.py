@@ -38,17 +38,20 @@ class VipPlugin(DefaultCrawlerPlugin):
     def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
         cfg = cast(VipCrawlConfig, config)
 
+        client = VipClient(
+            base_url=cfg.base_url,
+            timeout=cfg.timeout,
+            max_retries=cfg.max_retries,
+        )
+
         return DefaultCrawlSpec(
-            client=VipClient(
-                base_url=cfg.base_url,
-                timeout=cfg.timeout,
-                max_retries=cfg.max_retries,
-            ),
+            client=client,
             iterator_opts=VipIteratorOpts(
                 collection=cfg.collection,
                 page_size=cfg.page_size,
                 max_records=cfg.max_records,
             ),
+            resolve_fn=client.resolve_dataset,
             parser=VipParser(),
             metadata_builder=VipDataCiteBuilder(),
             run_context_name=cfg.collection,

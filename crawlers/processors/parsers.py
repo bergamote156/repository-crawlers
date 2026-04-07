@@ -22,7 +22,6 @@ class Parser[I, O](Protocol):
     Protocol for data parsers.
 
     Plugins can implement this protocol or use a simple callable.
-    Fetchers accept anything that has a `parse()` method (duck typing).
 
     Generics:
         I: Type of raw data (e.g. dict from JSON)

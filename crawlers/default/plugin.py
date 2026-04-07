@@ -27,7 +27,13 @@ from crawlers.core.workspace import RunContext, make_run_dir
 from crawlers.default.config import DefaultCrawlConfig
 from crawlers.default.crawl_spec import DefaultCrawlSpec
 from crawlers.default.workspace import DefaultRunContext
-from crawlers.processors import OnedataConverter, ProcessorPipeline, Tap, URLValidator
+from crawlers.processors import (
+    DatasetResolver,
+    OnedataConverter,
+    ProcessorPipeline,
+    Tap,
+    URLValidator,
+)
 from crawlers.processors.parsers import ParserProcessor
 from crawlers.ui import console
 
@@ -171,15 +177,30 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
             self._print_summary(status, pipeline, stats, ctx)
 
     def build_pipeline(self, ctx: DefaultRunContext) -> ProcessorPipeline:
-        """Build the default processor pipeline."""
+        """Build the default processor pipeline.
+
+        If ``resolve_fn`` is set in the crawl spec, the pipeline starts with
+        a DatasetResolver (resolve + parse). Otherwise it starts with a
+        plain ParserProcessor (parse only).
+        """
+        spec = ctx.crawl_spec
+
+        if spec.resolve_fn:
+            first_step: Processor = DatasetResolver(
+                resolve_fn=spec.resolve_fn,
+                parser=spec.parser,
+            )
+        else:
+            first_step = ParserProcessor(parser=spec.parser)
+
         processors: list[Processor] = [
-            ParserProcessor(parser=ctx.crawl_spec.parser),
+            first_step,
             URLValidator(
-                validate_fn=ctx.crawl_spec.client.validate_url,
+                validate_fn=spec.client.validate_url,
                 enabled=not ctx.config.no_url_validation,
             ),
             Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
-            OnedataConverter(metadata_builder=ctx.crawl_spec.metadata_builder),
+            OnedataConverter(metadata_builder=spec.metadata_builder),
             Tap(ctx.processed_sink, transform=lambda d: d.to_json()),
         ]
         return ProcessorPipeline(

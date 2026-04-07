@@ -22,18 +22,26 @@ class VipDataCiteBuilder(DataCiteBuilder):
     acquisitions stored in Girder collections.
     """
 
-    creator_name = "CREATIS"
+    creator_name = "VIP"
     publisher_name = "VIP (Virtual Imaging Platform)"
     resource_type_general = "Dataset"
     resource_type_value = "Medical imaging data"
-    default_subjects = [
-        "medical imaging",
-        "MRI",
-        "in-vivo imaging",
-        "VIP",
-        "CREATIS",
-    ]
-    default_rights = "Contact data owner for usage terms"
+    default_subjects: list[str] = []
+    default_rights = "Contact data owner for usage terms"  # TODO ?
+
+    # Meta keys whose values are included as DataCite subjects.
+    # Order matters — they appear in the XML in this order.
+    _SUBJECT_META_KEYS = (
+        "SUBJECT_study_modalities",
+        "SUBJECT_type",
+        "SUBJECT_gender",
+        "SUBJECT_id",
+        "SUBJECT_name_string",
+        "SUBJECT_study_instrument_position",
+        "SUBJECT_study_operator",
+        "ORIGIN",
+        "DATATYPE",
+    )
 
     def build_identifier_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
         """Use URL identifier since VIP datasets have no DOI."""
@@ -51,19 +59,21 @@ class VipDataCiteBuilder(DataCiteBuilder):
 
     def build_subjects_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
         """
-        Combine default subjects with dataset-specific terms from folder meta:
-        SUBJECT_study_modalities (e.g. 'MR_Modality'), SUBJECT_type (e.g. 'Quadruped'),
-        ORIGIN (e.g. 'Bruker BioSpin MRI GmbH').
+        Build subjects from SUBJECT_* and other descriptive meta fields.
+
+        All non-empty values from _SUBJECT_META_KEYS are emitted as
+        ``<subject>`` elements, deduplicated and in a stable order.
         """
         meta = getattr(ctx.dataset, "meta", {})
 
-        extra: list[str] = []
-        for field_name in ("SUBJECT_study_modalities", "SUBJECT_type", "ORIGIN"):
-            value = meta.get(field_name)
-            if value and value not in self.default_subjects and value not in extra:
-                extra.append(value)
+        seen: set[str] = set()
+        subjects: list[str] = []
+        for key in self._SUBJECT_META_KEYS:
+            value = meta.get(key)
+            if value and value not in seen:
+                seen.add(value)
+                subjects.append(value)
 
-        subjects = self.default_subjects + extra
         if not subjects:
             return
 

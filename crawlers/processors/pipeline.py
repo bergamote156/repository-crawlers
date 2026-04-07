@@ -35,7 +35,7 @@ class ProcessorPipeline[InT, OutT](Processor[InT, OutT, ProcessorStats]):
     Example usage:
         pipeline = ProcessorPipeline(
             processors=[
-                DatasetFetcher(...),
+                DatasetResolver(...),
                 URLValidator(...),
                 Tap(raw_sink),
                 OnedataConverter(...),

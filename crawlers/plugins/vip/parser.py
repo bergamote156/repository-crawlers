@@ -58,12 +58,11 @@ class VipDataset:
 # pylint: disable=too-few-public-methods
 class VipParser(Parser[dict, VipDataset]):
     """
-    Parses a raw Girder folder dict (as yielded by VipClient.iterate_datasets)
-    into a VipDataset.
+    Parses a resolved Girder folder dict into a VipDataset.
 
-    The raw dict must contain:
+    Expects the dict produced by VipClient.resolve_dataset():
       - 'folder': Girder folder JSON object
-      - 'files':  list[VipFile] collected by the client
+      - 'files':  list[VipFile] collected recursively
     """
 
     def parse(self, raw: dict) -> VipDataset | None:
