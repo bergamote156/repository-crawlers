@@ -9,6 +9,15 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass, field
 from typing import Sequence
 
+from crawlers.metadata.openaire import (
+    AccessRights,
+    BoundingBox,
+    FileLocation,
+    OpenAIRERecord,
+    ResourceType,
+)
+from crawlers.plugins.utils.language import normalize_language_code
+from crawlers.plugins.utils.mime import infer_mime_type
 from crawlers.plugins.utils.paths import resolve_path_collisions
 from crawlers.processors.parsers import Parser
 from crawlers.ui import console
@@ -44,6 +53,11 @@ KNOWN_ROOT_FIELDS = {
 # Known accessLevel values
 KNOWN_ACCESS_LEVELS = {"public"}
 
+# Maps eCUDO ``accessLevel`` strings to COAR access right enums.
+_ACCESS_LEVEL_MAP: dict[str, AccessRights] = {
+    "public": AccessRights.OPEN,
+}
+
 
 @dataclass
 class EcudoFile:
@@ -53,29 +67,20 @@ class EcudoFile:
     url: str
 
 
-# pylint: disable=too-many-instance-attributes
 @dataclass
 class EcudoDataset:
-    """Ecudo Dataset model."""
+    """
+    Pipeline carrier for an eCUDO dataset.
+
+    Holds the minimal fields the processor pipeline needs (identifier, title,
+    files) plus a fully populated :class:`OpenAIRERecord` for the metadata
+    builder, and the original JSON-LD payload for the raw sink.
+    """
 
     identifier: str
     title: str
-    description: str
-    publisher: str
-    issued: str  # publication date
     files: Sequence[EcudoFile]
-
-    # Optional but common fields
-    language: str = "en"
-    keywords: list[str] = field(default_factory=list)
-    modified: str | None = None
-    access_level: str = "public"
-
-    # Geographic/temporal metadata
-    spatial: str | None = None
-    temporal: str | None = None
-
-    # Raw JSON-LD data from API
+    metadata: OpenAIRERecord
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
 
     def to_json(self) -> dict:
@@ -104,44 +109,93 @@ class EcudoParser(Parser[dict, EcudoDataset]):
             return None
 
         try:
-            validate_structure(raw, identifier)
-            dataset = self._parse_record(raw, identifier)
-            return dataset
+            return _parse_record(raw, identifier)
         except Exception as e:  # pylint: disable=broad-except
             console.warning(f"Failed to parse record {identifier}: {e}")
             return None
 
-    def _parse_record(self, raw: dict, identifier: str) -> None | EcudoDataset:
-        """Internal parsing logic."""
 
-        # Extract files (distribution)
-        distributions = raw.get("distribution", [])
-        if not distributions:
-            console.debug(f"Skipping {identifier}: no distribution URLs")
-            return None
+def _parse_record(raw: dict, identifier: str) -> EcudoDataset | None:
+    """Internal parsing logic."""
+    validate_structure(raw, identifier)
 
-        files = parse_files(distributions, identifier)
-        if not files:
-            console.debug(f"Skipping {identifier}: no valid download URLs")
-            return None
+    distributions = raw.get("distribution", [])
+    if not distributions:
+        console.debug(f"Skipping {identifier}: no distribution URLs")
+        return None
 
-        publisher = parse_publisher(raw.get("publisher"), identifier)
+    files = parse_files(distributions, identifier)
+    if not files:
+        console.debug(f"Skipping {identifier}: no valid download URLs")
+        return None
 
-        return EcudoDataset(
-            identifier=identifier,
-            title=raw.get("title", "Untitled Dataset"),
-            description=raw.get("description", ""),
-            publisher=publisher,
-            language=raw.get("language", "en"),
-            keywords=raw.get("keywords", []),
-            files=files,
-            issued=raw.get("issued", raw.get("modified", "")),
-            modified=raw.get("modified"),
-            spatial=raw.get("spatial"),
-            temporal=raw.get("temporal"),
-            access_level=raw.get("accessLevel", "public"),
-            _raw=raw,
+    title = raw.get("title", "Untitled Dataset")
+    publisher = parse_publisher(raw.get("publisher"), identifier)
+    description = raw.get("description", "") or None
+    keywords = list(raw.get("keywords", []))
+    issued = raw.get("issued", raw.get("modified", ""))
+    language = raw.get("language", "en")
+    access_level = raw.get("accessLevel", "public")
+    spatial = raw.get("spatial")
+    temporal = raw.get("temporal")
+
+    metadata = OpenAIRERecord(
+        title=title,
+        creator=publisher,
+        identifier=identifier,
+        publication_date=issued,
+        access_rights=_resolve_access_rights(access_level),
+        resource_type=ResourceType.DATASET,
+        language=normalize_language_code(language),
+        publisher=publisher,
+        description=description,
+        subjects=keywords,
+        files=[
+            FileLocation(url=f.url, mime_type=infer_mime_type(f.url)) for f in files
+        ],
+        temporal_coverage=temporal,
+        spatial_coverage=_parse_bounding_box(spatial),
+    )
+
+    return EcudoDataset(
+        identifier=identifier,
+        title=title,
+        files=files,
+        metadata=metadata,
+        _raw=raw,
+    )
+
+
+def _resolve_access_rights(level: str | None) -> AccessRights:
+    if level and level in _ACCESS_LEVEL_MAP:
+        return _ACCESS_LEVEL_MAP[level]
+
+    if level:
+        console.warning(
+            f"Unknown eCUDO accessLevel '{level}', defaulting to open access."
         )
+
+    return AccessRights.OPEN
+
+
+def _parse_bounding_box(spatial: str | None) -> BoundingBox | None:
+    """Parse an eCUDO ``spatial`` string ("west,south,east,north")."""
+    if not spatial:
+        return None
+    try:
+        coords = [float(x.strip()) for x in spatial.split(",")]
+    except ValueError:
+        console.warning(f"Could not parse spatial coordinates '{spatial}'")
+        return None
+
+    if len(coords) != 4:
+        console.warning(
+            f"Expected 4 spatial coordinates, got {len(coords)}: '{spatial}'"
+        )
+        return None
+
+    west, south, east, north = coords
+    return BoundingBox(west=west, south=south, east=east, north=north)
 
 
 def validate_structure(raw: dict, identifier: str) -> None:

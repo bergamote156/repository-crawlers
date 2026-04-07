@@ -5,6 +5,11 @@
 import pytest
 
 from crawlers.core.result import Err, Ok
+from crawlers.metadata.openaire import (
+    AccessRights,
+    OpenAIRERecord,
+    ResourceType,
+)
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
 from crawlers.processors.filters import DiversityFilter
 
@@ -14,12 +19,17 @@ def make_record(identifier: str, title: str) -> EcudoDataset:
     return EcudoDataset(
         identifier=identifier,
         title=title,
-        description="",
-        publisher="Test",
-        issued="2024-01-01",
-        language="English",
-        keywords=[],
         files=[EcudoFile(path="data.zip", url="https://example.com/data.zip")],
+        metadata=OpenAIRERecord(
+            title=title,
+            creator="Test",
+            identifier=identifier,
+            publication_date="2024-01-01",
+            access_rights=AccessRights.OPEN,
+            resource_type=ResourceType.DATASET,
+            language="eng",
+            publisher="Test",
+        ),
     )
 
 

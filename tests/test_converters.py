@@ -1,63 +1,80 @@
-"""Tests for OnedataConverter."""
+"""Tests for RecordOnedataConverter."""
 
 # pylint: disable=redefined-outer-name,protected-access,missing-function-docstring
 
 import pytest
 
 from crawlers.core.result import Err
-from crawlers.plugins.ecudo.metadata import EcudoOpenAIREBuilder
+from crawlers.metadata.openaire import (
+    AccessRights,
+    OpenAIREBuilder,
+    OpenAIRERecord,
+    ResourceType,
+)
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
-from crawlers.processors.converters import OnedataConverter
+from crawlers.processors.converters import RecordOnedataConverter
+
+
+def _make_record(
+    identifier: str = "urn:SDN:CDI:iopan.pl:uuid:test-123",
+    title: str = "Test Dataset / With Slash",
+    files: list[EcudoFile] | None = None,
+) -> EcudoDataset:
+    if files is None:
+        files = [
+            EcudoFile(path="data.csv", url="https://example.com/data.csv"),
+            EcudoFile(path="readme.txt", url="https://example.com/readme.txt"),
+        ]
+    return EcudoDataset(
+        identifier=identifier,
+        title=title,
+        files=files,
+        metadata=OpenAIRERecord(
+            title=title,
+            creator="Test Institute",
+            identifier=identifier,
+            publication_date="2024-01-15",
+            access_rights=AccessRights.OPEN,
+            resource_type=ResourceType.DATASET,
+            language="eng",
+            publisher="Test Institute",
+            description="Test description",
+            subjects=["test"],
+        ),
+    )
 
 
 @pytest.fixture
 def converter():
-    """Create converter instance."""
-    return OnedataConverter(EcudoOpenAIREBuilder())
+    return RecordOnedataConverter(OpenAIREBuilder())
 
 
 @pytest.fixture
 def sample_record():
-    """Create a sample EcudoRecord."""
-    return EcudoDataset(
-        identifier="urn:SDN:CDI:iopan.pl:uuid:test-123",
-        title="Test Dataset / With Slash",
-        description="Test description",
-        publisher="Test Institute",
-        issued="2024-01-15",
-        language="English",
-        keywords=["test"],
-        files=[
-            EcudoFile(path="data.csv", url="https://example.com/data.csv"),
-            EcudoFile(path="readme.txt", url="https://example.com/readme.txt"),
-        ],
-    )
+    return _make_record()
 
 
-class TestOnedataConverter:
-    """Tests for OnedataConverter."""
+class TestRecordOnedataConverter:
+    """Tests for RecordOnedataConverter."""
 
     @pytest.mark.asyncio
     async def test_converts_record(self, converter, sample_record):
-        """Test basic conversion."""
         result = await converter.process(sample_record)
         dataset = result.value
 
         assert dataset.name == "Test Dataset / With Slash"
-        assert dataset.location == "Test Dataset - With Slash"  # Slash replaced
+        assert dataset.location == "Test Dataset - With Slash"
         assert dataset.pid == "urn:SDN:CDI:iopan.pl:uuid:test-123"
 
     @pytest.mark.asyncio
     async def test_generates_metadata_xml(self, converter, sample_record):
-        """Test that metadata XML is generated."""
         dataset = (await converter.process(sample_record)).value
 
-        assert dataset.metadata_xml.startswith('<?xml version="1.0"')
+        assert dataset.metadata_xml.startswith("<?xml version='1.0'")
         assert "Test Dataset" in dataset.metadata_xml
 
     @pytest.mark.asyncio
     async def test_converts_files(self, converter, sample_record):
-        """Test file conversion."""
         dataset = (await converter.process(sample_record)).value
 
         assert len(dataset.files) == 2
@@ -66,7 +83,6 @@ class TestOnedataConverter:
 
     @pytest.mark.asyncio
     async def test_to_json(self, converter, sample_record):
-        """Test to_json method."""
         d = (await converter.process(sample_record)).value.to_json()
 
         assert d["name"] == "Test Dataset / With Slash"
@@ -79,15 +95,9 @@ class TestOnedataConverter:
 
     @pytest.mark.asyncio
     async def test_rejects_duplicate_paths(self, converter):
-        """Duplicate file paths should reject the dataset with Err."""
-        record = EcudoDataset(
+        record = _make_record(
             identifier="urn:test:dup",
             title="Dup",
-            description="",
-            publisher="Test",
-            issued="2024-01-01",
-            language="en",
-            keywords=[],
             files=[
                 EcudoFile(path="data.csv", url="https://a.example/data.csv"),
                 EcudoFile(path="data.csv", url="https://b.example/data.csv"),

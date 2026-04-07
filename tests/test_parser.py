@@ -40,16 +40,19 @@ class TestParseRecord:
         assert result is not None
         assert result.identifier == "urn:SDN:CDI:iopan.pl:uuid:test-123"
         assert result.title == "Test Dataset"
-        assert result.description == "A test dataset for unit testing"
-        assert result.publisher == "Test Institute"
-        assert result.issued == "2024-01-15"
-        assert result.language == "English"
-        assert result.keywords == ["test", "sample", "data"]
         assert len(result.files) == 1
         assert result.files[0].url == "https://example.com/data/test.zip"
         assert result.files[0].path == "test.zip"
-        assert result.spatial == "18.0,54.0,19.0,55.0"
-        assert result.temporal == "2024-01-01/2024-01-31"
+
+        meta = result.metadata
+        assert meta.description == "A test dataset for unit testing"
+        assert meta.publisher == "Test Institute"
+        assert meta.publication_date == "2024-01-15"
+        assert meta.language == "eng"
+        assert meta.subjects == ["test", "sample", "data"]
+        assert meta.temporal_coverage == "2024-01-01/2024-01-31"
+        assert meta.spatial_coverage is not None
+        assert meta.spatial_coverage.west == 18.0
 
     def test_parse_missing_identifier(self):
         """Test that records without identifier are rejected."""
@@ -104,7 +107,7 @@ class TestParseRecord:
         parser = EcudoParser()
         result = parser.parse(record)
         assert result is not None
-        assert result.publisher == "Simple Publisher Name"
+        assert result.metadata.publisher == "Simple Publisher Name"
 
     def test_parse_missing_publisher(self):
         """Test parsing record without publisher."""
@@ -116,7 +119,7 @@ class TestParseRecord:
         parser = EcudoParser()
         result = parser.parse(record)
         assert result is not None
-        assert result.publisher == "Unknown Publisher"
+        assert result.metadata.publisher == "Unknown Publisher"
 
     def test_parse_multiple_files(self):
         """Test parsing record with multiple files."""
