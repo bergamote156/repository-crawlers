@@ -9,7 +9,6 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Sequence
 
 from crawlers.metadata.datacite import (
@@ -22,6 +21,7 @@ from crawlers.metadata.datacite import (
     NameType,
     Rights,
 )
+from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.vip.api import VipFile
 from crawlers.processors.parsers import Parser
 from crawlers.ui import console
@@ -116,7 +116,7 @@ class VipParser(Parser[dict, VipDataset]):
             ],
             title=title,
             publisher=_VIP_PUBLISHER,
-            publication_year=_year_from_datetime(datetime_val),
+            publication_year=year_from_iso(datetime_val),
             resource_type_general="Dataset",
             resource_type_value=_VIP_RESOURCE_TYPE_VALUE,
             subjects=_subjects_from_meta(meta),
@@ -136,16 +136,6 @@ class VipParser(Parser[dict, VipDataset]):
             metadata_record=record,
             _raw=raw,
         )
-
-
-def _year_from_datetime(dt: str | None) -> int:
-    """Extract year from ISO 8601 string, fall back to UTC now."""
-    if dt:
-        try:
-            return int(dt[:4])
-        except (ValueError, IndexError):
-            pass
-    return datetime.now(UTC).year
 
 
 def _subjects_from_meta(meta: dict) -> list[str]:

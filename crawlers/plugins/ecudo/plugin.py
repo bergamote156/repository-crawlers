@@ -89,7 +89,7 @@ class EcudoPlugin(DefaultCrawlerPlugin):
                     enabled=cfg.get_diversity_filter_enabled(),
                 ),
                 Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
-                OnedataConverter[OpenAIRERecord, EcudoDataset](
+                OnedataConverter[OpenAIRERecord, EcudoDataset](  # type: ignore[type-var]
                     metadata_builder=ctx.crawl_spec.metadata_builder,
                 ),
                 Tap(ctx.processed_sink, transform=lambda d: d.to_json()),

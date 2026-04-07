@@ -316,7 +316,7 @@ def _to_list(data: list | dict) -> list[dict]:
     Normalise a Girder paginated response to a plain list.
 
     Older Girder versions return a dict with numeric string keys
-    (``{"0": {...}, "1": {...}}``); newer versions return a plain JSON array.
+    ('{"0": {...}, "1": {...}}'); newer versions return a plain JSON array.
     """
     if isinstance(data, list):
         return data

@@ -4,7 +4,9 @@
 
 import pytest
 
-from crawlers.plugins.ecudo.parser import EcudoParser, parse_files, parse_publisher
+from crawlers.plugins.ecudo.parser import EcudoParser
+from crawlers.plugins.ecudo.parser import _parse_files as parse_files
+from crawlers.plugins.ecudo.parser import _parse_publisher as parse_publisher
 
 
 @pytest.fixture

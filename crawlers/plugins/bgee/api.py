@@ -5,7 +5,6 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
-from datetime import UTC, datetime
 from typing import AsyncIterator
 from urllib.parse import urljoin
 
@@ -35,6 +34,7 @@ from crawlers.plugins.bgee.models import (
     BgeeIteratorOpts,
     BgeeRawRecord,
 )
+from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
@@ -172,7 +172,7 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
             creators=[_build_creator(creator_name, creator_url)],
             title=title,
             publisher=_BGEE_PUBLISHER,
-            publication_year=_year_from_datetime(dt),
+            publication_year=year_from_iso(dt),
             resource_type_general="Dataset",
             resource_type_value=_BGEE_RESOURCE_TYPE_VALUE,
             subjects=keywords or list(_BGEE_DEFAULT_SUBJECTS),
@@ -224,16 +224,6 @@ def _build_creator(name: str | None, url: str | None) -> Creator:
         name_type=NameType.ORGANIZATIONAL,
         identifiers=[NameIdentifier(value=url, scheme="URL")] if url else [],
     )
-
-
-def _year_from_datetime(dt: str | None) -> int:
-    """Extract year from ISO 8601 string, fall back to UTC now."""
-    if dt:
-        try:
-            return int(dt[:4])
-        except (ValueError, IndexError):
-            pass
-    return datetime.now(UTC).year
 
 
 def _citations_to_related_identifiers(

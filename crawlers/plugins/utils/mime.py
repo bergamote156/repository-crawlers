@@ -37,3 +37,36 @@ def infer_mime_type(url: str) -> str | None:
         if url_lower.endswith(ext):
             return mime
     return None
+
+
+# Canonical extension to emit for a given MIME type. Hand-picked because
+# multiple suffixes can map to the same MIME (e.g. .tar.gz / .gz → gzip).
+_MIME_TO_EXT: dict[str, str] = {
+    "application/gzip": "gz",
+    "application/x-tar": "tar",
+    "application/zip": "zip",
+    "application/pdf": "pdf",
+    "text/csv": "csv",
+    "application/json": "json",
+    "application/geo+json": "geojson",
+    "application/xml": "xml",
+    "application/x-netcdf": "nc",
+    "application/x-hdf5": "h5",
+    "application/x-hdf": "hdf",
+    "text/plain": "txt",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/tiff": "tiff",
+}
+
+
+def extension_for_mime(mime: str | None) -> str | None:
+    """Return a canonical file extension (without dot) for a MIME type, or None.
+
+    Strips MIME parameters ('image/tiff; profile=cloud-optimized' → 'tiff').
+    """
+    if not mime:
+        return None
+
+    base = mime.split(";", 1)[0].strip().lower()
+    return _MIME_TO_EXT.get(base)

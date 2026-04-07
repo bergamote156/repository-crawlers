@@ -67,6 +67,6 @@ def _get_path_segments(url: str) -> list[str]:
 
 
 def _build_path(segments: list[str], count: int) -> str:
-    """Build a path from the first ``count`` reversed segments."""
+    """Build a path from the first 'count' reversed segments."""
     used = segments[:count]
     return "/".join(reversed(used))

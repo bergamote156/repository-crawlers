@@ -179,7 +179,7 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
     def build_pipeline(self, ctx: DefaultRunContext) -> ProcessorPipeline:
         """Build the default processor pipeline.
 
-        If ``resolve_fn`` is set in the crawl spec, the pipeline starts with
+        If 'resolve_fn' is set in the crawl spec, the pipeline starts with
         a DatasetResolver (resolve + parse). Otherwise it starts with a
         plain ParserProcessor (parse only).
         """

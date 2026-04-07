@@ -48,15 +48,15 @@ class OnedataConverter[RecordT, DatasetT: Dataset](
     Processor[DatasetT, OnedataDataset, ConverterStats]
 ):
     """
-    Converts a parsed pipeline carrier to :class:`OnedataDataset`.
+    Converts a parsed pipeline carrier to `OnedataDataset`.
 
-    The carrier must expose a typed metadata record on ``item.metadata``;
+    The carrier must expose a typed metadata record on 'item.metadata';
     this converter passes that record (not the carrier) to the builder so
     builders stay ignorant of plugin-specific dataset shapes. The plugin is
-    responsible for providing unique, human-readable ``path`` values on each
+    responsible for providing unique, human-readable 'path' values on each
     file — this converter only validates uniqueness and rejects datasets
     with duplicates. Plugins whose source API exposes a flat URL list can
-    use ``crawlers.plugins.utils.paths.resolve_path_collisions`` to derive
+    use 'crawlers.plugins.utils.paths.resolve_path_collisions' to derive
     paths.
     """
 

@@ -4,7 +4,7 @@ DataCite Metadata Builder.
 Generates DataCite Kernel 4.5 compliant XML metadata.
 https://schema.datacite.org/meta/kernel-4.5/
 
-The builder consumes a structured :class:`DataCiteRecord` describing a single
+The builder consumes a structured `DataCiteRecord` describing a single
 resource. Plugins are responsible for converting their domain dataset into a
 record — the builder stays ignorant of source-specific defaults, fallbacks
 and ad-hoc parsing.
@@ -30,7 +30,7 @@ _SCHEMA_LOCATION = (
     "http://schema.datacite.org/meta/kernel-4.5/metadata.xsd"
 )
 
-# Bind ``datacite:`` prefix consistently with openaire.py to avoid mutating
+# Bind 'datacite:' prefix consistently with openaire.py to avoid mutating
 # the global ET namespace map after import.
 ET.register_namespace("datacite", NS_DATACITE)
 ET.register_namespace("xsi", NS_XSI)
@@ -97,7 +97,7 @@ class NameIdentifier:
 
 @dataclass
 class Creator:
-    """A DataCite ``creator`` element."""
+    """A DataCite 'creator' element."""
 
     name: str
     name_type: NameType = NameType.ORGANIZATIONAL
@@ -106,7 +106,7 @@ class Creator:
 
 @dataclass
 class Date:
-    """A DataCite ``date`` element."""
+    """A DataCite 'date' element."""
 
     value: str
     date_type: DateType
@@ -114,14 +114,14 @@ class Date:
 
 @dataclass
 class GeoLocationPolygon:
-    """A DataCite ``geoLocationPolygon`` — list of (longitude, latitude) points."""
+    """A DataCite 'geoLocationPolygon' — list of (longitude, latitude) points."""
 
     points: list[tuple[float, float]]
 
 
 @dataclass
 class RelatedIdentifier:
-    """A DataCite ``relatedIdentifier`` element."""
+    """A DataCite 'relatedIdentifier' element."""
 
     value: str
     identifier_type: RelatedIdentifierType
@@ -130,7 +130,7 @@ class RelatedIdentifier:
 
 @dataclass
 class Description:
-    """A DataCite ``description`` element."""
+    """A DataCite 'description' element."""
 
     value: str
     description_type: str = "Abstract"
@@ -138,20 +138,21 @@ class Description:
 
 @dataclass
 class Rights:
-    """A DataCite ``rights`` element with optional URI."""
+    """A DataCite 'rights' element with optional URI."""
 
     text: str
     uri: str | None = None
 
 
 @dataclass
+# pylint: disable=too-many-instance-attributes
 class DataCiteRecord:
     """
-    Structured input for :class:`DataCiteBuilder`.
+    Structured input for `DataCiteBuilder`.
 
     Mandatory properties (M in DataCite Kernel 4.5) have no default — the
     dataclass constructor enforces their presence. Recommended/Optional fields
-    default to ``None`` / empty collections; sections corresponding to absent
+    default to 'None' / empty collections; sections corresponding to absent
     fields are not emitted.
     """
 
@@ -178,8 +179,9 @@ class DataCiteRecord:
 # --- Builder ------------------------------------------------------------------
 
 
+# pylint: disable=too-few-public-methods
 class DataCiteBuilder(MetadataBuilder[DataCiteRecord]):
-    """Render a :class:`DataCiteRecord` to a DataCite Kernel 4.5 XML string."""
+    """Render a `DataCiteRecord` to a DataCite Kernel 4.5 XML string."""
 
     def build(self, record: DataCiteRecord) -> str:
         root = ET.Element(

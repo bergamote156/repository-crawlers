@@ -5,7 +5,7 @@ Generates OpenAIRE-compliant XML metadata based on:
 OpenAIRE Guidelines for Literature Repository Managers v4.0.0
 https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/
 
-The builder consumes a structured :class:`OpenAIRERecord` describing a single
+The builder consumes a structured `OpenAIRERecord` describing a single
 resource. Plugins are responsible for converting their domain dataset into a
 record — keeping the builder ignorant of source-specific quirks (defaults,
 fallbacks, ad-hoc parsing).
@@ -69,10 +69,12 @@ class AccessRights(Enum):
 
     @property
     def uri(self) -> str:
+        """COAR concept URI."""
         return self.value[0]
 
     @property
     def label(self) -> str:
+        """Human-readable English label."""
         return self.value[1]
 
 
@@ -85,10 +87,12 @@ class ResourceType(Enum):
 
     @property
     def uri(self) -> str:
+        """COAR concept URI."""
         return self.value[0]
 
     @property
     def label(self) -> str:
+        """Human-readable English label."""
         return self.value[1]
 
 
@@ -114,13 +118,14 @@ class FileLocation:
 
 
 @dataclass
+# pylint: disable=too-many-instance-attributes
 class OpenAIRERecord:
     """
-    Structured input for :class:`OpenAIREBuilder`.
+    Structured input for `OpenAIREBuilder`.
 
     Required fields (M / "Mandatory" in OpenAIRE Guidelines v4.0) have no
     default — the dataclass constructor enforces their presence. Optional
-    fields default to ``None`` / empty collections; sections corresponding
+    fields default to 'None' / empty collections; sections corresponding
     to absent fields are not emitted.
     """
 
@@ -147,8 +152,9 @@ class OpenAIRERecord:
 # --- Builder ------------------------------------------------------------------
 
 
+# pylint: disable=too-few-public-methods
 class OpenAIREBuilder(MetadataBuilder[OpenAIRERecord]):
-    """Render an :class:`OpenAIRERecord` to an OpenAIRE v4.0 XML string."""
+    """Render an `OpenAIRERecord` to an OpenAIRE v4.0 XML string."""
 
     def build(self, record: OpenAIRERecord) -> str:
         root = ET.Element(
@@ -181,7 +187,7 @@ class OpenAIREBuilder(MetadataBuilder[OpenAIRERecord]):
 
 # --- Section builders (private) ----------------------------------------------
 #
-# Each function appends to ``root`` if its corresponding record field is
+# Each function appends to 'root' if its corresponding record field is
 # populated, and is a no-op otherwise. They intentionally use the
 # ElementTree imperative style — keeping each section to a handful of lines
 # is preferred over factoring out a more abstract section framework.

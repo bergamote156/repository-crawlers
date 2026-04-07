@@ -38,6 +38,8 @@ def sample_record() -> OpenAIRERecord:
 
 
 class TestOpenAIREBuilder:
+    """Tests for `OpenAIREBuilder.build`."""
+
     def test_produces_valid_xml_envelope(self, sample_record):
         result = OpenAIREBuilder().build(sample_record)
         assert result.startswith("<?xml")
