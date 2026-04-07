@@ -20,11 +20,11 @@ from crawlers.core.result import Err, Ok
 from crawlers.default.config import DefaultCrawlConfig
 from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
 from crawlers.default.workspace import DefaultRunContext
+from crawlers.metadata.openaire import OpenAIREBuilder, OpenAIRERecord
 from crawlers.plugins.ecudo.api import EcudoClient, EcudoIteratorOpts
 from crawlers.plugins.ecudo.config import EcudoApiConfig, EcudoCrawlConfig
-from crawlers.metadata.openaire import OpenAIREBuilder, OpenAIRERecord
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoParser
-from crawlers.processors.converters import RecordOnedataConverter
+from crawlers.processors.converters import OnedataConverter
 from crawlers.processors.filters import DiversityFilter
 from crawlers.processors.pipeline import ProcessorPipeline
 from crawlers.processors.resolvers import DatasetResolver
@@ -89,7 +89,7 @@ class EcudoPlugin(DefaultCrawlerPlugin):
                     enabled=cfg.get_diversity_filter_enabled(),
                 ),
                 Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
-                RecordOnedataConverter[OpenAIRERecord, EcudoDataset](
+                OnedataConverter[OpenAIRERecord, EcudoDataset](
                     metadata_builder=ctx.crawl_spec.metadata_builder,
                 ),
                 Tap(ctx.processed_sink, transform=lambda d: d.to_json()),

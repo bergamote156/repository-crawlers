@@ -1,8 +1,13 @@
 """
-DataCite Metadata Generator
+DataCite Metadata Builder.
 
 Generates DataCite Kernel 4.5 compliant XML metadata.
 https://schema.datacite.org/meta/kernel-4.5/
+
+The builder consumes a structured :class:`DataCiteRecord` describing a single
+resource. Plugins are responsible for converting their domain dataset into a
+record — the builder stays ignorant of source-specific defaults, fallbacks
+and ad-hoc parsing.
 """
 
 __author__ = "Bartosz Walkowicz"
@@ -10,286 +15,321 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Callable, Protocol, Sequence
-from xml.dom import minidom
+from dataclasses import dataclass, field
+from enum import Enum
 
 from crawlers.core.metadata import MetadataBuilder
 
-# XML namespace declarations
-DATACITE_NS = "http://datacite.org/schema/kernel-4"
-XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
-SCHEMA_LOCATION = (
+# --- Namespaces ---------------------------------------------------------------
+
+NS_DATACITE = "http://datacite.org/schema/kernel-4"
+NS_XSI = "http://www.w3.org/2001/XMLSchema-instance"
+
+_SCHEMA_LOCATION = (
     "http://datacite.org/schema/kernel-4 "
     "http://schema.datacite.org/meta/kernel-4.5/metadata.xsd"
 )
 
-# Register namespaces to avoid ns0/ns1 prefixes in output
-ET.register_namespace("", DATACITE_NS)
-ET.register_namespace("xsi", XSI_NS)
+# Bind ``datacite:`` prefix consistently with openaire.py to avoid mutating
+# the global ET namespace map after import.
+ET.register_namespace("datacite", NS_DATACITE)
+ET.register_namespace("xsi", NS_XSI)
 
 
-class DataCiteFile(Protocol):
-    """File object required properties by DataCiteBuilder."""
-
-    # pylint: disable=too-few-public-methods
-
-    url: str
+def _q(ns: str, tag: str) -> str:
+    """Build an ElementTree Clark-notation tag."""
+    return f"{{{ns}}}{tag}"
 
 
-class DataCiteDataset(Protocol):
-    """Dataset object required properties by DataCiteBuilder."""
+# --- Vocabularies -------------------------------------------------------------
 
-    # pylint: disable=too-few-public-methods
 
-    identifier: str
-    title: str
-    datetime: str | None
-    geometry: dict | None
-    files: Sequence[DataCiteFile]
-    self_link: str | None
+class IdentifierType(Enum):
+    """DataCite identifier types (subset)."""
+
+    DOI = "DOI"
+    URL = "URL"
+    URN = "URN"
+    OTHER = "Other"
+
+
+class DateType(Enum):
+    """DataCite date types (subset)."""
+
+    COLLECTED = "Collected"
+    UPDATED = "Updated"
+    ISSUED = "Issued"
+    CREATED = "Created"
+    SUBMITTED = "Submitted"
+
+
+class RelatedIdentifierType(Enum):
+    """DataCite related-identifier types (subset)."""
+
+    DOI = "DOI"
+    URL = "URL"
+
+
+class RelationType(Enum):
+    """DataCite relation types (subset)."""
+
+    IS_SUPPLEMENT_TO = "IsSupplementTo"
+    IS_REFERENCED_BY = "IsReferencedBy"
+
+
+class NameType(Enum):
+    """DataCite creator name types."""
+
+    PERSONAL = "Personal"
+    ORGANIZATIONAL = "Organizational"
+
+
+# --- Record model -------------------------------------------------------------
 
 
 @dataclass
-class DataCiteContext:
-    """Context object passed to section builders."""
+class NameIdentifier:
+    """An external identifier attached to a creator (ORCID, ROR, URL, ...)."""
 
-    dataset: DataCiteDataset
+    value: str
+    scheme: str  # e.g. "URL", "ORCID", "ROR"
+
+
+@dataclass
+class Creator:
+    """A DataCite ``creator`` element."""
+
+    name: str
+    name_type: NameType = NameType.ORGANIZATIONAL
+    identifiers: list[NameIdentifier] = field(default_factory=list)
+
+
+@dataclass
+class Date:
+    """A DataCite ``date`` element."""
+
+    value: str
+    date_type: DateType
+
+
+@dataclass
+class GeoLocationPolygon:
+    """A DataCite ``geoLocationPolygon`` — list of (longitude, latitude) points."""
+
+    points: list[tuple[float, float]]
+
+
+@dataclass
+class RelatedIdentifier:
+    """A DataCite ``relatedIdentifier`` element."""
+
+    value: str
+    identifier_type: RelatedIdentifierType
+    relation_type: RelationType
+
+
+@dataclass
+class Description:
+    """A DataCite ``description`` element."""
+
+    value: str
+    description_type: str = "Abstract"
+
+
+@dataclass
+class Rights:
+    """A DataCite ``rights`` element with optional URI."""
+
+    text: str
+    uri: str | None = None
+
+
+@dataclass
+class DataCiteRecord:
+    """
+    Structured input for :class:`DataCiteBuilder`.
+
+    Mandatory properties (M in DataCite Kernel 4.5) have no default — the
+    dataclass constructor enforces their presence. Recommended/Optional fields
+    default to ``None`` / empty collections; sections corresponding to absent
+    fields are not emitted.
+    """
+
+    # Mandatory
+    identifier: str
+    identifier_type: IdentifierType
+    creators: list[Creator]
+    title: str
+    publisher: str
     publication_year: int
+    resource_type_general: str  # e.g. "Dataset", "Image", "Software"
+    resource_type_value: str  # free-form sub-type label
+
+    # Recommended / Optional
+    subjects: list[str] = field(default_factory=list)
+    dates: list[Date] = field(default_factory=list)
+    geo_locations: list[GeoLocationPolygon] = field(default_factory=list)
+    descriptions: list[Description] = field(default_factory=list)
+    related_identifiers: list[RelatedIdentifier] = field(default_factory=list)
+    rights_list: list[Rights] = field(default_factory=list)
+    version: str | None = None
 
 
-class DataCiteBuilder(MetadataBuilder[DataCiteDataset]):
-    """
-    DataCite Kernel 4.5 metadata generator.
+# --- Builder ------------------------------------------------------------------
 
-    Produces XML compliant with DataCite schema. Can be extended by
-    subclasses to customize section builders.
-    """
 
-    # Default values - can be overridden by subclasses
-    creator_name: str = "Unknown Creator"
-    publisher_name: str = "Unknown Publisher"
-    resource_type_general: str = "Dataset"
-    resource_type_value: str = "dataset"
-    default_subjects: list[str] = []
-    default_description: str = ""
-    default_rights: str = ""
+class DataCiteBuilder(MetadataBuilder[DataCiteRecord]):
+    """Render a :class:`DataCiteRecord` to a DataCite Kernel 4.5 XML string."""
 
-    def build(self, dataset: DataCiteDataset) -> str:
-        """
-        Generate DataCite-compliant XML metadata.
-
-        DataCite Kernel 4.5 Mandatory properties:
-            - identifier (M)
-            - creators (M)
-            - titles (M)
-            - publisher (M)
-            - publicationYear (M)
-            - resourceType (M)
-
-        Optional properties included:
-            - subjects (R)
-            - dates (R)
-            - geoLocations (R)
-            - descriptions (R)
-            - relatedIdentifiers (R)
-            - rightsList (O)
-
-        Args:
-            dataset: Dataset with required properties
-
-        Returns:
-            DataCite-compliant XML string
-        """
-        ctx = self._build_context(dataset)
-        root = self._create_root()
-
-        for section_builder in self.get_sections():
-            section_builder(root, ctx)
-
-        return self._prettify(root)
-
-    def get_sections(
-        self,
-    ) -> list[Callable[[ET.Element, DataCiteContext], None]]:
-        """
-        Get the list of section builder methods.
-
-        Override specific methods or this list to customize generation.
-
-        Returns:
-            List of callables that take (root, context) and modify root
-        """
-        return [
-            self.build_identifier_section,
-            self.build_creators_section,
-            self.build_titles_section,
-            self.build_publisher_section,
-            self.build_publication_year_section,
-            self.build_resource_type_section,
-            self.build_subjects_section,
-            self.build_dates_section,
-            self.build_geo_locations_section,
-            self.build_descriptions_section,
-            self.build_related_identifiers_section,
-            self.build_rights_section,
-        ]
-
-    # --- Section Builders ---
-
-    def build_identifier_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
-        """Build identifier section."""
-        identifier = ET.SubElement(root, "identifier", {"identifierType": "DOI"})
-        identifier.text = f"10.12345/{ctx.dataset.identifier}"
-
-    def build_creators_section(
-        self, root: ET.Element, ctx: DataCiteContext  # pylint: disable=unused-argument
-    ) -> None:
-        """Build creators section."""
-        creators = ET.SubElement(root, "creators")
-        creator = ET.SubElement(creators, "creator")
-        creator_name = ET.SubElement(creator, "creatorName")
-        creator_name.text = self.creator_name
-
-    def build_titles_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
-        """Build titles section."""
-        titles = ET.SubElement(root, "titles")
-        title = ET.SubElement(titles, "title")
-        title.text = ctx.dataset.title
-
-    def build_publisher_section(
-        self, root: ET.Element, ctx: DataCiteContext  # pylint: disable=unused-argument
-    ) -> None:
-        """Build publisher section."""
-        publisher = ET.SubElement(root, "publisher")
-        publisher.text = self.publisher_name
-
-    def build_publication_year_section(
-        self, root: ET.Element, ctx: DataCiteContext
-    ) -> None:
-        """Build publication year section."""
-        pub_year = ET.SubElement(root, "publicationYear")
-        pub_year.text = str(ctx.publication_year)
-
-    def build_resource_type_section(
-        self, root: ET.Element, ctx: DataCiteContext  # pylint: disable=unused-argument
-    ) -> None:
-        """Build resource type section."""
-        resource_type = ET.SubElement(
-            root,
-            "resourceType",
-            {"resourceTypeGeneral": self.resource_type_general},
+    def build(self, record: DataCiteRecord) -> str:
+        root = ET.Element(
+            _q(NS_DATACITE, "resource"),
+            {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
         )
-        resource_type.text = self.resource_type_value
 
-    def build_subjects_section(
-        self, root: ET.Element, ctx: DataCiteContext  # pylint: disable=unused-argument
-    ) -> None:
-        """Build subjects section."""
-        if not self.default_subjects:
-            return
+        _add_identifier(root, record)
+        _add_creators(root, record)
+        _add_titles(root, record)
+        _add_publisher(root, record)
+        _add_publication_year(root, record)
+        _add_resource_type(root, record)
+        _add_subjects(root, record)
+        _add_dates(root, record)
+        _add_geo_locations(root, record)
+        _add_descriptions(root, record)
+        _add_related_identifiers(root, record)
+        _add_rights_list(root, record)
+        _add_version(root, record)
 
-        subjects = ET.SubElement(root, "subjects")
-        for subj in self.default_subjects:
-            subject = ET.SubElement(subjects, "subject")
-            subject.text = subj
-
-    def build_dates_section(self, root: ET.Element, ctx: DataCiteContext) -> None:
-        """Build dates section."""
-        if not ctx.dataset.datetime:
-            return
-
-        dates = ET.SubElement(root, "dates")
-        date = ET.SubElement(dates, "date", {"dateType": "Collected"})
-        date.text = ctx.dataset.datetime
-
-    def build_geo_locations_section(
-        self, root: ET.Element, ctx: DataCiteContext
-    ) -> None:
-        """Build geoLocations section from GeoJSON geometry."""
-        geom = ctx.dataset.geometry
-        if not geom or geom.get("type") != "Polygon":
-            return
-
-        coords = geom.get("coordinates", [[]])
-        if not coords or not coords[0]:
-            return
-
-        geolocs = ET.SubElement(root, "geoLocations")
-        geoloc = ET.SubElement(geolocs, "geoLocation")
-        polygon = ET.SubElement(geoloc, "geoLocationPolygon")
-
-        for lon, lat in coords[0]:
-            point = ET.SubElement(polygon, "polygonPoint")
-            point_lon = ET.SubElement(point, "pointLongitude")
-            point_lon.text = str(lon)
-            point_lat = ET.SubElement(point, "pointLatitude")
-            point_lat.text = str(lat)
-
-    def build_descriptions_section(
-        self, root: ET.Element, ctx: DataCiteContext  # pylint: disable=unused-argument
-    ) -> None:
-        """Build descriptions section."""
-        if not self.default_description:
-            return
-
-        descriptions = ET.SubElement(root, "descriptions")
-        description = ET.SubElement(
-            descriptions, "description", {"descriptionType": "Abstract"}
+        ET.indent(root, space="  ")
+        return ET.tostring(
+            root, encoding="unicode", xml_declaration=True, short_empty_elements=False
         )
-        description.text = self.default_description
 
-    def build_related_identifiers_section(
-        self, root: ET.Element, ctx: DataCiteContext
-    ) -> None:
-        """Build relatedIdentifiers section."""
-        if not ctx.dataset.self_link:
-            return
 
-        related = ET.SubElement(root, "relatedIdentifiers")
-        related_id = ET.SubElement(
+# --- Section builders (private) ----------------------------------------------
+
+
+def _add_identifier(root: ET.Element, record: DataCiteRecord) -> None:
+    el = ET.SubElement(
+        root,
+        _q(NS_DATACITE, "identifier"),
+        {"identifierType": record.identifier_type.value},
+    )
+    el.text = record.identifier
+
+
+def _add_creators(root: ET.Element, record: DataCiteRecord) -> None:
+    creators = ET.SubElement(root, _q(NS_DATACITE, "creators"))
+    for creator in record.creators:
+        creator_el = ET.SubElement(creators, _q(NS_DATACITE, "creator"))
+        ET.SubElement(
+            creator_el,
+            _q(NS_DATACITE, "creatorName"),
+            {"nameType": creator.name_type.value},
+        ).text = creator.name
+        for ident in creator.identifiers:
+            ET.SubElement(
+                creator_el,
+                _q(NS_DATACITE, "nameIdentifier"),
+                {"nameIdentifierScheme": ident.scheme},
+            ).text = ident.value
+
+
+def _add_titles(root: ET.Element, record: DataCiteRecord) -> None:
+    titles = ET.SubElement(root, _q(NS_DATACITE, "titles"))
+    ET.SubElement(titles, _q(NS_DATACITE, "title")).text = record.title
+
+
+def _add_publisher(root: ET.Element, record: DataCiteRecord) -> None:
+    ET.SubElement(root, _q(NS_DATACITE, "publisher")).text = record.publisher
+
+
+def _add_publication_year(root: ET.Element, record: DataCiteRecord) -> None:
+    ET.SubElement(root, _q(NS_DATACITE, "publicationYear")).text = str(
+        record.publication_year
+    )
+
+
+def _add_resource_type(root: ET.Element, record: DataCiteRecord) -> None:
+    el = ET.SubElement(
+        root,
+        _q(NS_DATACITE, "resourceType"),
+        {"resourceTypeGeneral": record.resource_type_general},
+    )
+    el.text = record.resource_type_value
+
+
+def _add_subjects(root: ET.Element, record: DataCiteRecord) -> None:
+    if not record.subjects:
+        return
+    subjects = ET.SubElement(root, _q(NS_DATACITE, "subjects"))
+    for kw in record.subjects:
+        ET.SubElement(subjects, _q(NS_DATACITE, "subject")).text = kw
+
+
+def _add_dates(root: ET.Element, record: DataCiteRecord) -> None:
+    if not record.dates:
+        return
+    dates = ET.SubElement(root, _q(NS_DATACITE, "dates"))
+    for date in record.dates:
+        ET.SubElement(
+            dates, _q(NS_DATACITE, "date"), {"dateType": date.date_type.value}
+        ).text = date.value
+
+
+def _add_geo_locations(root: ET.Element, record: DataCiteRecord) -> None:
+    if not record.geo_locations:
+        return
+    geo_locs = ET.SubElement(root, _q(NS_DATACITE, "geoLocations"))
+    for loc in record.geo_locations:
+        if not loc.points:
+            continue
+        geo_loc = ET.SubElement(geo_locs, _q(NS_DATACITE, "geoLocation"))
+        polygon = ET.SubElement(geo_loc, _q(NS_DATACITE, "geoLocationPolygon"))
+        for lon, lat in loc.points:
+            point = ET.SubElement(polygon, _q(NS_DATACITE, "polygonPoint"))
+            ET.SubElement(point, _q(NS_DATACITE, "pointLongitude")).text = str(lon)
+            ET.SubElement(point, _q(NS_DATACITE, "pointLatitude")).text = str(lat)
+
+
+def _add_descriptions(root: ET.Element, record: DataCiteRecord) -> None:
+    if not record.descriptions:
+        return
+    descriptions = ET.SubElement(root, _q(NS_DATACITE, "descriptions"))
+    for desc in record.descriptions:
+        ET.SubElement(
+            descriptions,
+            _q(NS_DATACITE, "description"),
+            {"descriptionType": desc.description_type},
+        ).text = desc.value
+
+
+def _add_related_identifiers(root: ET.Element, record: DataCiteRecord) -> None:
+    if not record.related_identifiers:
+        return
+    related = ET.SubElement(root, _q(NS_DATACITE, "relatedIdentifiers"))
+    for rel in record.related_identifiers:
+        ET.SubElement(
             related,
-            "relatedIdentifier",
+            _q(NS_DATACITE, "relatedIdentifier"),
             {
-                "relatedIdentifierType": "URL",
-                "relationType": "IsSupplementTo",
+                "relatedIdentifierType": rel.identifier_type.value,
+                "relationType": rel.relation_type.value,
             },
-        )
-        related_id.text = ctx.dataset.self_link
+        ).text = rel.value
 
-    def build_rights_section(
-        self, root: ET.Element, ctx: DataCiteContext  # pylint: disable=unused-argument
-    ) -> None:
-        """Build rightsList section."""
-        if not self.default_rights:
-            return
 
-        rights_list = ET.SubElement(root, "rightsList")
-        rights = ET.SubElement(rights_list, "rights")
-        rights.text = self.default_rights
+def _add_rights_list(root: ET.Element, record: DataCiteRecord) -> None:
+    if not record.rights_list:
+        return
+    rights_list = ET.SubElement(root, _q(NS_DATACITE, "rightsList"))
+    for r in record.rights_list:
+        attrs = {"rightsURI": r.uri} if r.uri else {}
+        ET.SubElement(rights_list, _q(NS_DATACITE, "rights"), attrs).text = r.text
 
-    # --- Helpers ---
 
-    def _build_context(self, dataset: DataCiteDataset) -> DataCiteContext:
-        """Build context object for section builders."""
-        return DataCiteContext(
-            dataset=dataset,
-            publication_year=datetime.now(UTC).year,
-        )
-
-    def _create_root(self) -> ET.Element:
-        """Create the root resource element with proper namespaces."""
-        # Following DataCite schema - root element with schemaLocation
-        return ET.Element(
-            "resource",
-            {
-                f"{{{XSI_NS}}}schemaLocation": SCHEMA_LOCATION,
-            },
-        )
-
-    def _prettify(self, elem: ET.Element) -> str:
-        """Convert ElementTree to pretty-printed XML string."""
-        rough = ET.tostring(elem, encoding="unicode")
-        reparsed = minidom.parseString(rough)
-        return reparsed.toprettyxml(indent="  ")
+def _add_version(root: ET.Element, record: DataCiteRecord) -> None:
+    if record.version is None:
+        return
+    ET.SubElement(root, _q(NS_DATACITE, "version")).text = record.version

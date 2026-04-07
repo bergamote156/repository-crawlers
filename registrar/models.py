@@ -17,7 +17,7 @@ class InputFile:
     """A file to be registered in Onedata."""
 
     path: str  # Relative path within dataset
-    url: str   # Download URL
+    url: str  # Download URL
 
 
 @dataclass
@@ -29,8 +29,8 @@ class InputDataset:
     """
 
     name: str
-    location: str      # Directory path in space (e.g., "datasets/123")
-    pid: str           # Persistent identifier (DOI, etc.)
+    location: str  # Directory path in space (e.g., "datasets/123")
+    pid: str  # Persistent identifier (DOI, etc.)
     metadata_xml: str  # OpenAIRE/DataCite XML metadata
     files: list[InputFile] = field(default_factory=list)
 

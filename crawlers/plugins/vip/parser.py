@@ -9,37 +9,51 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Sequence
 
+from crawlers.metadata.datacite import (
+    Creator,
+    DataCiteRecord,
+    Date,
+    DateType,
+    Description,
+    IdentifierType,
+    NameType,
+    Rights,
+)
 from crawlers.plugins.vip.api import VipFile
 from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
+# VIP defaults — moved here from the legacy VipDataCiteBuilder.
+_VIP_DEFAULT_CREATOR_NAME = "VIP"
+_VIP_PUBLISHER = "VIP (Virtual Imaging Platform)"
+_VIP_RESOURCE_TYPE_VALUE = "Medical imaging data"
+_VIP_RIGHTS = Rights(text="Contact data owner for usage terms")
+
+# Meta keys whose values are emitted as DataCite subjects, in this order.
+_SUBJECT_META_KEYS = (
+    "SUBJECT_study_modalities",
+    "SUBJECT_type",
+    "SUBJECT_gender",
+    "SUBJECT_id",
+    "SUBJECT_name_string",
+    "SUBJECT_study_instrument_position",
+    "SUBJECT_study_operator",
+    "ORIGIN",
+    "DATATYPE",
+)
+
 
 @dataclass
 class VipDataset:
-    """
-    VIP Girder folder mapped to a dataset model.
-
-    Satisfies the Dataset, DataCiteDataset, and Serializable protocols
-    via duck typing:
-      - Dataset:         identifier, title, files
-      - DataCiteDataset: identifier, title, datetime, geometry, files, self_link
-      - Serializable:    to_json()
-    """
+    """Pipeline carrier for a VIP Girder folder with prebuilt DataCite record."""
 
     identifier: str
     title: str
     files: Sequence[VipFile]
-
-    description: str | None = None
-    datetime: str | None = None
-    geometry: dict | None = None
-    self_link: str | None = None
-
-    # Selected fields from the Girder folder `meta` dict
-    meta: dict = field(default_factory=dict)
-
+    metadata_record: DataCiteRecord
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
 
     def to_json(self) -> dict:
@@ -47,10 +61,6 @@ class VipDataset:
         return {
             "identifier": self.identifier,
             "title": self.title,
-            "description": self.description,
-            "datetime": self.datetime,
-            "self_link": self.self_link,
-            "meta": self.meta,
             "files": [{"path": f.path, "url": f.url} for f in self.files],
         }
 
@@ -95,12 +105,56 @@ class VipParser(Parser[dict, VipDataset]):
         # Use the most recent timestamp available
         datetime_val = folder.get("updated") or folder.get("created") or None
 
+        record = DataCiteRecord(
+            identifier=folder_id,
+            identifier_type=IdentifierType.OTHER,
+            creators=[
+                Creator(
+                    name=meta.get("OWNER") or _VIP_DEFAULT_CREATOR_NAME,
+                    name_type=NameType.PERSONAL,
+                )
+            ],
+            title=title,
+            publisher=_VIP_PUBLISHER,
+            publication_year=_year_from_datetime(datetime_val),
+            resource_type_general="Dataset",
+            resource_type_value=_VIP_RESOURCE_TYPE_VALUE,
+            subjects=_subjects_from_meta(meta),
+            dates=(
+                [Date(value=datetime_val, date_type=DateType.UPDATED)]
+                if datetime_val
+                else []
+            ),
+            descriptions=([Description(value=description)] if description else []),
+            rights_list=[_VIP_RIGHTS],
+        )
+
         return VipDataset(
             identifier=folder_id,
             title=title,
             files=files,
-            description=description,
-            datetime=datetime_val,
-            meta=meta,
+            metadata_record=record,
             _raw=raw,
         )
+
+
+def _year_from_datetime(dt: str | None) -> int:
+    """Extract year from ISO 8601 string, fall back to UTC now."""
+    if dt:
+        try:
+            return int(dt[:4])
+        except (ValueError, IndexError):
+            pass
+    return datetime.now(UTC).year
+
+
+def _subjects_from_meta(meta: dict) -> list[str]:
+    """Pick the subject-relevant values from the Girder folder meta dict."""
+    seen: set[str] = set()
+    subjects: list[str] = []
+    for key in _SUBJECT_META_KEYS:
+        value = meta.get(key)
+        if value and value not in seen:
+            seen.add(value)
+            subjects.append(value)
+    return subjects

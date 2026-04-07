@@ -9,18 +9,10 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from abc import ABC, abstractmethod
 
 
-class MetadataBuilder[DatasetT](ABC):
+class MetadataBuilder[MetadataRecordT](ABC):
     """Abstract base class for metadata builders."""
 
     @abstractmethod
-    def build(self, dataset: DatasetT) -> str:
-        """
-        Generate metadata for dataset.
-
-        Args:
-            dataset: Dataset to process (InputDataset or derived)
-
-        Returns:
-            String with metadata (XML, JSON, etc.)
-        """
+    def build(self, record: MetadataRecordT) -> str:
+        """Generate metadata for dataset."""
         raise NotImplementedError

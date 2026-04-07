@@ -14,6 +14,7 @@ from rdflib import Dataset
 from rdflib.term import Node
 
 from crawlers.default.config import ApiConfig, DefaultCrawlConfig, opt
+from crawlers.metadata.datacite import DataCiteRecord
 
 
 class BgeeApiConfig(ApiConfig):
@@ -61,28 +62,13 @@ class BgeeFile:
 
 
 @dataclass
-class BgeeDataset:  # pylint: disable=too-many-instance-attributes
-    """Bgee gene expression dataset.
-
-    Satisfies both `Dataset` and `DataCiteDataset` protocols via duck typing:
-    - `Dataset` protocol: identifier, title, files
-    - `DataCiteDataset` protocol: identifier, title, datetime, geometry, files, self_link
-    - `Serializable` protocol: to_json()
-    """
+class BgeeDataset:
+    """Pipeline carrier for a Bgee dataset with prebuilt DataCite record."""
 
     identifier: str
     title: str
     files: Sequence[BgeeFile]
-    description: str | None = None
-    datetime: str | None = None
-    geometry: dict | None = None
-    self_link: str | None = None
-    version: str | None = None
-    creator_name: str | None = None
-    creator_url: str | None = None
-    keywords: list[str] = field(default_factory=list)
-    citations: list[str] = field(default_factory=list)  # DOIs/URLs from schema:citation
-
+    metadata_record: DataCiteRecord
     _raw: BgeeRawRecord | None = field(default=None, repr=False, compare=False)
 
     def to_json(self) -> dict:
@@ -90,9 +76,6 @@ class BgeeDataset:  # pylint: disable=too-many-instance-attributes
         result: dict = {
             "identifier": self.identifier,
             "title": self.title,
-            "description": self.description,
-            "datetime": self.datetime,
-            "self_link": self.self_link,
             "files": [{"path": f.path, "url": f.url} for f in self.files],
         }
         if self._raw:

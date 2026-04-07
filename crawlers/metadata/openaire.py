@@ -35,6 +35,7 @@ _SCHEMA_LOCATION = (
     "https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd"
 )
 
+
 def _register_namespaces() -> None:
     """Bind our preferred prefixes in ElementTree's global namespace map."""
     ET.register_namespace("xsi", NS_XSI)
@@ -150,11 +151,6 @@ class OpenAIREBuilder(MetadataBuilder[OpenAIRERecord]):
     """Render an :class:`OpenAIRERecord` to an OpenAIRE v4.0 XML string."""
 
     def build(self, record: OpenAIRERecord) -> str:
-        # Re-assert prefixes defensively: ``ET.register_namespace`` mutates a
-        # process-global map and other modules (notably the legacy DataCite
-        # builder) bind these URIs to different prefixes at import time.
-        _register_namespaces()
-
         root = ET.Element(
             _q(NS_OAIRE, "resource"),
             {_q(NS_XSI, "schemaLocation"): _SCHEMA_LOCATION},
@@ -258,9 +254,7 @@ def _add_description(root: ET.Element, record: OpenAIRERecord) -> None:
 
 def _add_identifier(root: ET.Element, record: OpenAIRERecord) -> None:
     """14. Resource Identifier (M)."""
-    el = ET.SubElement(
-        root, _q(NS_DATACITE, "identifier"), {"identifierType": "URN"}
-    )
+    el = ET.SubElement(root, _q(NS_DATACITE, "identifier"), {"identifierType": "URN"})
     el.text = record.identifier
 
 

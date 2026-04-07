@@ -44,7 +44,7 @@ class TestParseRecord:
         assert result.files[0].url == "https://example.com/data/test.zip"
         assert result.files[0].path == "test.zip"
 
-        meta = result.metadata
+        meta = result.metadata_record
         assert meta.description == "A test dataset for unit testing"
         assert meta.publisher == "Test Institute"
         assert meta.publication_date == "2024-01-15"
@@ -107,7 +107,7 @@ class TestParseRecord:
         parser = EcudoParser()
         result = parser.parse(record)
         assert result is not None
-        assert result.metadata.publisher == "Simple Publisher Name"
+        assert result.metadata_record.publisher == "Simple Publisher Name"
 
     def test_parse_missing_publisher(self):
         """Test parsing record without publisher."""
@@ -119,7 +119,7 @@ class TestParseRecord:
         parser = EcudoParser()
         result = parser.parse(record)
         assert result is not None
-        assert result.metadata.publisher == "Unknown Publisher"
+        assert result.metadata_record.publisher == "Unknown Publisher"
 
     def test_parse_multiple_files(self):
         """Test parsing record with multiple files."""

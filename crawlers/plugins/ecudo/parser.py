@@ -80,7 +80,7 @@ class EcudoDataset:
     identifier: str
     title: str
     files: Sequence[EcudoFile]
-    metadata: OpenAIRERecord
+    metadata_record: OpenAIRERecord
     _raw: dict = field(default_factory=dict, repr=False, compare=False)
 
     def to_json(self) -> dict:
@@ -161,7 +161,7 @@ def _parse_record(raw: dict, identifier: str) -> EcudoDataset | None:
         identifier=identifier,
         title=title,
         files=files,
-        metadata=metadata,
+        metadata_record=metadata,
         _raw=raw,
     )
 

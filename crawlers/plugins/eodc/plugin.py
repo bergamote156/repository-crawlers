@@ -16,9 +16,9 @@ from crawlers.core.plugin import command
 from crawlers.core.result import Err
 from crawlers.default.config import DefaultCrawlConfig
 from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
+from crawlers.metadata.datacite import DataCiteBuilder
 from crawlers.plugins.eodc.api import EODCClient, EODCSearchOpts
 from crawlers.plugins.eodc.config import EODCApiConfig, EODCCrawlConfig
-from crawlers.plugins.eodc.metadata import EODCDataCiteBuilder
 from crawlers.plugins.eodc.parser import EODCParser
 from crawlers.ui import console
 
@@ -53,7 +53,7 @@ class EODCPlugin(DefaultCrawlerPlugin):
             client=api_client,
             iterator_opts=iterator_opts,
             parser=EODCParser(),
-            metadata_builder=EODCDataCiteBuilder(),
+            metadata_builder=DataCiteBuilder(),
             run_context_name=collections[0] if collections else "eodc",
             banner_subtitle=f"Collections: {', '.join(collections)}",
         )

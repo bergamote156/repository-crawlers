@@ -27,7 +27,11 @@ def sample_record() -> OpenAIRERecord:
         publisher="Institute of Oceanology",
         description="Oceanographic data from research vessel",
         subjects=["ocean", "temperature", "salinity"],
-        files=[FileLocation(url="https://example.com/data.zip", mime_type="application/zip")],
+        files=[
+            FileLocation(
+                url="https://example.com/data.zip", mime_type="application/zip"
+            )
+        ],
         spatial_coverage=BoundingBox(west=18.0, south=54.0, east=19.0, north=55.0),
         temporal_coverage="2024-01-01/2024-01-31",
     )
@@ -74,8 +78,12 @@ class TestOpenAIREBuilder:
     def test_contains_geo_location(self, sample_record):
         result = OpenAIREBuilder().build(sample_record)
         assert "datacite:geoLocationBox" in result
-        assert "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
-        assert "<datacite:northBoundLatitude>55.0</datacite:northBoundLatitude>" in result
+        assert (
+            "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
+        )
+        assert (
+            "<datacite:northBoundLatitude>55.0</datacite:northBoundLatitude>" in result
+        )
 
     def test_contains_temporal_coverage(self, sample_record):
         result = OpenAIREBuilder().build(sample_record)

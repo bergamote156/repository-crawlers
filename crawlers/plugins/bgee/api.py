@@ -5,6 +5,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
+from datetime import UTC, datetime
 from typing import AsyncIterator
 from urllib.parse import urljoin
 
@@ -14,6 +15,20 @@ from rdflib.namespace import RDF
 from rdflib.term import Node
 
 from crawlers.core.api import ApiClient
+from crawlers.metadata.datacite import (
+    Creator,
+    DataCiteRecord,
+    Date,
+    DateType,
+    Description,
+    IdentifierType,
+    NameIdentifier,
+    NameType,
+    RelatedIdentifier,
+    RelatedIdentifierType,
+    RelationType,
+    Rights,
+)
 from crawlers.plugins.bgee.models import (
     BgeeDataset,
     BgeeFile,
@@ -22,6 +37,18 @@ from crawlers.plugins.bgee.models import (
 )
 from crawlers.processors.parsers import Parser
 from crawlers.ui import console
+
+# Bgee defaults — moved here from the legacy BgeeDataCiteBuilder.
+_BGEE_PUBLISHER = "Bgee"
+_BGEE_DEFAULT_CREATOR_NAME = "Bgee"
+_BGEE_DEFAULT_SUBJECTS = [
+    "gene expression",
+    "Bgee",
+    "genomics",
+    "transcriptomics",
+]
+_BGEE_RIGHTS = Rights(text="CC0 1.0 Universal (CC0 1.0) Public Domain Dedication")
+_BGEE_RESOURCE_TYPE_VALUE = "Gene expression data"
 
 
 class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
@@ -135,18 +162,32 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
                 creator_name = creator_name or _val(g, creator_node, "name")
                 creator_url = creator_url or _val(g, creator_node, "url")
 
+        description = _val(g, node, "description")
+        dt = _val(g, node, "dateModified") or _val(g, node, "datePublished")
+        version = _val(g, node, "version")
+
+        record = DataCiteRecord(
+            identifier=identifier,
+            identifier_type=IdentifierType.URL,
+            creators=[_build_creator(creator_name, creator_url)],
+            title=title,
+            publisher=_BGEE_PUBLISHER,
+            publication_year=_year_from_datetime(dt),
+            resource_type_general="Dataset",
+            resource_type_value=_BGEE_RESOURCE_TYPE_VALUE,
+            subjects=keywords or list(_BGEE_DEFAULT_SUBJECTS),
+            dates=[Date(value=dt, date_type=DateType.UPDATED)] if dt else [],
+            descriptions=([Description(value=description)] if description else []),
+            related_identifiers=_citations_to_related_identifiers(citations),
+            rights_list=[_BGEE_RIGHTS],
+            version=version,
+        )
+
         return BgeeDataset(
             identifier=identifier,
             title=title,
             files=files,
-            description=_val(g, node, "description"),
-            datetime=_val(g, node, "dateModified") or _val(g, node, "datePublished"),
-            self_link=identifier,
-            version=_val(g, node, "version"),
-            creator_name=creator_name,
-            creator_url=creator_url,
-            keywords=keywords,
-            citations=citations,
+            metadata_record=record,
             _raw=raw,
         )
 
@@ -171,6 +212,53 @@ class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
                 )
                 files.append(BgeeFile(path=name, url=url))
         return files
+
+
+# DataCite mapping helpers
+
+
+def _build_creator(name: str | None, url: str | None) -> Creator:
+    """Build the DataCite creator entry, falling back to the Bgee default."""
+    return Creator(
+        name=name or _BGEE_DEFAULT_CREATOR_NAME,
+        name_type=NameType.ORGANIZATIONAL,
+        identifiers=[NameIdentifier(value=url, scheme="URL")] if url else [],
+    )
+
+
+def _year_from_datetime(dt: str | None) -> int:
+    """Extract year from ISO 8601 string, fall back to UTC now."""
+    if dt:
+        try:
+            return int(dt[:4])
+        except (ValueError, IndexError):
+            pass
+    return datetime.now(UTC).year
+
+
+def _citations_to_related_identifiers(
+    citations: list[str],
+) -> list[RelatedIdentifier]:
+    """Convert citation strings (DOI URLs or other URLs) to relatedIdentifier entries."""
+    entries: list[RelatedIdentifier] = []
+    for citation in citations:
+        if "doi.org" in citation:
+            entries.append(
+                RelatedIdentifier(
+                    value=citation.split("doi.org/", 1)[-1],
+                    identifier_type=RelatedIdentifierType.DOI,
+                    relation_type=RelationType.IS_REFERENCED_BY,
+                )
+            )
+        else:
+            entries.append(
+                RelatedIdentifier(
+                    value=citation,
+                    identifier_type=RelatedIdentifierType.URL,
+                    relation_type=RelationType.IS_REFERENCED_BY,
+                )
+            )
+    return entries
 
 
 # RDF helpers

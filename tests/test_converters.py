@@ -1,4 +1,4 @@
-"""Tests for RecordOnedataConverter."""
+"""Tests for OnedataConverter."""
 
 # pylint: disable=redefined-outer-name,protected-access,missing-function-docstring
 
@@ -12,7 +12,7 @@ from crawlers.metadata.openaire import (
     ResourceType,
 )
 from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoFile
-from crawlers.processors.converters import RecordOnedataConverter
+from crawlers.processors.converters import OnedataConverter
 
 
 def _make_record(
@@ -29,7 +29,7 @@ def _make_record(
         identifier=identifier,
         title=title,
         files=files,
-        metadata=OpenAIRERecord(
+        metadata_record=OpenAIRERecord(
             title=title,
             creator="Test Institute",
             identifier=identifier,
@@ -46,7 +46,7 @@ def _make_record(
 
 @pytest.fixture
 def converter():
-    return RecordOnedataConverter(OpenAIREBuilder())
+    return OnedataConverter(OpenAIREBuilder())
 
 
 @pytest.fixture
@@ -54,8 +54,8 @@ def sample_record():
     return _make_record()
 
 
-class TestRecordOnedataConverter:
-    """Tests for RecordOnedataConverter."""
+class TestOnedataConverter:
+    """Tests for OnedataConverter."""
 
     @pytest.mark.asyncio
     async def test_converts_record(self, converter, sample_record):
