@@ -11,6 +11,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import argparse
 import os
 from abc import ABC
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, cast
@@ -76,7 +77,14 @@ class CrawlerPlugin(ABC):
     1. Collects commands from decorated methods
     2. Builds CLI argument parser from config field metadata
     3. Loads and validates configuration
-    4. Dispatches to the appropriate command method
+    4. Opens an `AsyncExitStack` and dispatches to the command method,
+       passing the stack as the second argument so the command can
+       register cleanups (HTTP clients, sinks, etc.) without writing
+       its own `async with AsyncExitStack()` boilerplate.
+
+    Command methods must have the signature:
+
+        async def <method>(self, config: <ConfigT>, stack: AsyncExitStack) -> None
 
     Example:
         class MyPlugin(CrawlerPlugin):
@@ -84,7 +92,9 @@ class CrawlerPlugin(ABC):
             description = "My crawler plugin"
 
             @command("crawl", MyCrawlConfig, help="Run crawler")
-            async def run_crawl(self, config: MyCrawlConfig) -> None:
+            async def run_crawl(
+                self, config: MyCrawlConfig, stack: AsyncExitStack
+            ) -> None:
                 ...
     """
 
@@ -178,7 +188,8 @@ class CrawlerPlugin(ABC):
         config = self.load_config(cli_args, cmd_def.config_class, command_name)
 
         method = getattr(self, cmd_def.method_name)
-        await method(config)
+        async with AsyncExitStack() as stack:
+            await method(config, stack)
 
     def load_config(
         self,

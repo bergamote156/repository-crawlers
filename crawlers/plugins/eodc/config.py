@@ -6,10 +6,10 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from crawlers.default.config import ApiConfig, DefaultCrawlConfig, opt
+from crawlers.default.config import DefaultCrawlConfig, HttpConfig, opt
 
 
-class EODCApiConfig(ApiConfig):
+class EODCApiConfig(HttpConfig):
     """
     Base configuration for EODC API connections.
 

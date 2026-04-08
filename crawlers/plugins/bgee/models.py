@@ -13,11 +13,11 @@ from typing import Sequence
 from rdflib import Dataset
 from rdflib.term import Node
 
-from crawlers.default.config import ApiConfig, DefaultCrawlConfig, opt
+from crawlers.default.config import DefaultCrawlConfig, HttpConfig, opt
 from crawlers.metadata.datacite import DataCiteRecord
 
 
-class BgeeApiConfig(ApiConfig):
+class BgeeApiConfig(HttpConfig):
     """Base configuration for Bgee connections."""
 
     base_url: str = opt(

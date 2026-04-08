@@ -14,8 +14,8 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from crawlers.core.config import ConfigBase, opt
 
 
-class ApiConfig(ConfigBase):
-    """Base configuration for API connections."""
+class HttpConfig(ConfigBase):
+    """Base configuration for HTTP connections."""
 
     base_url: str = opt(..., description="API base URL")
     timeout: int = opt(15, description="Request timeout in seconds")
@@ -39,7 +39,7 @@ class ProcessingConfig(ConfigBase):
     queue_size: int = opt(1000, description="Size of the processing queue")
 
 
-class DefaultCrawlConfig(ApiConfig, OutputConfig, ProcessingConfig, kw_only=True):
+class DefaultCrawlConfig(HttpConfig, OutputConfig, ProcessingConfig, kw_only=True):
     """Default configuration for crawlers using DefaultCrawlerPlugin."""
 
     page_size: int = opt(100, description="Items per API page")

@@ -8,6 +8,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from contextlib import AsyncExitStack
 from typing import cast
 
 from rich.table import Table
@@ -52,33 +53,36 @@ class EODCPlugin(DefaultCrawlerPlugin):
         )
 
     @command("list-collections", EODCApiConfig, help="List available STAC collections")
-    async def list_collections(self, config: EODCApiConfig) -> None:
+    async def list_collections(
+        self, config: EODCApiConfig, stack: AsyncExitStack
+    ) -> None:
         """List all available STAC collections from EODC."""
-        async with EODCClient.from_config(config) as client:
-            with console.status("Fetching collections..."):
-                result = await client.get_collections()
+        client = await stack.enter_async_context(EODCClient.from_config(config))
 
-            if isinstance(result, Err):
-                console.error(f"Failed to fetch collections: {result.value}")
-                return
+        with console.status("Fetching collections..."):
+            result = await client.get_collections()
 
-            collections = result.value
+        if isinstance(result, Err):
+            console.error(f"Failed to fetch collections: {result.value}")
+            return
 
-            table = Table(
-                title=f"Available Collections ({len(collections)})",
-                show_header=True,
-                header_style="bold",
-            )
-            table.add_column("ID", style="cyan", no_wrap=True)
-            table.add_column("Title")
-            table.add_column("Description", max_width=60)
+        collections = result.value
 
-            for coll in collections:
-                coll_id = coll.get("id", "unknown")
-                title = coll.get("title", "-")
-                desc = coll.get("description", "")[:80]
-                if len(coll.get("description", "")) > 80:
-                    desc += "..."
-                table.add_row(coll_id, title, desc)
+        table = Table(
+            title=f"Available Collections ({len(collections)})",
+            show_header=True,
+            header_style="bold",
+        )
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Title")
+        table.add_column("Description", max_width=60)
 
-            console.print(table)
+        for coll in collections:
+            coll_id = coll.get("id", "unknown")
+            title = coll.get("title", "-")
+            desc = coll.get("description", "")[:80]
+            if len(coll.get("description", "")) > 80:
+                desc += "..."
+            table.add_row(coll_id, title, desc)
+
+        console.print(table)

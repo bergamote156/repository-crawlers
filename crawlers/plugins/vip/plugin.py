@@ -8,6 +8,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from contextlib import AsyncExitStack
 from typing import cast
 
 from rich.table import Table
@@ -53,11 +54,13 @@ class VipPlugin(DefaultCrawlerPlugin):
         )
 
     @command("list-collections", VipApiConfig, help="List available VIP collections")
-    async def list_collections(self, config: VipApiConfig) -> None:
+    async def list_collections(
+        self, config: VipApiConfig, stack: AsyncExitStack
+    ) -> None:
         """List all collections available in the VIP Girder instance."""
-        async with VipClient.from_config(config) as client:
-            with console.status("Fetching collections..."):
-                result = await client.list_collections()
+        client = await stack.enter_async_context(VipClient.from_config(config))
+        with console.status("Fetching collections..."):
+            result = await client.list_collections()
 
         if isinstance(result, Err):
             console.error(f"Failed to fetch collections: {result.value}")

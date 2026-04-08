@@ -11,6 +11,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 import asyncio
 from abc import abstractmethod
+from contextlib import AsyncExitStack
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
@@ -120,8 +121,17 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
 
     # --- Main execution ---
 
-    async def run_crawl(self, config: DefaultCrawlConfig) -> None:
-        """Execute the crawl command. Wired automatically by __init_subclass__."""
+    async def run_crawl(
+        self, config: DefaultCrawlConfig, stack: AsyncExitStack
+    ) -> None:
+        """Execute the crawl command. Wired automatically by __init_subclass__.
+
+        `stack` is injected by the dispatcher. The legacy pipeline path
+        still owns its own client/pipeline lifecycle, so the stack is
+        intentionally unused here — new hooks added to this class should
+        prefer the stack over ad-hoc try/finally.
+        """
+        del stack  # legacy path manages lifecycle internally
         spec = self.prepare_crawl(config)
 
         ctx = self._create_run_context(config, spec)
@@ -293,12 +303,23 @@ class DefaultCrawlerPlugin(CrawlerPlugin):
         console.section("Run Directory")
         console.print(f"  {ctx.run_dir}")
 
-        next_steps = ["Run: registrar"]
-        if status == "interrupted":
-            next_steps.insert(
-                0,
-                f"Resume: crawlers {self.name} crawl --resume {ctx.run_dir}",
+        next_steps: list[str] = []
+        if status == "failed":
+            next_steps.append("Fix the error shown above and re-run the crawl")
+        elif status == "interrupted":
+            next_steps.append(
+                f"Resume: crawlers {self.name} crawl --resume {ctx.run_dir}"
             )
-        console.section("Next Steps")
-        for i, step in enumerate(next_steps, 1):
-            console.print(f"  {i}. {step}")
+
+        if overall.processed > 0:
+            next_steps.append("Run: registrar")
+
+        if overall.failed > 0:
+            next_steps.append(
+                "Investigate worker failures (parser bug — see warnings above)"
+            )
+
+        if next_steps:
+            console.section("Next Steps")
+            for i, step in enumerate(next_steps, 1):
+                console.print(f"  {i}. {step}")
