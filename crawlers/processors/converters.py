@@ -88,7 +88,7 @@ class OnedataConverter[DatasetT: Dataset](
             location=item.title.replace("/", "-"),
             pid=item.identifier,
             metadata_xml=item.metadata_record.to_xml(),
-            files=[OnedataFile(path=f.path, url=f.url) for f in item.files],
+            files=tuple(OnedataFile(path=f.path, url=f.url) for f in item.files),
         )
 
         self._stats.processed += 1

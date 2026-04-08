@@ -1,138 +1,184 @@
 """
 Ecudo Plugin.
 
-Crawler plugin for eCUDO.pl science data repositories.
+Crawler plugin for eCUDO.pl science data repositories. Built on
+`SimpleCrawlerPlugin`: pulls JSON-LD records from the eCUDO REST
+API, delegates mapping to `ecudo.parser`, and lets the framework
+persist processed/rejected datasets.
 """
-
-# pylint: disable=import-outside-toplevel
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-import sys
-from typing import assert_never, cast
+from collections.abc import AsyncIterator
+from contextlib import AsyncExitStack
+from typing import Any
 
 from rich.table import Table
 
+from crawlers.core.config import opt
+from crawlers.core.http import HttpClient
+from crawlers.core.onedata import OnedataDataset, OnedataFile
 from crawlers.core.plugin import command
-from crawlers.core.result import Err, Ok
-from crawlers.default.config import DefaultCrawlConfig
-from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
-from crawlers.default.workspace import DefaultRunContext
-from crawlers.plugins.ecudo.api import EcudoClient, EcudoIteratorOpts
-from crawlers.plugins.ecudo.config import EcudoApiConfig, EcudoCrawlConfig
-from crawlers.plugins.ecudo.parser import EcudoDataset, EcudoParser
-from crawlers.processors.converters import OnedataConverter
-from crawlers.processors.filters import DiversityFilter
-from crawlers.processors.pipeline import ProcessorPipeline
-from crawlers.processors.resolvers import DatasetResolver
-from crawlers.processors.tap import Tap
-from crawlers.processors.validators import URLValidator
+from crawlers.core.result import Err, Result
+from crawlers.default.config import HttpConfig
+from crawlers.plugins.ecudo.api import EcudoApiClient
+from crawlers.plugins.ecudo.parser import parse_ecudo_record
+from crawlers.simple.config import SimpleCrawlConfig
+from crawlers.simple.plugin import SimpleCrawlerPlugin
+from crawlers.simple.workspace import SimpleRunContext
 from crawlers.ui import console
 
 
-class EcudoPlugin(DefaultCrawlerPlugin):
+class EcudoApiConfig(HttpConfig):
+    """Configuration for Ecudo API connections."""
+
+    base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
+
+
+class EcudoCrawlConfig(EcudoApiConfig, SimpleCrawlConfig, kw_only=True):
+    """Configuration for an Ecudo crawling."""
+
+    organization: str = opt(
+        ...,
+        # Explicit CLI is needed for positional args to be detected correctly
+        # (otherwise '--' will be prepended)
+        cli="organization",
+        description="Organization ID (e.g. iopan)",
+    )
+
+    page_size: int = opt(200, description="Items per API page")
+
+
+class EcudoPlugin(SimpleCrawlerPlugin[str, EcudoCrawlConfig]):
     """
     Plugin for eCUDO.pl science data repositories.
 
     Commands:
-    - crawl: Crawl datasets from an organization
-    - list-orgs: List available organizations
+    - crawl:      fetch JSON-LD records for an organization and emit OnedataDatasets
+    - list-orgs:  list available organizations
     """
 
     name = "ecudo"
     description = "Crawler for eCUDO.pl science data repositories"
-    config_class = EcudoCrawlConfig  # type: ignore[assignment]
-    _crawl_config: EcudoCrawlConfig
 
-    def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
-        cfg = cast(EcudoCrawlConfig, config)
-        self._crawl_config = cfg
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Crawling
+    # ─────────────────────────────────────────────────────────────────────────────
 
-        return DefaultCrawlSpec(
-            client=EcudoClient.from_config(cfg),
-            iterator_opts=EcudoIteratorOpts(
-                org_id=cfg.organization,
-                page_size=cfg.page_size,
-                max_datasets=cfg.max_records,
-            ),
-            parser=EcudoParser(),
-            run_context_name=cfg.organization,
-            banner_subtitle=f"Organization: {cfg.organization}",
-        )
+    config_class = EcudoCrawlConfig
 
-    def build_pipeline(self, ctx: DefaultRunContext) -> ProcessorPipeline:
-        ecudo_client = cast(EcudoClient, ctx.crawl_spec.client)
-        cfg = cast(EcudoCrawlConfig, ctx.config)
-        df_cfg = cfg.diversity_filter
+    _api_client: EcudoApiClient
+    _validation_http: HttpClient | None
 
-        return ProcessorPipeline(
-            processors=[
-                DatasetResolver[str, dict, EcudoDataset](
-                    resolve_fn=ecudo_client.get_dataset_metadata,
-                    parser=ctx.crawl_spec.parser,
-                ),
-                URLValidator[EcudoDataset](  # type: ignore[type-var]
-                    validate_fn=ecudo_client.validate_url,
-                    enabled=not cfg.no_url_validation,
-                ),
-                DiversityFilter[EcudoDataset](
-                    max_similar=df_cfg.max_similar,
-                    similarity_threshold=df_cfg.similarity_threshold,
-                    enabled=cfg.get_diversity_filter_enabled(),
-                ),
-                Tap(ctx.raw_sink, transform=lambda d: d.to_json()),
-                OnedataConverter[EcudoDataset](),  # type: ignore[type-var]
-                Tap(ctx.processed_sink, transform=lambda d: d.to_json()),
-            ],
-            rejection_sink=ctx.rejection_sink,
-        )
+    # --- Banner / context plumbing ---
 
-    async def before_crawl(self, ctx: DefaultRunContext) -> None:
-        """Validate that the requested organization exists."""
-        ecudo_client = cast(EcudoClient, ctx.crawl_spec.client)
+    def run_context_name(self, config: EcudoCrawlConfig) -> str:
+        return config.organization
+
+    # --- Lifecycle ---
+
+    async def setup(
+        self, ctx: SimpleRunContext[EcudoCrawlConfig], stack: AsyncExitStack
+    ) -> None:
+        """Open the shared HttpClient and build the API façade."""
+        http = await self._open_http(ctx.config, stack)
+        self._api_client = EcudoApiClient(http)
+        self._validation_http = None if ctx.config.no_url_validation else http
+
+    async def before_crawl(self, ctx: SimpleRunContext[EcudoCrawlConfig]) -> None:
+        """Verify the requested organization exists before producing items."""
+        target_organization = ctx.config.organization
 
         with console.status("Validating organization..."):
-            result = await ecudo_client.get_organizations()
+            result = await self._api_client.get_organizations()
 
-        match result:
-            case Ok(value=orgs):
-                org = self._crawl_config.organization
-                if not any(o["id"] == org for o in orgs):
-                    console.error(f"Organization '{org}' not found.")
-                    console.error(f"Available: {', '.join(o['id'] for o in orgs)}")
-                    sys.exit(1)
-            case Err(value=err):
-                console.error(f"Failed to fetch organizations: {err}")
-                sys.exit(1)
-            case other:
-                assert_never(other)
+        if isinstance(result, Err):
+            raise RuntimeError(f"Failed to fetch organizations: {result.value}")
 
-        console.success(f"Found organization: {self._crawl_config.organization}")
+        all_organizations = result.value
+        if not any(o["id"] == target_organization for o in all_organizations):
+            available = ", ".join(o["id"] for o in all_organizations)
+            raise RuntimeError(
+                f"Organization '{target_organization}' not found. Available: {available}"
+            )
+
+        console.success(f"Found organization: {target_organization}")
+
+    # --- Iteration & parse ---
+
+    async def iterate_datasets(
+        self, ctx: SimpleRunContext[EcudoCrawlConfig]
+    ) -> AsyncIterator[str]:
+        """Yield dataset IDs to feed the worker pool."""
+        async for dataset_id in self._api_client.iterate_dataset_ids(
+            ctx.config.organization,
+            page_size=ctx.config.page_size,
+            max_datasets=ctx.config.max_records,
+        ):
+            yield dataset_id
+
+    async def parse(self, dataset_id: str) -> Result[OnedataDataset, Any] | None:
+        """Resolve a dataset ID to JSON-LD and build an `OnedataDataset`."""
+        fetch_result = await self._api_client.get_dataset_metadata(dataset_id)
+        if isinstance(fetch_result, Err):
+            return fetch_result
+
+        parsed = parse_ecudo_record(fetch_result.value)
+        if parsed is None:
+            return None
+
+        return await OnedataDataset.build(
+            pid=parsed.identifier,
+            name=parsed.title,
+            location=parsed.title.replace("/", "-"),
+            metadata=parsed.metadata,
+            files=[OnedataFile(path=f.path, url=f.url) for f in parsed.files],
+            http=self._validation_http,
+        )
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Auxiliary commands
+    # ─────────────────────────────────────────────────────────────────────────────
 
     @command("list-orgs", EcudoApiConfig, help="List available organizations")
-    async def list_organizations(self, config: EcudoApiConfig) -> None:
+    async def list_organizations(
+        self, config: EcudoApiConfig, stack: AsyncExitStack
+    ) -> None:
         """List all available organizations from Ecudo."""
-        async with EcudoClient.from_config(config) as client:
-            with console.status("Fetching organizations..."):
-                result = await client.get_organizations()
+        http = await self._open_http(config, stack)
+        api_client = EcudoApiClient(http)
 
-            if isinstance(result, Err):
-                console.error(f"Failed to fetch organizations: {result.value}")
-                return
+        with console.status("Fetching organizations..."):
+            result = await api_client.get_organizations()
 
-            organizations = result.value
+        if isinstance(result, Err):
+            console.error(f"Failed to fetch organizations: {result.value}")
+            return
 
-            table = Table(
-                title=f"Available Organizations ({len(organizations)})",
-                show_header=True,
-                header_style="bold",
-            )
-            table.add_column("ID", style="cyan", no_wrap=True)
-            table.add_column("Name")
+        organizations = result.value
 
-            for org in organizations:
-                table.add_row(org.get("id", "unknown"), org.get("name", "-"))
+        table = Table(
+            title=f"Available Organizations ({len(organizations)})",
+            show_header=True,
+            header_style="bold",
+        )
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("Name")
 
-            console.print(table)
+        for org in organizations:
+            table.add_row(org.get("id", "unknown"), org.get("name", "-"))
+
+        console.print(table)
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Helpers
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def _open_http(config: EcudoApiConfig, stack: AsyncExitStack) -> HttpClient:
+        """Open a shared `HttpClient` for the eCUDO API on `stack`."""
+        return await stack.enter_async_context(
+            HttpClient.from_config(config, extra_headers={"Accept-Language": "en"})
+        )

@@ -1,13 +1,19 @@
 """
-Ecudo Parser.
+Ecudo JSON-LD parser.
+
+Maps a dcat JSON-LD record (as returned by the eCUDO REST API) to an
+`OpenAIRERecord` plus the list of downloadable files. This module has
+no knowledge of the crawler lifecycle or HTTP — it is pure mapping and
+schema validation, so it can be unit-tested in isolation and so the
+plugin file stays focused on lifecycle wiring.
 """
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass
+from typing import Any
 
 from crawlers.metadata.openaire import (
     AccessRights,
@@ -19,10 +25,10 @@ from crawlers.metadata.openaire import (
 from crawlers.plugins.utils.language import normalize_language_code
 from crawlers.plugins.utils.mime import infer_mime_type
 from crawlers.plugins.utils.paths import resolve_path_collisions
-from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
-# Expected @type values for structure validation
+# --- Schema expectations -----------------------------------------------------
+
 _EXPECTED_TYPES = {
     "root": "dcat:Dataset",
     "distribution": "dcat:Distribution",
@@ -30,7 +36,6 @@ _EXPECTED_TYPES = {
     "contactPoint": "vCard:contact",
 }
 
-# Known root-level fields in ECUDO JSON-LD records
 _KNOWN_ROOT_FIELDS = {
     "@context",
     "@type",
@@ -50,73 +55,49 @@ _KNOWN_ROOT_FIELDS = {
     "title",
 }
 
-# Known accessLevel values
 _KNOWN_ACCESS_LEVELS = {"public"}
 
-# Maps eCUDO 'accessLevel' strings to COAR access right enums.
 _ACCESS_LEVEL_MAP: dict[str, AccessRights] = {
     "public": AccessRights.OPEN,
 }
 
 
+# --- Public types ------------------------------------------------------------
+
+
 @dataclass
 class EcudoFile:
-    """File from Ecudo dataset."""
+    """A single downloadable file extracted from a dcat:Distribution."""
 
     path: str
     url: str
 
 
 @dataclass
-class EcudoDataset:
-    """
-    Pipeline carrier for an eCUDO dataset.
-
-    Holds the minimal fields the processor pipeline needs (identifier, title,
-    files) plus a fully populated `OpenAIRERecord` for the metadata
-    builder, and the original JSON-LD payload for the raw sink.
-    """
+class ParsedEcudoRecord:
+    """Result of parsing a single eCUDO JSON-LD record."""
 
     identifier: str
     title: str
-    files: Sequence[EcudoFile]
-    metadata_record: OpenAIRERecord
-    _raw: dict = field(default_factory=dict, repr=False, compare=False)
-
-    def to_json(self) -> dict:
-        """Return the raw JSON-LD data."""
-        return self._raw
+    metadata: OpenAIRERecord
+    files: list[EcudoFile]
 
 
-# pylint: disable=too-few-public-methods
-class EcudoParser(Parser[dict, EcudoDataset]):
+# --- Entry point -------------------------------------------------------------
+
+
+def parse_ecudo_record(raw: dict) -> ParsedEcudoRecord | None:
     """
-    Parses Ecudo JSON-LD into EcudoDataset.
+    Map a raw eCUDO JSON-LD dict into a `ParsedEcudoRecord`.
+
+    Returns `None` when the record should be silently skipped (missing
+    identifier, no distributions, no valid download URLs). Schema
+    deviations are logged as warnings but do not stop parsing.
     """
+    identifier = raw.get("identifier")
+    if not identifier:
+        return None
 
-    def parse(self, raw: dict) -> EcudoDataset | None:
-        """
-        Parse raw JSON-LD data.
-
-        Args:
-            raw: Dictionary with JSON-LD data
-
-        Returns:
-            EcudoDataset or None if parsing fails or data is invalid
-        """
-        identifier = raw.get("identifier")
-        if not identifier:
-            return None
-
-        try:
-            return _parse_record(raw, identifier)
-        except Exception as e:  # pylint: disable=broad-except
-            console.warning(f"Failed to parse record {identifier}: {e}")
-            return None
-
-
-def _parse_record(raw: dict, identifier: str) -> EcudoDataset | None:
-    """Build an `EcudoDataset` from a validated JSON-LD record."""
     _validate_structure(raw, identifier)
 
     distributions = raw.get("distribution", [])
@@ -131,48 +112,38 @@ def _parse_record(raw: dict, identifier: str) -> EcudoDataset | None:
 
     title = raw.get("title", "Untitled Dataset")
     publisher = _parse_publisher(raw.get("publisher"), identifier)
-    description = raw.get("description", "") or None
-    keywords = list(raw.get("keywords", []))
-    issued = raw.get("issued", raw.get("modified", ""))
-    language = raw.get("language", "en")
-    access_level = raw.get("accessLevel", "public")
-    spatial = raw.get("spatial")
-    temporal = raw.get("temporal")
 
     metadata = OpenAIRERecord(
         title=title,
         creator=publisher,
         identifier=identifier,
-        publication_date=issued,
-        access_rights=_resolve_access_rights(access_level),
+        publication_date=raw.get("issued", raw.get("modified", "")),
+        access_rights=_resolve_access_rights(raw.get("accessLevel", "public")),
         resource_type=ResourceType.DATASET,
-        language=normalize_language_code(language),
+        language=normalize_language_code(raw.get("language", "en")),
         publisher=publisher,
-        description=description,
-        subjects=keywords,
+        description=raw.get("description") or None,
+        subjects=list(raw.get("keywords", [])),
         files=[
             FileLocation(url=f.url, mime_type=infer_mime_type(f.url)) for f in files
         ],
-        temporal_coverage=temporal,
-        spatial_coverage=_parse_bounding_box(spatial),
+        temporal_coverage=raw.get("temporal"),
+        spatial_coverage=_parse_bounding_box(raw.get("spatial")),
     )
 
-    return EcudoDataset(
+    return ParsedEcudoRecord(
         identifier=identifier,
         title=title,
+        metadata=metadata,
         files=files,
-        metadata_record=metadata,
-        _raw=raw,
     )
+
+
+# --- Internals ---------------------------------------------------------------
 
 
 def _validate_structure(raw: dict, identifier: str) -> None:
-    """
-    Validate record structure and log warnings for unexpected values.
-
-    This helps detect schema changes or new record types during crawling.
-    """
-    # Check root @type
+    """Warn on unexpected schema deviations; never raises."""
     root_type = raw.get("@type")
     if root_type and root_type != _EXPECTED_TYPES["root"]:
         console.warning(
@@ -180,7 +151,6 @@ def _validate_structure(raw: dict, identifier: str) -> None:
             f" in record {identifier}"
         )
 
-    # Check for unknown root fields
     unknown_fields = set(raw.keys()) - _KNOWN_ROOT_FIELDS
     if unknown_fields:
         console.warning(
@@ -188,7 +158,6 @@ def _validate_structure(raw: dict, identifier: str) -> None:
             " updating parser"
         )
 
-    # Check accessLevel
     access_level = raw.get("accessLevel")
     if access_level and access_level not in _KNOWN_ACCESS_LEVELS:
         console.warning(
@@ -196,7 +165,6 @@ def _validate_structure(raw: dict, identifier: str) -> None:
             " mapping"
         )
 
-    # Check publisher @type if present
     publisher = raw.get("publisher")
     if isinstance(publisher, dict):
         pub_type = publisher.get("@type")
@@ -206,7 +174,6 @@ def _validate_structure(raw: dict, identifier: str) -> None:
                 f" '{_EXPECTED_TYPES['publisher']}') in record {identifier}"
             )
 
-    # Check contactPoint @type if present
     contact = raw.get("contactPoint")
     if isinstance(contact, dict):
         contact_type = contact.get("@type")
@@ -217,11 +184,10 @@ def _validate_structure(raw: dict, identifier: str) -> None:
             )
 
 
-def _parse_files(distributions: list, identifier: str = "") -> list[EcudoFile]:
+def _parse_files(distributions: list, identifier: str) -> list[EcudoFile]:
     """Parse a JSON-LD distribution array into a list of `EcudoFile`."""
     urls: list[str] = []
     for dist in distributions:
-        # Validate distribution @type
         dist_type = dist.get("@type")
         if dist_type and dist_type != _EXPECTED_TYPES["distribution"]:
             console.warning(
@@ -232,14 +198,13 @@ def _parse_files(distributions: list, identifier: str = "") -> list[EcudoFile]:
         url = dist.get("downloadURL")
         if not url:
             continue
-
         urls.append(url)
 
     paths = resolve_path_collisions(urls)
     return [EcudoFile(path=p, url=u) for p, u in zip(paths, urls)]
 
 
-def _parse_publisher(publisher_data, identifier: str = "") -> str:
+def _parse_publisher(publisher_data: Any, identifier: str) -> str:
     """Parse the publisher field which can be a dict, a string, or missing."""
     if not publisher_data:
         return "Unknown Publisher"

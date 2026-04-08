@@ -1,29 +1,15 @@
-"""
-Ecudo API Client.
-"""
-
-# pylint: disable=duplicate-code
+"""eCUDO API thin façade over `HttpClient`."""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass
-from typing import AsyncIterator, Self, TypedDict, assert_never
+from collections.abc import AsyncIterator
+from typing import TypedDict, assert_never
 
-from crawlers.core.api import ApiClient, ApiFailure
+from crawlers.core.http import HttpClient, HttpFailure
 from crawlers.core.result import Err, Ok, Result
-from crawlers.plugins.ecudo.config import EcudoApiConfig
 from crawlers.ui import console
-
-
-@dataclass
-class EcudoIteratorOpts:
-    """Options for iterating over Ecudo datasets."""
-
-    org_id: str
-    page_size: int = 200
-    max_datasets: int | None = None
 
 
 class EcudoOrganization(TypedDict):
@@ -34,40 +20,32 @@ class EcudoOrganization(TypedDict):
     link: str
 
 
-class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
+class EcudoApiClient:
     """
-    API Client for Ecudo.
+    Stateless façade over `HttpClient` for the eCUDO REST API.
 
-    Iterates over dataset IDs (str).
-    Provides method to fetch full metadata for a given ID.
+    Owns no session state — pass an open `HttpClient` and reuse it
+    across calls. Endpoints return `Result` so the caller decides how
+    to handle failures.
     """
 
-    @classmethod
-    def from_config(cls, config: EcudoApiConfig) -> Self:
-        """Construct client object."""
-        return cls(
-            base_url=config.base_url,
-            timeout=config.timeout,
-            max_retries=config.max_retries,
-        )
+    def __init__(self, http: HttpClient):
+        self._http = http
 
-    # pylint: disable=invalid-overridden-method
-    async def iterate_datasets(self, opts: EcudoIteratorOpts) -> AsyncIterator[str]:
-        """
-        Iterate over dataset IDs in the specified organization.
-
-        Args:
-            opts: Iteration options including org_id and limits
-
-        Yields:
-            Dataset ID (str)
-        """
+    async def iterate_dataset_ids(
+        self,
+        org_id: str,
+        *,
+        page_size: int = 200,
+        max_datasets: int | None = None,
+    ) -> AsyncIterator[str]:
+        """Async-iterate dataset IDs page by page, honoring `max_datasets`."""
         yielded = 0
         page = 0
 
         while True:
-            offset = page * opts.page_size + 1
-            result = await self.list_dataset_ids(opts.org_id, offset, opts.page_size)
+            offset = page * page_size + 1
+            result = await self.list_dataset_ids(org_id, offset, page_size)
 
             match result:
                 case Ok(value=ids) if not ids:
@@ -76,11 +54,8 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
                     for dataset_id in ids:
                         yield dataset_id
                         yielded += 1
-
-                        if opts.max_datasets and yielded >= opts.max_datasets:
-                            console.info(
-                                f"Reached max_datasets limit: {opts.max_datasets}"
-                            )
+                        if max_datasets and yielded >= max_datasets:
+                            console.info(f"Reached max_datasets limit: {max_datasets}")
                             return
                 case Err(value=err):
                     console.error(str(err))
@@ -89,46 +64,23 @@ class EcudoClient(ApiClient[EcudoIteratorOpts, str]):
                     assert_never(other)
 
             page += 1
-            console.info(f"📄 Page {page} | {yielded} IDs fetched")
+            console.info(f"Page {page} | {yielded} IDs fetched")
 
     async def list_dataset_ids(
         self, org_id: str, offset: int, limit: int
-    ) -> Result[list[str], ApiFailure]:
-        """
-        Fetch a page of dataset IDs.
+    ) -> Result[list[str], HttpFailure]:
+        """Fetch a page of dataset IDs for `org_id` (1-based offset)."""
+        url = f"/organizations/{org_id}/data?offset={offset}&limit={limit}"
+        result = await self._http.get_json(url)
+        return result.map(lambda d: d.get("metadata", []))
 
-        Args:
-            org_id: Organization ID
-            offset: Pagination offset (1-based)
-            limit: Number of items per page
+    async def get_dataset_metadata(self, dataset_id: str) -> Result[dict, HttpFailure]:
+        """Fetch full JSON-LD metadata for one dataset."""
+        return await self._http.get_json(f"/metadata/{dataset_id}/json-ld")
 
-        Returns:
-            Ok(list[str]) of dataset IDs, or Err(ApiFailure)
-        """
-        url = (
-            f"{self.base_url}/organizations/{org_id}/data?offset={offset}&limit={limit}"
-        )
-        return (await self.get_json(url)).map(lambda d: d.get("metadata", []))
-
-    async def get_dataset_metadata(self, dataset_id: str) -> Result[dict, ApiFailure]:
-        """
-        Fetch full JSON-LD metadata for a dataset.
-
-        Args:
-            dataset_id: Dataset ID
-
-        Returns:
-            Ok(dict) with JSON-LD metadata, or Err(ApiFailure)
-        """
-        url = f"{self.base_url}/metadata/{dataset_id}/json-ld"
-        return await self.get_json(url)
-
-    async def get_organizations(self) -> Result[list[EcudoOrganization], ApiFailure]:
-        """
-        Fetch list of all available organizations.
-
-        Returns:
-            Ok(list) of organization dicts, or Err(ApiFailure)
-        """
-        result = await self.get_json(f"{self.base_url}/organizations")
+    async def get_organizations(
+        self,
+    ) -> Result[list[EcudoOrganization], HttpFailure]:
+        """Fetch the list of available organizations."""
+        result = await self._http.get_json("/organizations")
         return result.map(lambda d: d.get("organizations", []))
