@@ -11,9 +11,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Self
 
 from crawlers.core.http import HttpClient, HttpFailure
-from crawlers.core.metadata import MetadataRecord
 from crawlers.core.result import Err, Ok, Result
-
+from crawlers.model.metadata import MetadataRecord
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Build failures
