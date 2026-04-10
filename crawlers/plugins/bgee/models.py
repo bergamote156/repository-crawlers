@@ -13,7 +13,7 @@ from typing import Sequence
 from rdflib import Dataset
 from rdflib.term import Node
 
-from crawlers.default.config import DefaultCrawlConfig, HttpConfig, opt
+from crawlers.core import CrawlConfig, HttpConfig, opt
 from crawlers.metadata.datacite import DataCiteRecord
 
 
@@ -26,7 +26,7 @@ class BgeeApiConfig(HttpConfig):
     )
 
 
-class BgeeCrawlConfig(BgeeApiConfig, DefaultCrawlConfig, kw_only=True):
+class BgeeCrawlConfig(BgeeApiConfig, CrawlConfig, kw_only=True):
     """Full configuration for Bgee schema.org JSON-LD crawling."""
 
 

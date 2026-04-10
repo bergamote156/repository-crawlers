@@ -13,7 +13,7 @@ from rdflib import Dataset, Namespace
 from rdflib.namespace import RDF
 from rdflib.term import Node
 
-from crawlers.core.api import ApiClient
+from crawlers.core import Err, HttpClient
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -35,7 +35,6 @@ from crawlers.plugins.bgee.models import (
     BgeeRawRecord,
 )
 from crawlers.plugins.utils.datetime import year_from_iso
-from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
 # Bgee defaults — moved here from the legacy BgeeDataCiteBuilder.
@@ -51,35 +50,36 @@ _BGEE_RIGHTS = Rights(text="CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 _BGEE_RESOURCE_TYPE_VALUE = "Gene expression data"
 
 
-class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
-    """Crawls Bgee species pages and extracts schema.org JSON-LD Dataset records."""
+class BgeeClient:
+    """
+    Stateless façade over `HttpClient` that crawls Bgee species pages
+    and extracts schema.org JSON-LD Dataset records.
+    """
 
-    # pylint: disable=invalid-overridden-method
+    def __init__(self, http: HttpClient):
+        self._http = http
+
     async def iterate_datasets(
         self, opts: BgeeIteratorOpts
     ) -> AsyncIterator[BgeeRawRecord]:
         """Fetch start URL, discover species page links, yield `BgeeRawRecord` per dataset."""
         yielded = 0
-        try:
-            async with self.session.get(opts.start_url) as resp:
-                resp.raise_for_status()
-                html = await resp.text()
-        except Exception as e:  # pylint: disable=broad-except
-            console.error(f"Failed to fetch start URL {opts.start_url}: {e}")
+        start_result = await self._http.get_text(opts.start_url)
+        if isinstance(start_result, Err):
+            console.error(
+                f"Failed to fetch start URL {opts.start_url}: {start_result.value}"
+            )
             return
-        _, discover_urls = self._parse_page(html, opts.start_url)
+        _, discover_urls = self._parse_page(start_result.value, opts.start_url)
         console.info(f"Found {len(discover_urls)} pages to crawl")
         for url in discover_urls:
             if opts.max_records is not None and yielded >= opts.max_records:
                 break
-            try:
-                async with self.session.get(url) as resp:
-                    resp.raise_for_status()
-                    page_html = await resp.text()
-            except Exception as e:  # pylint: disable=broad-except
-                console.warning(f"Failed to fetch {url}: {e}")
+            page_result = await self._http.get_text(url)
+            if isinstance(page_result, Err):
+                console.warning(f"Failed to fetch {url}: {page_result.value}")
                 continue
-            records, _ = self._parse_page(page_html, url)
+            records, _ = self._parse_page(page_result.value, url)
             console.debug(f"Found {len(records)} dataset(s) on {url}")
             for record in records:
                 yield record
@@ -109,7 +109,7 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
                 continue
             raw_parts.append(raw_json)
             try:
-                g.parse(data=raw_json, format="json-ld")
+                g.process(data=raw_json, format="json-ld")
             except Exception as e:  # pylint: disable=broad-except
                 console.warning(f"Failed to parse JSON-LD on {page_url}: {e}")
 
@@ -121,7 +121,7 @@ class BgeeClient(ApiClient[BgeeIteratorOpts, BgeeRawRecord]):
 
 
 # pylint: disable=too-few-public-methods
-class BgeeParser(Parser[BgeeRawRecord, BgeeDataset]):
+class BgeeParser:
     """Converts a `BgeeRawRecord` (rdflib graph + node) into a `BgeeDataset`."""
 
     # pylint: disable=too-many-locals

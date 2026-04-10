@@ -1,15 +1,18 @@
 """
-EODC Parser.
+EODC STAC item parser.
 
-Parses STAC items from EODC API into EODCDataset models.
+Maps a STAC item dict (as returned by the EODC `POST /search` endpoint)
+to a `DataCiteRecord` plus the list of downloadable assets. This module
+has no knowledge of the crawler lifecycle or HTTP — it is pure mapping,
+so it can be unit-tested in isolation and the plugin file stays focused
+on lifecycle wiring.
 """
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass
 
 from crawlers.metadata.datacite import (
     Creator,
@@ -27,7 +30,6 @@ from crawlers.metadata.datacite import (
 )
 from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.utils.mime import extension_for_mime
-from crawlers.processors.parsers import Parser
 from crawlers.ui import console
 
 # --- EODC Sentinel-1 GRD constants -------------------------------------------
@@ -59,62 +61,43 @@ _DEFAULT_ASSET_EXTENSION = "tiff"
 
 @dataclass
 class EODCFile:
-    """Asset from STAC item."""
+    """A single downloadable asset from a STAC item."""
 
     path: str
     url: str
 
 
 @dataclass
-class EODCDataset:
-    """Pipeline carrier for an EODC STAC item with prebuilt DataCite record."""
+class ParsedEODCItem:
+    """Result of parsing a single EODC STAC item."""
 
     identifier: str
     title: str
-    files: Sequence[EODCFile]
-    metadata_record: DataCiteRecord
-    _raw: dict = field(default_factory=dict, repr=False, compare=False)
-
-    def to_json(self) -> dict:
-        """Return the raw STAC item data."""
-        return self._raw
+    metadata: DataCiteRecord
+    files: list[EODCFile]
 
 
-# pylint: disable=too-few-public-methods
-class EODCParser(Parser[dict, EODCDataset]):
+def parse_eodc_item(raw: dict) -> ParsedEODCItem | None:
     """
-    Parses STAC Item dict to EODCDataset.
+    Map a raw STAC item dict into a `ParsedEODCItem`.
 
-    Handles:
-    - Dynamic title generation from Sentinel-1 properties
-    - Asset extraction with MIME type inference
-    - GeoJSON geometry extraction
+    Returns `None` when the item should be silently skipped (missing id,
+    no assets, no valid asset URLs). Unexpected errors are logged as
+    warnings and also yield `None`.
     """
+    item_id = raw.get("id")
+    if not item_id:
+        console.warning("STAC item missing 'id' field")
+        return None
 
-    def parse(self, raw: dict) -> EODCDataset | None:
-        """
-        Parse raw STAC item data.
-
-        Args:
-            raw: Dictionary with STAC item data
-
-        Returns:
-            EODCDataset or None if parsing fails or data is invalid
-        """
-        item_id = raw.get("id")
-        if not item_id:
-            console.warning("STAC item missing 'id' field")
-            return None
-
-        try:
-            return _parse_item(raw, item_id)
-        except Exception as e:  # pylint: disable=broad-except
-            console.warning(f"Failed to parse STAC item {item_id}: {e}")
-            return None
+    try:
+        return _parse_item(raw, item_id)
+    except Exception as e:  # pylint: disable=broad-except
+        console.warning(f"Failed to parse STAC item {item_id}: {e}")
+        return None
 
 
-def _parse_item(raw: dict, item_id: str) -> EODCDataset | None:
-    """Build an `EODCDataset` from a validated STAC item dict."""
+def _parse_item(raw: dict, item_id: str) -> ParsedEODCItem | None:
     assets = raw.get("assets", {})
     if not assets:
         console.debug(f"Skipping {item_id}: no assets")
@@ -131,7 +114,7 @@ def _parse_item(raw: dict, item_id: str) -> EODCDataset | None:
     dt = props.get("datetime")
     geometry = raw.get("geometry")
 
-    record = DataCiteRecord(
+    metadata = DataCiteRecord(
         identifier=item_id,
         identifier_type=IdentifierType.OTHER,
         creators=[_EODC_CREATOR],
@@ -158,12 +141,11 @@ def _parse_item(raw: dict, item_id: str) -> EODCDataset | None:
         rights_list=[_EODC_RIGHTS],
     )
 
-    return EODCDataset(
+    return ParsedEODCItem(
         identifier=item_id,
         title=title,
+        metadata=metadata,
         files=files,
-        metadata_record=record,
-        _raw=raw,
     )
 
 

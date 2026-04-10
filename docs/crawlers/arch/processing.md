@@ -14,7 +14,7 @@ source_modules:
   - crawlers/core/processor.py
   - crawlers/core/sink.py
   - crawlers/core/orchestration.py
-  - crawlers/core/onedata.py
+  - crawlers/core/dataset.py
   - crawlers/processors/pipeline.py
   - crawlers/processors/resolvers.py
   - crawlers/processors/parsers.py

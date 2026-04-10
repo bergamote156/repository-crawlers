@@ -1,64 +1,140 @@
 """
 VIP Plugin.
 
-Crawler for VIP (Virtual Imaging Platform) Girder REST API.
+Crawler plugin for VIP (Virtual Imaging Platform) Girder REST API.
+Built on `CrawlerPlugin`: iterates top-level dataset folders in
+a named collection, resolves each folder's files recursively, and
+delegates DataCite mapping to `vip.parser`.
 """
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import cast
+from typing import Any
 
 from rich.table import Table
 
-from crawlers.core.plugin import command
-from crawlers.core.result import Err
-from crawlers.default.config import DefaultCrawlConfig
-from crawlers.default.plugin import DefaultCrawlerPlugin, DefaultCrawlSpec
-from crawlers.plugins.vip.api import VipClient, VipIteratorOpts
-from crawlers.plugins.vip.config import VipApiConfig, VipCrawlConfig
-from crawlers.plugins.vip.parser import VipParser
+from crawlers.core import (
+    CrawlConfig,
+    CrawlerPlugin,
+    Err,
+    HttpClient,
+    HttpConfig,
+    Result,
+    RunContext,
+    command,
+    opt,
+)
+from crawlers.model.dataset import OnedataDataset, OnedataFile
+from crawlers.plugins.vip.api import VipClient
+from crawlers.plugins.vip.parser import parse_vip_record
 from crawlers.ui import console
 
 
-class VipPlugin(DefaultCrawlerPlugin):
-    """
-    VIP (Virtual Imaging Platform) crawler using the default plugin architecture.
+class VipApiConfig(HttpConfig):
+    """Base configuration for VIP Girder API connections."""
 
-    Crawls Girder collections exposed by the VIP platform, recursively
-    collecting all nested files for each top-level dataset folder.
-    """
+    base_url: str = opt(
+        "https://srmnopt.creatis.insa-lyon.fr/api/v1",
+        description="VIP Girder REST API base URL",
+    )
+
+
+class VipCrawlConfig(VipApiConfig, CrawlConfig, kw_only=True):
+    """Configuration for VIP Girder collection crawling."""
+
+    collection: str = opt(
+        ...,
+        # Explicit CLI is needed for positional args to be detected correctly
+        # (otherwise '--' will be prepended)
+        cli="collection",
+        description="Name of the VIP collection to crawl",
+    )
+
+    page_size: int = opt(100, description="Items per API page")
+
+    def __post_init__(self):
+        if not self.collection or self.collection.isspace():
+            raise ValueError("Collection name cannot be empty")
+
+        self.collection = self.collection.strip()
+
+
+class VipPlugin(CrawlerPlugin[dict, VipCrawlConfig]):
+    """Crawler for VIP (Virtual Imaging Platform) Girder collections."""
 
     name = "vip"
     description = "Crawler for VIP (Virtual Imaging Platform) Girder REST API"
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Crawling
+    # ─────────────────────────────────────────────────────────────────────────────
+
     config_class = VipCrawlConfig
 
-    def prepare_crawl(self, config: DefaultCrawlConfig) -> DefaultCrawlSpec:
-        cfg = cast(VipCrawlConfig, config)
+    _api_client: VipClient
+    _validation_http: HttpClient | None
 
-        client = VipClient.from_config(cfg)
+    # --- Banner / context plumbing ---
 
-        return DefaultCrawlSpec(
-            client=client,
-            iterator_opts=VipIteratorOpts(
-                collection=cfg.collection,
-                page_size=cfg.page_size,
-                max_records=cfg.max_records,
-            ),
-            resolve_fn=client.resolve_dataset,
-            parser=VipParser(),
-            run_context_name=cfg.collection,
-            banner_subtitle=f"Collection: {cfg.collection}",
+    def run_context_name(self, config: VipCrawlConfig) -> str:
+        return config.collection
+
+    # --- Lifecycle ---
+
+    async def setup(
+        self, ctx: RunContext[VipCrawlConfig], stack: AsyncExitStack
+    ) -> None:
+        """Open the shared HttpClient and build the API façade."""
+        http = await self._open_http(ctx.config, stack)
+        self._api_client = VipClient(http)
+        self._validation_http = None if ctx.config.no_url_validation else http
+
+    # --- Iteration & parse ---
+
+    async def iterate_datasets(
+        self, ctx: RunContext[VipCrawlConfig]
+    ) -> AsyncIterator[dict]:
+        """Yield raw Girder folder dicts (one per top-level dataset)."""
+        async for folder in self._api_client.iterate_datasets(
+            ctx.config.collection,
+            page_size=ctx.config.page_size,
+            max_records=ctx.config.max_records,
+        ):
+            yield folder
+
+    async def process(self, folder: dict) -> Result[OnedataDataset, Any] | None:
+        """Resolve a folder's files and build an `OnedataDataset`."""
+        files = await self._api_client.resolve_dataset_files(folder)
+
+        parsed = parse_vip_record(folder, files)
+        if parsed is None:
+            return None
+
+        return await OnedataDataset.build(
+            pid=parsed.identifier,
+            name=parsed.title,
+            location=parsed.title.replace("/", "-"),
+            metadata=parsed.metadata,
+            files=[OnedataFile(path=f.path, url=f.url) for f in parsed.files],
+            http=self._validation_http,
         )
 
-    @command("list-collections", VipApiConfig, help="List available VIP collections")
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Auxiliary commands
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    @command
     async def list_collections(
         self, config: VipApiConfig, stack: AsyncExitStack
     ) -> None:
         """List all collections available in the VIP Girder instance."""
-        client = await stack.enter_async_context(VipClient.from_config(config))
+        http = await self._open_http(config, stack)
+        client = VipClient(http)
+
         with console.status("Fetching collections..."):
             result = await client.list_collections()
 
@@ -85,10 +161,20 @@ class VipPlugin(DefaultCrawlerPlugin):
             if len(desc) > 80:
                 desc = desc[:77] + "..."
             size = coll.get("size", 0)
-            size_str = _format_size(size)
-            table.add_row(coll_id, name, desc, size_str)
+            table.add_row(coll_id, name, desc, _format_size(size))
 
         console.print(table)
+
+    # ─────────────────────────────────────────────────────────────────────────────
+    # Helpers
+    # ─────────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    async def _open_http(config: VipApiConfig, stack: AsyncExitStack) -> HttpClient:
+        """Open a shared `HttpClient` for the VIP Girder API on `stack`."""
+        return await stack.enter_async_context(
+            HttpClient.from_config(config, extra_headers={"Accept-Language": "en"})
+        )
 
 
 def _format_size(size_bytes: int) -> str:

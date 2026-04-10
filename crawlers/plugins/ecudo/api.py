@@ -7,8 +7,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from collections.abc import AsyncIterator
 from typing import TypedDict, assert_never
 
-from crawlers.core.http import HttpClient, HttpFailure
-from crawlers.core.result import Err, Ok, Result
+from crawlers.core import Err, HttpClient, HttpFailure, Ok, Result
 from crawlers.ui import console
 
 

@@ -2,7 +2,7 @@
 Ecudo Plugin.
 
 Crawler plugin for eCUDO.pl science data repositories. Built on
-`SimpleCrawlerPlugin`: pulls JSON-LD records from the eCUDO REST
+`CrawlerPlugin`: pulls JSON-LD records from the eCUDO REST
 API, delegates mapping to `ecudo.parser`, and lets the framework
 persist processed/rejected datasets.
 """
@@ -17,17 +17,20 @@ from typing import Any
 
 from rich.table import Table
 
-from crawlers.core.config import opt
-from crawlers.core.http import HttpClient
-from crawlers.core.onedata import OnedataDataset, OnedataFile
-from crawlers.core.plugin import command
-from crawlers.core.result import Err, Result
-from crawlers.default.config import HttpConfig
+from crawlers.core import (
+    CrawlConfig,
+    CrawlerPlugin,
+    Err,
+    HttpClient,
+    HttpConfig,
+    Result,
+    RunContext,
+    command,
+    opt,
+)
+from crawlers.model.dataset import OnedataDataset, OnedataFile
 from crawlers.plugins.ecudo.api import EcudoApiClient
 from crawlers.plugins.ecudo.parser import parse_ecudo_record
-from crawlers.simple.config import SimpleCrawlConfig
-from crawlers.simple.plugin import SimpleCrawlerPlugin
-from crawlers.simple.workspace import SimpleRunContext
 from crawlers.ui import console
 
 
@@ -37,8 +40,8 @@ class EcudoApiConfig(HttpConfig):
     base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
 
 
-class EcudoCrawlConfig(EcudoApiConfig, SimpleCrawlConfig, kw_only=True):
-    """Configuration for an Ecudo crawling."""
+class EcudoCrawlConfig(EcudoApiConfig, CrawlConfig, kw_only=True):
+    """Ecudo crawl configuration."""
 
     organization: str = opt(
         ...,
@@ -51,14 +54,8 @@ class EcudoCrawlConfig(EcudoApiConfig, SimpleCrawlConfig, kw_only=True):
     page_size: int = opt(200, description="Items per API page")
 
 
-class EcudoPlugin(SimpleCrawlerPlugin[str, EcudoCrawlConfig]):
-    """
-    Plugin for eCUDO.pl science data repositories.
-
-    Commands:
-    - crawl:      fetch JSON-LD records for an organization and emit OnedataDatasets
-    - list-orgs:  list available organizations
-    """
+class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
+    """Crawler for eCUDO.pl science data repositories."""
 
     name = "ecudo"
     description = "Crawler for eCUDO.pl science data repositories"
@@ -80,14 +77,14 @@ class EcudoPlugin(SimpleCrawlerPlugin[str, EcudoCrawlConfig]):
     # --- Lifecycle ---
 
     async def setup(
-        self, ctx: SimpleRunContext[EcudoCrawlConfig], stack: AsyncExitStack
+        self, ctx: RunContext[EcudoCrawlConfig], stack: AsyncExitStack
     ) -> None:
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = EcudoApiClient(http)
         self._validation_http = None if ctx.config.no_url_validation else http
 
-    async def before_crawl(self, ctx: SimpleRunContext[EcudoCrawlConfig]) -> None:
+    async def before_crawl(self, ctx: RunContext[EcudoCrawlConfig]) -> None:
         """Verify the requested organization exists before producing items."""
         target_organization = ctx.config.organization
 
@@ -109,7 +106,7 @@ class EcudoPlugin(SimpleCrawlerPlugin[str, EcudoCrawlConfig]):
     # --- Iteration & parse ---
 
     async def iterate_datasets(
-        self, ctx: SimpleRunContext[EcudoCrawlConfig]
+        self, ctx: RunContext[EcudoCrawlConfig]
     ) -> AsyncIterator[str]:
         """Yield dataset IDs to feed the worker pool."""
         async for dataset_id in self._api_client.iterate_dataset_ids(
@@ -119,7 +116,7 @@ class EcudoPlugin(SimpleCrawlerPlugin[str, EcudoCrawlConfig]):
         ):
             yield dataset_id
 
-    async def parse(self, dataset_id: str) -> Result[OnedataDataset, Any] | None:
+    async def process(self, dataset_id: str) -> Result[OnedataDataset, Any] | None:
         """Resolve a dataset ID to JSON-LD and build an `OnedataDataset`."""
         fetch_result = await self._api_client.get_dataset_metadata(dataset_id)
         if isinstance(fetch_result, Err):
@@ -142,7 +139,7 @@ class EcudoPlugin(SimpleCrawlerPlugin[str, EcudoCrawlConfig]):
     # Auxiliary commands
     # ─────────────────────────────────────────────────────────────────────────────
 
-    @command("list-orgs", EcudoApiConfig, help="List available organizations")
+    @command(name="list-orgs")
     async def list_organizations(
         self, config: EcudoApiConfig, stack: AsyncExitStack
     ) -> None:
