@@ -8,10 +8,8 @@ import json
 from pathlib import Path
 from typing import TextIO
 
-from crawlers.core.sink import Sink
 
-
-class JSONLSink(Sink[dict]):
+class JSONLSink:
     """
     Writes items as JSON lines to a file.
 
@@ -21,12 +19,6 @@ class JSONLSink(Sink[dict]):
     """
 
     def __init__(self, path: Path):
-        """
-        Initialize the sink.
-
-        Args:
-            path: Path to the output JSONL file
-        """
         self.path = path
         self._file: TextIO | None = None
 
@@ -37,12 +29,7 @@ class JSONLSink(Sink[dict]):
         self._file = open(self.path, "a", encoding="utf-8")
 
     async def push(self, item: dict) -> None:
-        """
-        Write item as a JSON line.
-
-        Args:
-            item: Dictionary to serialize and write
-        """
+        """Write item as a JSON line."""
         if self._file:
             self._file.write(json.dumps(item, ensure_ascii=False) + "\n")
             self._file.flush()

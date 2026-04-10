@@ -19,7 +19,9 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from enum import Enum
 
-# --- Namespaces ---------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Namespaces
+# ─────────────────────────────────────────────────────────────────────────────
 
 NS_XSI = "http://www.w3.org/2001/XMLSchema-instance"
 NS_DC = "http://purl.org/dc/elements/1.1/"
@@ -49,7 +51,9 @@ def _q(ns: str, tag: str) -> str:
     return f"{{{ns}}}{tag}"
 
 
-# --- Vocabularies -------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Vocabularies
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 class AccessRights(Enum):
@@ -89,7 +93,9 @@ class ResourceType(Enum):
         return self.value[1]
 
 
-# --- Record model -------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Record model
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -146,7 +152,9 @@ class OpenAIRERecord:
         return _build(self)
 
 
-# --- Builder ------------------------------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Builder
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def _build(record: OpenAIRERecord) -> str:
@@ -178,12 +186,14 @@ def _build(record: OpenAIRERecord) -> str:
     )
 
 
-# --- Section builders (private) ----------------------------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+# Section builders (private)
+# ─────────────────────────────────────────────────────────────────────────────
 #
 # Each function appends to 'root' if its corresponding record field is
-# populated, and is a no-op otherwise. They intentionally use the
-# ElementTree imperative style — keeping each section to a handful of lines
-# is preferred over factoring out a more abstract section framework.
+# populated, and is a no-op otherwise. The imperative ElementTree style is
+# intentional — keeping each section to a handful of lines beats a more
+# abstract section framework.
 
 
 def _add_title(root: ET.Element, record: OpenAIRERecord) -> None:

@@ -18,7 +18,6 @@ from crawlers.ui import console
 
 
 class HttpConfigLike(Protocol):
-    # pylint: disable=too-few-public-methods
     """Minimum config shape consumed by `HttpClient.from_config`."""
 
     base_url: str
@@ -61,15 +60,6 @@ class TimeoutFailure:
 
 
 type HttpFailure = ResponseFailure | TimeoutFailure
-
-
-def _default_user_agent() -> str:
-    """Build the default `OnedataCrawler/<version>` UA string."""
-    try:
-        ver = version("public-data-crawlers")
-    except PackageNotFoundError:
-        ver = "dev"
-    return f"OnedataCrawler/{ver} (+https://onedata.org; mailto:info@onedata.org)"
 
 
 class HttpClient:
@@ -173,11 +163,32 @@ class HttpClient:
             )
         return self._session
 
-    def _resolve(self, url: str) -> str:
-        """Resolve `url` against `base_url` if set; absolute URLs pass through."""
-        if self.base_url is None:
-            return url
-        return urljoin(self.base_url.rstrip("/") + "/", url.lstrip("/"))
+    async def head(self, url: str, **kwargs) -> Result[None, HttpFailure]:
+        """
+        HEAD `url` to check accessibility.
+
+        Returns `Ok(None)` on a 2xx response, `Err(HttpFailure)` on any non-2xx,
+        `Err(TimeoutFailure)` after exhausting retries on network errors.
+        """
+        return await self._request("HEAD", url, lambda _: _noop(), **kwargs)
+
+    async def get_bytes(self, url: str, **kwargs) -> Result[bytes, HttpFailure]:
+        """GET `url` and return the raw response body."""
+        return await self._request("GET", url, lambda r: r.read(), **kwargs)
+
+    async def get_text(self, url: str, **kwargs) -> Result[str, HttpFailure]:
+        """GET `url` and return the response body decoded as text."""
+        return await self._request("GET", url, lambda r: r.text(), **kwargs)
+
+    async def get_json(self, url: str, **kwargs) -> Result[dict, HttpFailure]:
+        """GET `url` and return the response body parsed as JSON."""
+        return await self._request("GET", url, lambda r: r.json(), **kwargs)
+
+    async def post_json(
+        self, url: str, body: dict, **kwargs
+    ) -> Result[dict, HttpFailure]:
+        """POST `body` as JSON to `url` and return the response parsed as JSON."""
+        return await self._request("POST", url, lambda r: r.json(), json=body, **kwargs)
 
     async def _request[T](
         self,
@@ -200,7 +211,7 @@ class HttpClient:
             **kwargs: Forwarded to `aiohttp.ClientSession.request`.
 
         Returns:
-            `Ok(value)` on a 200 response, `Err(HttpFailure)` on non-200,
+            `Ok(value)` on a 2xx response, `Err(HttpFailure)` on non-2xx,
             `Err(TimeoutFailure)` after exhausting retries on network errors.
         """
         resolved_url = self._resolve(url)
@@ -209,7 +220,7 @@ class HttpClient:
                 async with self.session.request(
                     method, resolved_url, allow_redirects=True, **kwargs
                 ) as resp:
-                    if resp.status == 200:
+                    if 200 <= resp.status < 300:
                         return Ok(await read(resp))
 
                     text = await resp.text()
@@ -250,34 +261,23 @@ class HttpClient:
             )
         )
 
-    async def head(self, url: str, **kwargs) -> Result[None, HttpFailure]:
-        """
-        HEAD `url` to check accessibility.
+    def _resolve(self, url: str) -> str:
+        """Resolve `url` against `base_url` if set; absolute URLs pass through."""
+        if self.base_url is None:
+            return url
 
-        Returns `Ok(None)` on a 200 response, `Err(HttpFailure)` on any non-200,
-        `Err(TimeoutFailure)` after exhausting retries on network errors.
-        """
-        return await self._request("HEAD", url, lambda _: _noop(), **kwargs)
-
-    async def get_bytes(self, url: str, **kwargs) -> Result[bytes, HttpFailure]:
-        """GET `url` and return the raw response body."""
-        return await self._request("GET", url, lambda r: r.read(), **kwargs)
-
-    async def get_text(self, url: str, **kwargs) -> Result[str, HttpFailure]:
-        """GET `url` and return the response body decoded as text."""
-        return await self._request("GET", url, lambda r: r.text(), **kwargs)
-
-    async def get_json(self, url: str, **kwargs) -> Result[dict, HttpFailure]:
-        """GET `url` and return the response body parsed as JSON."""
-        return await self._request("GET", url, lambda r: r.json(), **kwargs)
-
-    async def post_json(
-        self, url: str, body: dict, **kwargs
-    ) -> Result[dict, HttpFailure]:
-        """POST `body` as JSON to `url` and return the response parsed as JSON."""
-        return await self._request("POST", url, lambda r: r.json(), json=body, **kwargs)
+        return urljoin(self.base_url.rstrip("/") + "/", url.lstrip("/"))
 
 
 async def _noop() -> None:
     """Awaitable that returns None — used as a body reader for HEAD requests."""
     return None
+
+
+def _default_user_agent() -> str:
+    """Build the default `OnedataCrawler/<version>` UA string."""
+    try:
+        ver = version("public-data-crawlers")
+    except PackageNotFoundError:
+        ver = "dev"
+    return f"OnedataCrawler/{ver} (+https://onedata.org; mailto:info@onedata.org)"

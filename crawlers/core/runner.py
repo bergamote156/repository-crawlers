@@ -1,14 +1,14 @@
 """
-Parallel crawl runner for `SimpleCrawlerPlugin`.
+Parallel crawl runner.
 
 Consumes an async source iterator with a producer task, spawns
-`concurrency` workers that call `parse_fn(raw)`, and routes the
-outcome to the framework sinks:
+`concurrency` workers that call `parse_fn(raw)`, and routes
+outcomes to framework sinks:
 
 - `Ok(OnedataDataset)`  → processed sink
 - `Err(failure)`        → rejection sink
 - `None`                → silent skip
-- exception             → counted as failure, logged
+- unhandled exception   → counted as failure, logged
 """
 
 __author__ = "Bartosz Walkowicz"
@@ -20,16 +20,17 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from crawlers.core.errors import to_json as error_to_json
-from crawlers.core.onedata import OnedataDataset
-from crawlers.core.result import Err, Ok, Result
-from crawlers.sinks import JSONLSink
+from crawlers.core.jsonl import JSONLSink
+from crawlers.core.result import Err, Ok, Result, failure_to_json
+from crawlers.model.dataset import OnedataDataset
 from crawlers.ui import console
+
+_SENTINEL = object()
 
 
 @dataclass
 class CrawlStats:
-    """Coarse-grained stats for a simple crawl."""
+    """Coarse-grained stats for a crawl run."""
 
     queued: int = 0
     processed: int = 0
@@ -45,7 +46,6 @@ class CrawlStats:
         )
 
 
-# pylint: disable=too-many-locals,too-many-arguments
 async def run_parallel_crawl[RawT](
     source_iterator: AsyncIterable[RawT],
     parse_fn: Callable[[RawT], Awaitable[Result[OnedataDataset, Any] | None]],
@@ -61,31 +61,36 @@ async def run_parallel_crawl[RawT](
     """
     Fan out `parse_fn` over items from `source_iterator`.
 
-    A single producer pulls from the iterator and enqueues items; `concurrency`
-    workers dequeue, invoke `parse_fn`, and route the result to the appropriate
-    sink. Shows live progress tracking. `state_callback` is invoked every
-    `state_save_interval` processed items so the caller can persist intermediate
-    stats for resume support.
+    A single producer pulls from the iterator and enqueues items;
+    `concurrency` workers dequeue, invoke `parse_fn`, and route the
+    result to the appropriate sink.
+
+    If the producer raises, the error propagates after all in-flight work
+    drains — workers see the sentinel and stop, then the producer
+    exception is re-raised so the caller can handle it.
     """
-    queue: asyncio.Queue[RawT | None] = asyncio.Queue(maxsize=queue_size)
+    queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=queue_size)
     stats = CrawlStats()
     progress = console.create_progress(total=max_items)
 
+    producer_error: BaseException | None = None
+
     async def producer() -> None:
+        nonlocal producer_error
         try:
             async for item in source_iterator:
                 await queue.put(item)
                 stats.queued += 1
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            progress.console.print(f"[error]:cross_mark:[/] Producer error: {exc}")
+        except BaseException as exc:
+            producer_error = exc
         finally:
             for _ in range(concurrency):
-                await queue.put(None)
+                await queue.put(_SENTINEL)
 
-    async def worker(worker_id: int, task_id) -> None:
+    async def worker(worker_id: int, task_id: int) -> None:
         while True:
             item = await queue.get()
-            if item is None:
+            if item is _SENTINEL:
                 queue.task_done()
                 break
 
@@ -98,7 +103,7 @@ async def run_parallel_crawl[RawT](
                     await processed_sink.push(result.value.to_json())
                     stats.processed += 1
                 elif isinstance(result, Err):
-                    await rejection_sink.push(error_to_json(result.value))
+                    await rejection_sink.push(failure_to_json(result.value))
                     stats.rejected += 1
             except Exception as exc:  # pylint: disable=broad-exception-caught
                 item_str = str(item)[:50]
@@ -125,5 +130,8 @@ async def run_parallel_crawl[RawT](
         await producer_task
         await asyncio.gather(*workers)
         await queue.join()
+
+    if producer_error is not None:
+        raise producer_error
 
     return stats

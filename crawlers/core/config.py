@@ -15,7 +15,9 @@ from dataclasses import MISSING, Field, dataclass, field, is_dataclass
 from types import NoneType, UnionType
 from typing import Any, ClassVar, Iterator, Union, get_args, get_origin, get_type_hints
 
-# --- Schema Data Structures ---
+# ─────────────────────────────────────────────────────────────────────────────
+# Schema Data Structures
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 class ConfigBase:
@@ -47,7 +49,6 @@ class ConfigBase:
 
         # Apply @dataclass
         dataclass(kw_only=kw_only)(cls)
-        # Build and attach schema
         cls.__config_schema__ = _build_schema(cls)
 
 
@@ -110,7 +111,9 @@ def opt(
     return field(metadata=metadata, **field_kwargs)
 
 
-# --- Schema Building Helpers ---
+# ─────────────────────────────────────────────────────────────────────────────
+# Schema Building Helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 @dataclass
@@ -188,7 +191,6 @@ def _build_schema(config_cls: type) -> ConfigSchema:
             seen_fields.add(field_name)
             field_obj = cls.__dataclass_fields__[field_name]
             annotation = type_hints.get(field_name, field_obj.type)
-
             info = _build_field_info(field_obj, annotation)
             group_fields.append(info)
 
@@ -219,39 +221,26 @@ def _build_field_info(field_obj: Field, annotation: type) -> ConfigFieldInfo:
     metadata = dict(field_obj.metadata)
     field_name = field_obj.name
 
-    # Unwrap Optional
     actual_type, _ = _unwrap_optional(annotation)
 
-    # Check if nested dataclass
     is_nested = is_dataclass(actual_type) and isinstance(actual_type, type)
-    nested_schema = None
+    nested_schema = _build_schema(actual_type) if is_nested else None
 
-    if is_nested:
-        # Recursively build schema for nested config
-        nested_schema = _build_schema(actual_type)
-
-    # Determine required status
     required = field_obj.default is MISSING and field_obj.default_factory is MISSING
 
-    # Get default value
     default: Any = None
     if field_obj.default is not MISSING:
         default = field_obj.default
     elif field_obj.default_factory is not MISSING:
-        default = field_obj.default_factory  # Keep factory, not called value
+        default = field_obj.default_factory  # keep factory reference, don't call it
 
-    # Build CLI info (disabled for nested dataclasses)
-    cli = None
-    if not is_nested:
-        cli = _build_cli_info(field_name, metadata, actual_type)
+    cli = None if is_nested else _build_cli_info(field_name, metadata, actual_type)
 
-    # Build ENV var
     env_var = None
     if not metadata.get("env_disabled"):
         env_suffix = metadata.get("env") or field_name.upper()
         env_var = f"CRAWLER_{env_suffix}"
 
-    # Build YAML key
     yaml_key = None
     if not metadata.get("yaml_disabled"):
         yaml_key = metadata.get("yaml_key") or field_name
@@ -290,37 +279,32 @@ def _build_cli_info(
     if metadata.get("cli_disabled"):
         return None
 
-    # Get CLI names
     cli_explicit = metadata.get("cli")
     if cli_explicit:
         names = (
             (cli_explicit,) if isinstance(cli_explicit, str) else tuple(cli_explicit)
         )
     else:
-        # Auto-generate: my_field -> --my-field
+        # auto-generate: my_field -> --my-field
         names = (f"--{field_name.replace('_', '-')}",)
 
-    # Determine if positional
     is_positional = not str(names[0]).startswith("-")
 
-    # Build kwargs for argparse
     kwargs: dict[str, Any] = {}
 
     if metadata.get("description"):
         kwargs["help"] = metadata["description"]
 
-    # Handle type
     if actual_type is bool:
         kwargs["action"] = "store_true"
     elif actual_type in (int, float, str):
         kwargs["type"] = actual_type
 
     if is_positional:
-        # For positional args, argparse uses the name as dest
-        # So we require cli name == field_name for positionals
+        # argparse uses the positional name directly as dest
         attr_name = names[0]
     else:
-        # For optional args, use dest to ensure attr_name == field_name
+        # dest ensures attr_name == field_name regardless of flag spelling
         kwargs["dest"] = field_name
         kwargs["default"] = None
         attr_name = field_name

@@ -10,7 +10,8 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, is_dataclass
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,3 +51,22 @@ class Err[E]:
 
 
 type Result[T, E] = Ok[T] | Err[E]
+
+
+def failure_to_json(failure: Any) -> dict:
+    """Serialize any failure to a JSON-safe dict.
+
+    Supports:
+    - dict: returned as-is
+    - objects with to_json(): call it
+    - dataclass instances: `asdict()` (nested dataclasses become nested dicts)
+    - anything else: wrap in {"error": str(err)}
+    """
+    if isinstance(failure, dict):
+        return failure
+    if hasattr(failure, "to_json"):
+        return failure.to_json()
+    if is_dataclass(failure) and not isinstance(failure, type):
+        return asdict(failure)
+
+    return {"failure": str(failure)}

@@ -1,6 +1,4 @@
-"""Metadata Generator Base."""
-
-# pylint: disable=too-few-public-methods
+"""Metadata record protocol."""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
@@ -13,4 +11,4 @@ class MetadataRecord(Protocol):
     """Protocol for metadata records."""
 
     def to_xml(self) -> str:
-        """Generate xml metadata for dataset."""
+        """Generate XML metadata for the dataset."""
