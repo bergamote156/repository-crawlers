@@ -15,6 +15,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass
 from typing import Any
 
+from crawlers.core import JsonObject
 from crawlers.metadata.openaire import (
     AccessRights,
     BoundingBox,
@@ -86,7 +87,7 @@ class ParsedEcudoRecord:
 # --- Entry point -------------------------------------------------------------
 
 
-def parse_ecudo_record(raw: dict) -> ParsedEcudoRecord | None:
+def parse_ecudo_record(raw: JsonObject) -> ParsedEcudoRecord | None:
     """
     Map a raw eCUDO JSON-LD dict into a `ParsedEcudoRecord`.
 
@@ -117,7 +118,7 @@ def parse_ecudo_record(raw: dict) -> ParsedEcudoRecord | None:
         title=title,
         creator=publisher,
         identifier=identifier,
-        publication_date=raw.get("issued", raw.get("modified", "")),
+        publication_date=str(raw.get("issued", raw.get("modified", "")) or ""),
         access_rights=_resolve_access_rights(raw.get("accessLevel", "public")),
         resource_type=ResourceType.DATASET,
         language=normalize_language_code(raw.get("language", "en")),

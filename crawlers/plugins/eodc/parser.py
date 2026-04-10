@@ -14,6 +14,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from dataclasses import dataclass
 
+from crawlers.core import JsonObject
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -77,7 +78,7 @@ class ParsedEODCItem:
     files: list[EODCFile]
 
 
-def parse_eodc_item(raw: dict) -> ParsedEODCItem | None:
+def parse_eodc_item(raw: JsonObject) -> ParsedEODCItem | None:
     """
     Map a raw STAC item dict into a `ParsedEODCItem`.
 

@@ -13,6 +13,22 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, is_dataclass
 from typing import Any
 
+# ─────────────────────────────────────────────────────────────────────────────
+# JSON (RFC 8259) value tree.
+#
+# Nested `dict` / `list` use `Any` so values like `list[str]` (e.g. STAC
+# `collections`) type-check; fully recursive `list[JsonValue]` is invariant
+# and fights mypy on normal API payloads.
+# ─────────────────────────────────────────────────────────────────────────────
+
+type JsonValue = str | int | float | bool | None | dict[str, Any] | list[Any]
+type JsonObject = dict[str, Any]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Result type.
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 @dataclass(frozen=True, slots=True)
 class Ok[T]:

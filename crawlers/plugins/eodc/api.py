@@ -10,10 +10,22 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from dataclasses import dataclass
 from typing import AsyncIterator, assert_never
 
-from crawlers.core import Err, HttpClient, HttpFailure, Ok, Result
+from crawlers.core import Err, HttpClient, HttpFailure, JsonObject, Ok, Result
 from crawlers.ui import console
+
+
+@dataclass(frozen=True, slots=True)
+class EODCSearchParams:
+    """STAC `POST /search` request parameters for `EODCClient.iterate_items`."""
+
+    collections: list[str]
+    intersects: JsonObject | None = None
+    datetime_range: str | None = None
+    page_size: int = 100
+    max_items: int | None = None
 
 
 class EODCClient:
@@ -28,36 +40,38 @@ class EODCClient:
         self._http = http
 
     async def iterate_items(
-        self,
-        collections: list[str],
-        *,
-        intersects: dict | None = None,
-        datetime: str | None = None,  # pylint: disable=redefined-outer-name
-        page_size: int = 100,
-        max_items: int | None = None,
-    ) -> AsyncIterator[dict]:
+        self, params: EODCSearchParams
+    ) -> AsyncIterator[JsonObject]:
         """
         Iterate over STAC items matching the search criteria.
 
         Uses `POST /search` with pagination via `rel=next` links in the
         response body.
         """
-        body: dict = {"collections": collections, "limit": page_size}
-        if intersects:
-            body["intersects"] = intersects
-        if datetime:
-            body["datetime"] = datetime
+        body: JsonObject = {
+            "collections": params.collections,
+            "limit": params.page_size,
+        }
+        if params.intersects:
+            body["intersects"] = params.intersects
+        if params.datetime_range:
+            body["datetime"] = params.datetime_range
 
         next_url: str | None = "/search"
         yielded = 0
         page = 0
 
         while next_url:
-            match await self._http.post_json(next_url, body):
+            match await self._http.post_json_object(next_url, body):
                 case Ok(value=data) if not data:
                     return
                 case Ok(value=data):
-                    features = data.get("features", [])
+                    features_raw = data.get("features", [])
+                    if not isinstance(features_raw, list):
+                        console.debug(f"No features array in response from {next_url}")
+                        return
+
+                    features = [f for f in features_raw if isinstance(f, dict)]
                     if not features:
                         console.debug(f"No features in response from {next_url}")
                         return
@@ -66,8 +80,8 @@ class EODCClient:
                         yield item
                         yielded += 1
 
-                        if max_items and yielded >= max_items:
-                            console.info(f"Reached max_items limit: {max_items}")
+                        if params.max_items and yielded >= params.max_items:
+                            console.info(f"Reached max_items limit: {params.max_items}")
                             return
 
                     page += 1
@@ -81,14 +95,26 @@ class EODCClient:
                 case other:
                     assert_never(other)
 
-    async def get_collections(self) -> Result[list[dict], HttpFailure]:
+    async def get_collections(self) -> Result[list[JsonObject], HttpFailure]:
         """Fetch the list of available STAC collections."""
-        result = await self._http.get_json("/collections")
-        return result.map(lambda d: d.get("collections", []))
+        result = await self._http.get_json_object("/collections")
+        return result.map(_stac_root_collections)
 
 
-def _find_next_link(links: list) -> str | None:
+def _stac_root_collections(root: JsonObject) -> list[JsonObject]:
+    raw = root.get("collections", [])
+    if not isinstance(raw, list):
+        return []
+    return [c for c in raw if isinstance(c, dict)]
+
+
+def _find_next_link(links: object) -> str | None:
+    if not isinstance(links, list):
+        return None
     for link in links:
+        if not isinstance(link, dict):
+            continue
         if link.get("rel") == "next":
-            return link.get("href")
+            href = link.get("href")
+            return str(href) if href is not None else None
     return None

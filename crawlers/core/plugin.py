@@ -72,11 +72,15 @@ def command(
         cmd_config = config if config is not None else _infer_config_class(func)
         cmd_help = help if help is not None else _infer_help(func)
 
-        func._command_def = CommandDef(  # type: ignore[attr-defined]
-            name=cmd_name,
-            help=cmd_help,
-            method_name=func.__name__,
-            config_class=cmd_config,
+        setattr(
+            func,
+            "_command_def",
+            CommandDef(
+                name=cmd_name,
+                help=cmd_help,
+                method_name=func.__name__,
+                config_class=cmd_config,
+            ),
         )
         return func
 
@@ -155,7 +159,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
                 continue
             method = getattr(cls, attr_name, None)
             if callable(method) and hasattr(method, "_command_def"):
-                cmd_def: CommandDef = method._command_def
+                cmd_def: CommandDef = getattr(method, "_command_def")
                 cls._commands[cmd_def.name] = cmd_def
 
         # Auto-register the `crawl` command on concrete subclasses
@@ -250,7 +254,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
     async def iterate_datasets(self, ctx: RunContext[ConfigT]) -> AsyncIterator[RawT]:
         """Async-iterate raw items from the upstream API."""
         raise NotImplementedError
-        yield  # pragma: no cover
+        yield  # pragma: no cover  # pylint: disable=unreachable
 
     @abstractmethod
     async def process(self, raw: RawT, /) -> Result[OnedataDataset, Any] | None:
@@ -264,7 +268,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         """
         raise NotImplementedError
 
-    def run_context_name(self, config: ConfigT) -> str:
+    def run_context_name(self, _config: ConfigT) -> str:
         """Short identifier appended to the run directory name."""
         return "default"
 

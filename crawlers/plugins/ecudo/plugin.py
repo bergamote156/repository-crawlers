@@ -34,12 +34,14 @@ from crawlers.plugins.ecudo.parser import parse_ecudo_record
 from crawlers.ui import console
 
 
+# pylint: disable=too-few-public-methods
 class EcudoApiConfig(HttpConfig):
     """Configuration for Ecudo API connections."""
 
     base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
 
 
+# pylint: disable=too-few-public-methods
 class EcudoCrawlConfig(EcudoApiConfig, CrawlConfig, kw_only=True):
     """Ecudo crawl configuration."""
 
@@ -116,7 +118,7 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
         ):
             yield dataset_id
 
-    async def process(self, dataset_id: str) -> Result[OnedataDataset, Any] | None:
+    async def process(self, dataset_id: str, /) -> Result[OnedataDataset, Any] | None:
         """Resolve a dataset ID to JSON-LD and build an `OnedataDataset`."""
         fetch_result = await self._api_client.get_dataset_metadata(dataset_id)
         if isinstance(fetch_result, Err):

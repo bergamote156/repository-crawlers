@@ -15,6 +15,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass
 from typing import Sequence
 
+from crawlers.core import JsonObject
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -59,7 +60,9 @@ class ParsedVipRecord:
     files: list[VipFile]
 
 
-def parse_vip_record(folder: dict, files: Sequence[VipFile]) -> ParsedVipRecord | None:
+def parse_vip_record(
+    folder: JsonObject, files: Sequence[VipFile]
+) -> ParsedVipRecord | None:
     """
     Map a Girder folder dict (with pre-collected files) into a `ParsedVipRecord`.
 

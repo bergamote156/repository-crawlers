@@ -13,10 +13,11 @@ from urllib.parse import urljoin
 
 import aiohttp  # type: ignore[import-not-found]
 
-from crawlers.core.result import Err, Ok, Result
+from crawlers.core.result import Err, JsonObject, JsonValue, Ok, Result
 from crawlers.ui import console
 
 
+# pylint: disable=too-few-public-methods
 class HttpConfigLike(Protocol):
     """Minimum config shape consumed by `HttpClient.from_config`."""
 
@@ -180,15 +181,59 @@ class HttpClient:
         """GET `url` and return the response body decoded as text."""
         return await self._request("GET", url, lambda r: r.text(), **kwargs)
 
-    async def get_json(self, url: str, **kwargs) -> Result[dict, HttpFailure]:
+    async def get_json(self, url: str, **kwargs) -> Result[JsonValue, HttpFailure]:
         """GET `url` and return the response body parsed as JSON."""
         return await self._request("GET", url, lambda r: r.json(), **kwargs)
 
     async def post_json(
-        self, url: str, body: dict, **kwargs
-    ) -> Result[dict, HttpFailure]:
+        self, url: str, body: JsonObject, **kwargs
+    ) -> Result[JsonValue, HttpFailure]:
         """POST `body` as JSON to `url` and return the response parsed as JSON."""
         return await self._request("POST", url, lambda r: r.json(), json=body, **kwargs)
+
+    async def get_json_object(
+        self, url: str, **kwargs
+    ) -> Result[JsonObject, HttpFailure]:
+        """GET `url` and return the response body as a JSON object.
+
+        Returns `Err(ResponseFailure)` if the response is valid JSON but not
+        an object (e.g. an array or primitive).
+        """
+        return await self._expect_object("GET", url, await self.get_json(url, **kwargs))
+
+    async def post_json_object(
+        self, url: str, body: JsonObject, **kwargs
+    ) -> Result[JsonObject, HttpFailure]:
+        """POST `body` as JSON and return the response as a JSON object.
+
+        Returns `Err(ResponseFailure)` if the response is valid JSON but not
+        an object (e.g. an array or primitive).
+        """
+        return await self._expect_object(
+            "POST", url, await self.post_json(url, body, **kwargs)
+        )
+
+    async def _expect_object(
+        self,
+        method: str,
+        url: str,
+        result: Result[JsonValue, HttpFailure],
+    ) -> Result[JsonObject, HttpFailure]:
+        """Narrow a JSON result to a dict, or return an error."""
+        match result:
+            case Ok(value=v) if isinstance(v, dict):
+                return Ok(v)
+            case Ok(value=v):
+                return Err(
+                    ResponseFailure(
+                        status=200,
+                        method=method,
+                        url=self._resolve(url),
+                        body=f"expected JSON object, got {type(v).__name__}",
+                    )
+                )
+            case err:
+                return err
 
     async def _request[T](
         self,
@@ -252,7 +297,7 @@ class HttpClient:
                 )
 
         # Unreachable, but satisfies type checker
-        return Err(
+        return Err(  # pylint: disable=unreachable
             TimeoutFailure(
                 method=method,
                 url=resolved_url,

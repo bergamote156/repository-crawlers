@@ -57,7 +57,9 @@ class BgeePlugin(CrawlerPlugin[BgeeRawRecord, BgeeCrawlConfig]):
         async for record in self._api_client.iterate_datasets(opts):
             yield record
 
-    async def process(self, raw: BgeeRawRecord) -> Result[OnedataDataset, Any] | None:
+    async def process(
+        self, raw: BgeeRawRecord, /
+    ) -> Result[OnedataDataset, Any] | None:
         """Parse a schema.org Dataset node and build an `OnedataDataset`."""
         bgee_dataset = self._parser.parse(raw)
         if bgee_dataset is None:

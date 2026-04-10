@@ -9,7 +9,7 @@ from crawlers.core.crawl_config import (
 )
 from crawlers.core.http import HttpClient, HttpFailure, ResponseFailure, TimeoutFailure
 from crawlers.core.plugin import CrawlerPlugin, command
-from crawlers.core.result import Err, Ok, Result
+from crawlers.core.result import Err, JsonObject, JsonValue, Ok, Result
 from crawlers.core.workspace import RunContext
 
 __all__ = [
@@ -28,5 +28,7 @@ __all__ = [
     "Result",
     "Ok",
     "Err",
+    "JsonValue",
+    "JsonObject",
     "RunContext",
 ]

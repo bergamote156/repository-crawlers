@@ -50,7 +50,7 @@ _BGEE_RIGHTS = Rights(text="CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 _BGEE_RESOURCE_TYPE_VALUE = "Gene expression data"
 
 
-class BgeeClient:
+class BgeeClient:  # pylint: disable=too-few-public-methods
     """
     Stateless façade over `HttpClient` that crawls Bgee species pages
     and extracts schema.org JSON-LD Dataset records.
@@ -109,7 +109,7 @@ class BgeeClient:
                 continue
             raw_parts.append(raw_json)
             try:
-                g.process(data=raw_json, format="json-ld")
+                g.parse(data=raw_json, format="json-ld")
             except Exception as e:  # pylint: disable=broad-except
                 console.warning(f"Failed to parse JSON-LD on {page_url}: {e}")
 

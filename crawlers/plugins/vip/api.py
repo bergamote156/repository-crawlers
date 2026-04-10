@@ -13,7 +13,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from dataclasses import dataclass
 from typing import AsyncIterator, assert_never
 
-from crawlers.core import Err, HttpClient, HttpFailure, Ok, Result
+from crawlers.core import Err, HttpClient, HttpFailure, JsonObject, Ok, Result
 from crawlers.ui import console
 
 
@@ -42,15 +42,14 @@ class VipClient:
 
     # --- Collections ---
 
-    async def list_collections(self) -> Result[list[dict], HttpFailure]:
+    async def list_collections(self) -> Result[list[JsonObject], HttpFailure]:
         """
         Fetch all available collections, paginating until exhausted.
 
         Returns:
-            Ok(list[dict]) where each dict is a Girder collection object,
-            or Err(HttpFailure) on HTTP/network error.
+            Ok with Girder collection objects, or Err on HTTP/network error.
         """
-        all_collections: list[dict] = []
+        all_collections: list[JsonObject] = []
         offset = 0
 
         while True:
@@ -62,7 +61,7 @@ class VipClient:
             if isinstance(result, Err):
                 return result
 
-            page = result.value
+            page = _as_girder_object_list(result.value)
             if not page:
                 break
 
@@ -86,7 +85,7 @@ class VipClient:
         *,
         page_size: int = 100,
         max_records: int | None = None,
-    ) -> AsyncIterator[dict]:
+    ) -> AsyncIterator[JsonObject]:
         """
         Iterate over top-level dataset folders in the named collection.
 
@@ -126,7 +125,7 @@ class VipClient:
 
     # --- Dataset resolution ---
 
-    async def resolve_dataset_files(self, folder: dict) -> list[VipFile]:
+    async def resolve_dataset_files(self, folder: JsonObject) -> list[VipFile]:
         """
         Recursively collect all downloadable files under a Girder folder.
 
@@ -165,9 +164,9 @@ class VipClient:
 
     async def _get_collection_folder_count(self, collection_id: str) -> int:
         """Return the number of top-level folders in a collection."""
-        match await self._http.get_json(f"/collection/{collection_id}/details"):
+        match await self._http.get_json_object(f"/collection/{collection_id}/details"):
             case Ok(value=data):
-                return data.get("nFolders", 0)
+                return int(data.get("nFolders", 0) or 0)
             case Err(value=err):
                 console.warning(f"Failed to get collection details: {err}")
                 return 0
@@ -176,9 +175,11 @@ class VipClient:
 
     async def _get_folder_details(self, folder_id: str) -> tuple[int, int]:
         """Return (nFolders, nItems) for a folder."""
-        match await self._http.get_json(f"/folder/{folder_id}/details"):
+        match await self._http.get_json_object(f"/folder/{folder_id}/details"):
             case Ok(value=data):
-                return data.get("nFolders", 0), data.get("nItems", 0)
+                return int(data.get("nFolders", 0) or 0), int(
+                    data.get("nItems", 0) or 0
+                )
             case Err(value=err):
                 console.warning(f"Failed to get folder details for {folder_id}: {err}")
                 return 0, 0
@@ -191,7 +192,7 @@ class VipClient:
         parent_id: str,
         limit: int,
         offset: int,
-    ) -> list[dict]:
+    ) -> list[JsonObject]:
         """Fetch one page of child folders."""
         url = (
             f"/folder?limit={limit}&offset={offset}&sort=name&sortdir=1"
@@ -199,7 +200,7 @@ class VipClient:
         )
         match await self._http.get_json(url):
             case Ok(value=data):
-                return data
+                return _as_girder_object_list(data)
             case Err(value=err):
                 console.warning(
                     f"Failed to list folders ({parent_type}/{parent_id}): {err}"
@@ -208,7 +209,9 @@ class VipClient:
             case other:
                 assert_never(other)
 
-    async def _list_items(self, folder_id: str, limit: int, offset: int) -> list[dict]:
+    async def _list_items(
+        self, folder_id: str, limit: int, offset: int
+    ) -> list[JsonObject]:
         """Fetch one page of items (files) inside a folder."""
         url = (
             f"/item?limit={limit}&offset={offset}&sort=name&sortdir=1"
@@ -216,7 +219,7 @@ class VipClient:
         )
         match await self._http.get_json(url):
             case Ok(value=data):
-                return data
+                return _as_girder_object_list(data)
             case Err(value=err):
                 console.warning(f"Failed to list items for folder {folder_id}: {err}")
                 return []
@@ -237,8 +240,8 @@ class VipClient:
                 if not items:
                     break
                 for item in items:
-                    item_id = item.get("_id", "")
-                    item_name = item.get("name", item_id)
+                    item_id = str(item.get("_id", "") or "")
+                    item_name = str(item.get("name", item_id) or item_id)
                     file_path = (
                         f"{path_prefix}/{item_name}" if path_prefix else item_name
                     )
@@ -258,8 +261,8 @@ class VipClient:
                 if not subfolders:
                     break
                 for subfolder in subfolders:
-                    sub_id = subfolder.get("_id", "")
-                    sub_name = subfolder.get("name", sub_id)
+                    sub_id = str(subfolder.get("_id", "") or "")
+                    sub_name = str(subfolder.get("name", sub_id) or sub_id)
                     sub_prefix = (
                         f"{path_prefix}/{sub_name}" if path_prefix else sub_name
                     )
@@ -271,3 +274,10 @@ class VipClient:
                     break
 
         return files
+
+
+def _as_girder_object_list(value: object) -> list[JsonObject]:
+    """Girder list endpoints return a JSON array of resource objects."""
+    if not isinstance(value, list):
+        return []
+    return [obj for obj in value if isinstance(obj, dict)]

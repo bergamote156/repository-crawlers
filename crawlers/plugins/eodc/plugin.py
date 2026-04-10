@@ -22,17 +22,19 @@ from crawlers.core import (
     Err,
     HttpClient,
     HttpConfig,
+    JsonObject,
     Result,
     RunContext,
     command,
     opt,
 )
 from crawlers.model.dataset import OnedataDataset, OnedataFile
-from crawlers.plugins.eodc.api import EODCClient
+from crawlers.plugins.eodc.api import EODCClient, EODCSearchParams
 from crawlers.plugins.eodc.parser import parse_eodc_item
 from crawlers.ui import console
 
 
+# pylint: disable=too-few-public-methods
 class EODCApiConfig(HttpConfig):
     """Base configuration for EODC STAC API connections."""
 
@@ -42,6 +44,7 @@ class EODCApiConfig(HttpConfig):
     )
 
 
+# pylint: disable=too-few-public-methods
 class EODCCrawlConfig(EODCApiConfig, CrawlConfig, kw_only=True):
     """Configuration for EODC STAC crawling."""
 
@@ -53,7 +56,7 @@ class EODCCrawlConfig(EODCApiConfig, CrawlConfig, kw_only=True):
         description="STAC collections to crawl (comma-separated)",
     )
 
-    intersects: dict | None = opt(
+    intersects: JsonObject | None = opt(
         None,
         cli=False,
         yaml_key="intersects",
@@ -114,18 +117,20 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
 
     async def iterate_datasets(
         self, ctx: RunContext[EODCCrawlConfig]
-    ) -> AsyncIterator[dict]:
+    ) -> AsyncIterator[JsonObject]:
         """Yield STAC item dicts from the configured collections."""
         async for item in self._api_client.iterate_items(
-            ctx.config.get_collections_list(),
-            intersects=ctx.config.intersects,
-            datetime=ctx.config.datetime_range,
-            page_size=ctx.config.page_size,
-            max_items=ctx.config.max_records,
+            EODCSearchParams(
+                collections=ctx.config.get_collections_list(),
+                intersects=ctx.config.intersects,
+                datetime_range=ctx.config.datetime_range,
+                page_size=ctx.config.page_size,
+                max_items=ctx.config.max_records,
+            )
         ):
             yield item
 
-    async def process(self, item: dict) -> Result[OnedataDataset, Any] | None:
+    async def process(self, item: JsonObject, /) -> Result[OnedataDataset, Any] | None:
         """Map a STAC item into an `OnedataDataset`."""
         parsed = parse_eodc_item(item)
         if parsed is None:

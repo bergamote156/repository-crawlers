@@ -20,6 +20,8 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+from rich.progress import TaskID
+
 from crawlers.core.jsonl import JSONLSink
 from crawlers.core.result import Err, Ok, Result, failure_to_json
 from crawlers.model.dataset import OnedataDataset
@@ -46,6 +48,7 @@ class CrawlStats:
         )
 
 
+# pylint: disable=too-many-arguments,too-many-locals
 async def run_parallel_crawl[RawT](
     source_iterator: AsyncIterable[RawT],
     parse_fn: Callable[[RawT], Awaitable[Result[OnedataDataset, Any] | None]],
@@ -81,13 +84,13 @@ async def run_parallel_crawl[RawT](
             async for item in source_iterator:
                 await queue.put(item)
                 stats.queued += 1
-        except BaseException as exc:
+        except BaseException as exc:  # pylint: disable=broad-exception-caught
             producer_error = exc
         finally:
             for _ in range(concurrency):
                 await queue.put(_SENTINEL)
 
-    async def worker(worker_id: int, task_id: int) -> None:
+    async def worker(worker_id: int, task_id: TaskID) -> None:
         while True:
             item = await queue.get()
             if item is _SENTINEL:

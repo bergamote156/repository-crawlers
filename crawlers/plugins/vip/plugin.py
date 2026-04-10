@@ -23,6 +23,7 @@ from crawlers.core import (
     Err,
     HttpClient,
     HttpConfig,
+    JsonObject,
     Result,
     RunContext,
     command,
@@ -63,7 +64,7 @@ class VipCrawlConfig(VipApiConfig, CrawlConfig, kw_only=True):
         self.collection = self.collection.strip()
 
 
-class VipPlugin(CrawlerPlugin[dict, VipCrawlConfig]):
+class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
     """Crawler for VIP (Virtual Imaging Platform) Girder collections."""
 
     name = "vip"
@@ -97,7 +98,7 @@ class VipPlugin(CrawlerPlugin[dict, VipCrawlConfig]):
 
     async def iterate_datasets(
         self, ctx: RunContext[VipCrawlConfig]
-    ) -> AsyncIterator[dict]:
+    ) -> AsyncIterator[JsonObject]:
         """Yield raw Girder folder dicts (one per top-level dataset)."""
         async for folder in self._api_client.iterate_datasets(
             ctx.config.collection,
@@ -106,7 +107,9 @@ class VipPlugin(CrawlerPlugin[dict, VipCrawlConfig]):
         ):
             yield folder
 
-    async def process(self, folder: dict) -> Result[OnedataDataset, Any] | None:
+    async def process(
+        self, folder: JsonObject, /
+    ) -> Result[OnedataDataset, Any] | None:
         """Resolve a folder's files and build an `OnedataDataset`."""
         files = await self._api_client.resolve_dataset_files(folder)
 
