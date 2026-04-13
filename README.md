@@ -6,12 +6,12 @@ Tools for automatic discovery and registration of public scientific datasets in
 ## Overview
 
 This project provides:
-- **Crawlers** - Fetch and process datasets from public repositories
-- **Registrar** - Register processed datasets in Onedata
+- **Crawlers** — framework for fetching and processing datasets from public repositories
+- **Registrar** — tool for registering processed datasets in Onedata
 
 ```mermaid
 graph LR
-    A["Data Source\n(eCUDO, EODC)"] --> B["Crawler"]
+    A["Data Source\n(eCUDO, EODC, Bgee, VIP)"] --> B["Crawler"]
     B --> C["processed.jsonl\n(with metadata)"]
     C --> D["Registrar"]
     D --> E["Onedata"]
@@ -19,8 +19,11 @@ graph LR
 
 ## Installation
 
+Requires [uv](https://docs.astral.sh/uv/):
+
 ```bash
-pip install -r requirements.txt
+uv sync              # install all dependencies
+uv sync --all-extras # include optional plugin dependencies (e.g. rdflib for bgee)
 ```
 
 ## Crawlers
@@ -34,146 +37,87 @@ JSONL files ready for registration.
 |--------|--------|-------------|
 | `ecudo` | [eCUDO.pl](http://central.ecudo.pl) | Polish university scientific datasets |
 | `eodc` | [EODC STAC](https://stac.eodc.eu) | Earth Observation Data Centre |
+| `bgee` | [Bgee](https://bgee.org) | Gene expression database (schema.org JSON-LD) |
+| `vip` | [VIP Girder](https://vip.creatis.insa-lyon.fr) | Virtual Imaging Platform datasets |
 
-### Basic Usage
+### Usage
 
 ```bash
 # List available plugins
-python -m crawlers --list-plugins
+uv run crawlers --list-plugins
 
 # Show plugin help
-python -m crawlers ecudo --help
+uv run crawlers ecudo --help
 
 # Show command help
-python -m crawlers ecudo crawl --help
+uv run crawlers ecudo crawl --help
 ```
 
-### eCUDO Crawler
+Every plugin provides a `crawl` command and usually a `list-*` command to
+inspect available data sources.
 
-Crawls datasets from Polish scientific institutions via eCUDO.pl.
+### Examples
+
+**eCUDO** — crawls datasets from Polish scientific institutions:
 
 ```bash
-# List available organizations
-python -m crawlers ecudo list-orgs
-
-# Crawl all datasets from an organization
-python -m crawlers ecudo crawl iopan
-
-# Crawl with limit
-python -m crawlers ecudo crawl iopan -n 100
-
-# Specify output directory
-python -m crawlers ecudo crawl iopan -o ./output
-
-# Disable URL validation (faster, but may include broken links)
-python -m crawlers ecudo crawl iopan --no-url-validation
-
-# Disable diversity filter (include all similar datasets)
-python -m crawlers ecudo crawl iopan --no-diversity-filter
+uv run crawlers ecudo list-orgs
+uv run crawlers ecudo crawl iopan
+uv run crawlers ecudo crawl iopan -n 100 -o ./data
 ```
 
-### EODC Crawler
-
-Crawls STAC items from EODC Earth Observation Data Centre.
+**EODC** — crawls STAC items from Earth Observation Data Centre:
 
 ```bash
-# List available collections
-python -m crawlers eodc list-collections
-
-# Crawl items from a collection
-python -m crawlers eodc crawl SENTINEL1_GRD
-
-# Crawl with temporal filter
-python -m crawlers eodc crawl SENTINEL1_GRD --datetime 2025-01-01/2025-01-31
-
-# Crawl with limit
-python -m crawlers eodc crawl SENTINEL1_GRD -n 50
+uv run crawlers eodc list-collections
+uv run crawlers eodc crawl SENTINEL1_GRD -n 50
 ```
 
-### Bgee Crawler
+**Bgee** — crawls gene expression datasets from the SIB Bgee database:
 
-Crawl species gene expression datasets from the SIB Bgee database, crawling schema.org JSON-LD embedded in HTML pages:
+```bash
+uv run crawlers bgee crawl
+uv run crawlers bgee crawl --base-url https://bgee.org/search/species -n 200
+```
 
-```sh
-python -m crawlers bgee crawl
+**VIP** — crawls datasets from the Virtual Imaging Platform Girder API:
 
-# Crawl from a given base URL
-python -m crawlers bgee crawl --base-url https://bgee.org/search/species -n 200
+```bash
+uv run crawlers vip list-collections
+uv run crawlers vip crawl <collection>
 ```
 
 ### Configuration
 
 Crawlers support configuration from multiple sources (in priority order):
 1. CLI arguments
-2. YAML config file
-3. Environment variables
-4. Default values
-
-**Using a config file:**
+2. YAML config file (`-c config.yaml`)
+3. Default values
 
 ```bash
-python -m crawlers ecudo -c config.yaml crawl iopan
+uv run crawlers ecudo -c config.yaml crawl iopan
 ```
 
-**Example `config.yaml`:**
-
-```yaml
-global:
-  timeout: 30
-  output_dir: ./data
-
-plugins:
-  ecudo:
-    base_url: "http://central.ecudo.pl"
-    
-    processors:
-      url_validator:
-        enabled: true
-        invalid_url_log: "invalid_urls.jsonl"
-      diversity_filter:
-        enabled: true
-        max_similar: 10
-        similarity_threshold: 0.85
-    
-    commands:
-      crawl:
-        page_size: 200
-        concurrency: 128
-```
-
-**Environment variables:**
-
-All config options can be set via `CRAWLER_<OPTION>` environment variables:
-
-```bash
-CRAWLER_TIMEOUT=60 python -m crawlers ecudo crawl iopan
-```
+All common options (`--timeout`, `--max-retries`, `-o`, `--concurrency`,
+`--queue-size`, `-n`, `--no-url-validation`) are shared across plugins via
+the base config classes. Run `uv run crawlers <plugin> crawl --help` for
+the full list.
 
 ### Output
 
-Crawlers produce two JSONL files:
+Each crawl creates a timestamped run directory under
+`<output_dir>/runs/<timestamp>_<plugin>_<context>/`:
 
-| File | Content |
-|------|---------|
-| `{org}_raw.jsonl` | Source data in original format |
-| `{org}_processed.jsonl` | Onedata-ready format with metadata XML |
-
-**Example processed record:**
-
-```json
-{
-  "name": "Dataset Title",
-  "location": "dataset-title",
-  "pid": "unique-identifier",
-  "metadata_xml": "<?xml version=\"1.0\"?>...",
-  "files": [
-    {"name": "data.csv", "path": "data.csv", "url": "https://..."}
-  ]
-}
+```
+data/runs/2026-03-29T21-06-52_ecudo_iopan/
+├── config.json       # resolved configuration snapshot
+├── processed.jsonl   # Onedata-ready records with metadata XML
+├── rejected.jsonl    # records that failed validation
+└── state.json        # run summary (counts, duration, errors)
 ```
 
-The `metadata_xml` contains standardized metadata (OpenAIRE or DataCite format)
-for Onedata registration.
+The `metadata_xml` field in processed records contains standardized metadata
+(OpenAIRE or DataCite format) for Onedata registration.
 
 ## Registrar
 
@@ -198,59 +142,60 @@ Or use a config file (`registrar_config.yaml`).
 ### Usage
 
 ```bash
-# Register datasets from JSONL
-python -m registrar register data/iopan_processed.jsonl
+# Register datasets from a crawl run
+uv run registrar register data/runs/<run_dir>/processed.jsonl
 
 # Register with limit (for testing)
-python -m registrar register data/iopan_processed.jsonl --limit 10
+uv run registrar register data/runs/<run_dir>/processed.jsonl --limit 10
 
 # Dry run (validate without registering)
-python -m registrar register data/iopan_processed.jsonl --dry-run
+uv run registrar register data/runs/<run_dir>/processed.jsonl --dry-run
 
-# List available spaces
-python -m registrar list-spaces
-
-# List available storages
-python -m registrar list-storages
+# List available spaces / storages
+uv run registrar list-spaces
+uv run registrar list-storages
 
 # Show configuration
-python -m registrar show-config
+uv run registrar show-config
 ```
 
 ## Complete Workflow
 
 ```bash
 # 1. Crawl datasets
-python -m crawlers ecudo crawl iopan -o ./data
+uv run crawlers ecudo crawl iopan -o ./data
 
-# 2. Review output
-head data/iopan_processed.jsonl
+# 2. Review the run output
+ls data/runs/                                       # find the latest run directory
+head data/runs/<run_dir>/processed.jsonl
 
 # 3. Register in Onedata (dry run first)
-python -m registrar register data/iopan_processed.jsonl --dry-run
+uv run registrar register data/runs/<run_dir>/processed.jsonl --dry-run
 
 # 4. Register for real
-python -m registrar register data/iopan_processed.jsonl
+uv run registrar register data/runs/<run_dir>/processed.jsonl
 ```
 
 ## Development
 
-### Adding a New Plugin
+### Writing a New Plugin
 
-See the [Plugin Development Guide](crawlers/docs/PLUGIN_GUIDE.md) for
+See the [Writing Plugins](docs/crawlers/guides/writing-plugins.md) guide for
 step-by-step instructions.
 
-### Architecture Documentation
+### Architecture
 
-See the [Framework Architecture](crawlers/docs/arch/ARCHITECTURE.md) for detailed
-framework documentation/reference.
+See the [Architecture Overview](docs/crawlers/arch/_overview.md) for the
+framework design, data flow, and key decisions.
 
-### Running Tests
+### Linting and Tests
 
 ```bash
-make test
+make format   # auto-format with black + isort
+make lint     # black check + pylint + mypy
+make test     # run pytest
 ```
 
 ## License
 
-MIT - See [LICENSE.txt](LICENSE.txt)
+MIT — See [LICENSE.txt](LICENSE.txt)
