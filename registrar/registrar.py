@@ -306,9 +306,14 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
                 domain=domain,
                 default_size=self.config.storage.default_size,
             )
+            # TODO
+            # space_id = ""
+            # space_name = ""
+            # storage_id = ""
 
             # Register files
-            location = dataset.location.strip("/")
+            # location = dataset.location.strip("/")  ## TODO
+            location = "bgee/" + dataset.location.strip("/")
             registered, skipped = operations.register_dataset_files(
                 oneprovider=self.oneprovider,
                 space_name=space_name,

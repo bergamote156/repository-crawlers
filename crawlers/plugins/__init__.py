@@ -14,6 +14,7 @@ from crawlers.core import CrawlerPlugin
 from crawlers.plugins.bgee.plugin import BgeePlugin
 from crawlers.plugins.ecudo.plugin import EcudoPlugin
 from crawlers.plugins.eodc.plugin import EODCPlugin
+from crawlers.plugins.topanat.plugin import TopanatPlugin
 from crawlers.plugins.vip.plugin import VipPlugin
 
 # List of all available plugins
@@ -22,4 +23,5 @@ REGISTERED_PLUGINS: list[CrawlerPlugin[Any, Any]] = [
     EODCPlugin(),
     BgeePlugin(),
     VipPlugin(),
+    TopanatPlugin(),
 ]

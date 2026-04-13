@@ -157,14 +157,14 @@ class OnezoneClient:
         Returns:
             Handle ID
         """
-        url = f"{self._base_url}/handles"
+        url = f"{self._base_url}/user/handles"
         payload = {
             "handleServiceId": handle_service_id,
             "resourceType": "Share",
             "resourceId": share_id,
             "requestPublicHandle": False,
             "metadata": metadata_xml,
-            "metadataPrefix": "oai_openaire",
+            "metadataPrefix": "oai_datacite",  ## TODO
         }
 
         response = requests.post(
