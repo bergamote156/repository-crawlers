@@ -7,22 +7,20 @@ description: >
 topic: crawlers/arch
 audience: internal-developer-onboarding
 generated: 2026-04-01
-last_reviewed: 2026-04-04
+last_reviewed: 2026-04-10
 source_modules:
   - crawlers/core/config.py
   - crawlers/core/plugin.py
-  - crawlers/core/processor.py
+  - crawlers/core/http.py
   - crawlers/core/result.py
-  - crawlers/core/sink.py
+  - crawlers/core/runner.py
   - crawlers/core/workspace.py
-  - crawlers/core/orchestration.py
-  - crawlers/core/api.py
-  - crawlers/core/metadata.py
-  - crawlers/processors/pipeline.py
-  - crawlers/default/plugin.py
-  - crawlers/default/crawl_spec.py
+  - crawlers/model/metadata.py
+  - crawlers/model/dataset.py
+  - crawlers/metadata/datacite.py
+  - crawlers/metadata/openaire.py
 source_commits:
-  public-data-crawlers: bbd9be2e7
+  public-data-crawlers: cff14ee
 status: draft
 ---
 
@@ -33,106 +31,113 @@ mindmap
   root((🏗️ Crawlers Framework))
     🔌 Plugin System
       ⚙️ CrawlerPlugin
-      📋 DefaultCrawlerPlugin
-      📋 DefaultCrawlSpec
       🔧 Command
-      🌐 ApiClient
-    ⚙️ Pipeline
+      🌐 HttpClient
+    ⚙️ Execution
       ✅ Result
-      ⚙️ Processor
-      🔗 ProcessorPipeline
-      💾 Sink
-      👁️ Tap
+      ⚙️ run_parallel_crawl
     🔧 Config
       📝 ConfigBase
+      📋 CrawlConfig
     📁 Workspace
       📁 RunContext
-    🏷️ Metadata
-      🏷️ MetadataBuilder
+    🏷️ Data Model
+      📦 OnedataDataset
+      🏷️ MetadataRecord
+        📄 DataCiteRecord
+        📄 OpenAIRERecord
 ```
 
 ---
 
-## ApiClient
-
-Generic async HTTP base (`ApiClient[OptsT, DatasetT]`) with retries,
-exponential backoff, and typed error handling via `Result`.
-Learn more: [Plugin System](plugin-system.md#api-client).
-
 ## Command
 
-A named CLI entry point registered on a plugin via `@command()`,
+A named CLI entry point registered on a plugin via `@command`,
 bound to a `ConfigBase` subclass that defines its arguments.
 Learn more: [Plugin System](plugin-system.md#command-registration).
 
 ## ConfigBase
 
-Base class for declarative configuration — subclasses are dataclasses
-whose fields carry CLI/ENV/YAML metadata via `opt()`.
+Base class for declarative configuration — subclasses are
+dataclasses whose fields carry CLI/ENV/YAML metadata via `opt()`.
 Learn more: [Configuration](configuration.md#configbase-and-opt).
+
+## CrawlConfig
+
+Framework-level config base for crawl commands — extends
+`HttpConfig`, `OutputConfig`, and `ProcessingConfig` to provide
+fields like `max_records` and `no_url_validation`. Plugin crawl
+configs inherit from this.
+Learn more:
+[Configuration](configuration.md#config-inheritance).
 
 ## CrawlerPlugin
 
-Abstract base for all plugins — collects `@command()` methods,
-builds argparse, loads config, and dispatches to the selected command.
+The single abstract base for all plugins — combines command
+registration, argparse generation, multi-source config loading,
+and the complete crawl lifecycle (`setup` → `iterate_datasets` →
+`process`, parallel workers, JSONL sinks).
 Learn more: [Plugin System](plugin-system.md#crawlerplugin).
 
-## DefaultCrawlerPlugin
+## DataCiteRecord
 
-Batteries-included base extending `CrawlerPlugin` with a complete
-crawl lifecycle. Plugins subclass this and implement `prepare_crawl()`.
-Learn more: [Plugin System](plugin-system.md#defaultcrawlerplugin).
+Structured record that generates XML compliant with DataCite
+Metadata Schema 4.5. Satisfies the `MetadataRecord` protocol.
+Learn more: [Metadata](metadata.md#dataciterecord).
 
-## DefaultCrawlSpec
+## HttpClient
 
-Dataclass returned by `prepare_crawl()` — describes *what* to crawl
-(client, parser, metadata builder) so the framework handles *how*.
-Learn more: [Plugin System](plugin-system.md#defaultcrawlspec).
+Concrete async HTTP client with retries, exponential backoff, and
+`Result`-based error handling. Plugins create one during `setup()`
+via `HttpClient.from_config(config)`.
+Learn more: [Plugin System](plugin-system.md#httpclient).
 
-## MetadataBuilder
+## MetadataRecord
 
-Abstract base (`MetadataBuilder[DatasetT]`) with `build(dataset) →
-str` that produces XML. Concrete: `DataCiteBuilder`, `OpenAIREBuilder`.
-Learn more: [Metadata](metadata.md).
+Protocol with a single method (`to_xml() → str`). Satisfied by
+`OpenAIRERecord` and `DataCiteRecord`. Consumed by
+`OnedataDataset.build()` to materialize XML metadata.
+Learn more: [Metadata](metadata.md#metadatarecord-protocol).
 
-## Processor
+## OnedataDataset
 
-Generic abstract base (`Processor[InT, OutT, StatsT]`) for pipeline
-stages — lifecycle (`open`/`close`), `Result`-based processing, stats.
-The framework ships six built-in processors (DatasetResolver,
-ParserProcessor, URLValidator, DiversityFilter, OnedataConverter, Tap).
-Learn more: [Processing](processing.md#processor-abstraction).
-Individual processors: [Available Processors](processing.md#available-processors).
+Frozen dataclass representing a dataset ready for Onedata
+registration. Built via `OnedataDataset.build()`, which validates
+files and materializes XML metadata from a `MetadataRecord`.
+Learn more:
+[Plugin System](plugin-system.md#onedatadataset-assembly).
 
-## ProcessorPipeline
+## OpenAIRERecord
 
-Chains processors sequentially — `Ok` values flow forward, `Err`
-values short-circuit to the rejection sink.
-Learn more: [Processing](processing.md#processorpipeline).
+Structured record that generates XML compliant with OpenAIRE
+Guidelines v4.0. Satisfies the `MetadataRecord` protocol.
+Learn more: [Metadata](metadata.md#openairrecord).
 
 ## Result
 
 Explicit error-handling type: `type Result[T, E] = Ok[T] | Err[E]`.
-Makes success/failure paths visible in signatures throughout the
-pipeline and API client.
-Learn more: [Processing](processing.md#result-type).
+Makes success/failure paths visible in signatures — `process()`
+returns `Result[OnedataDataset, Any]`, `HttpClient` methods return
+`Result[T, HttpFailure]` (where `HttpFailure` is
+`ResponseFailure | TimeoutFailure`).
+Learn more:
+[Plugin System](plugin-system.md#iteration-and-processing).
+
+## run_parallel_crawl
+
+The producer–consumer engine that drives a crawl — feeds items
+from `iterate_datasets()` into a bounded queue and processes them
+with N concurrent workers. Tracks stats and routes results to
+JSONL sinks.
+Learn more:
+[Plugin System](plugin-system.md#parallel-execution).
 
 ## RunContext
 
-Manages a crawl run's directory, config snapshot, state persistence,
-and sink lifecycle. Standard implementation: `DefaultRunContext`.
-Learn more: [Plugin System](plugin-system.md#workspace-and-run-management).
-
-## Sink
-
-Output destination (`Sink[T]`) with `open`/`push`/`close` lifecycle
-managed by `RunContext`. Implementations: `JSONLSink`, `NullSink`.
-Learn more: [Processing](processing.md#sink-abstraction).
-
-## Tap
-
-Pass-through processor that observes data at any pipeline point —
-pushes copies to a sink without disrupting the flow.
-Learn more: [Processing](processing.md#tap).
+Manages a crawl run's directory, config snapshot, state
+persistence, and JSONL sink lifecycle. Creates `processed.jsonl`
+and `rejected.jsonl` via append-mode JSONL sinks.
+Learn more:
+[Plugin System](plugin-system.md#workspace-and-run-management).
 
 ---

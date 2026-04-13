@@ -1,313 +1,359 @@
 ---
 title: Metadata Generation
 description: >
-  How metadata builders produce standards-compliant XML (DataCite
-  Kernel 4.5, OpenAIRE v4.0) from parsed dataset models. Covers the
-  MetadataBuilder abstraction, the template method pattern, dataset
-  protocols, class-level defaults, and how to extend builders.
+  How metadata records produce standards-compliant XML (DataCite
+  Kernel 4.5, OpenAIRE v4.0) from parsed dataset fields. Covers
+  the MetadataRecord protocol, both concrete record types, and
+  their controlled vocabularies.
 topic: crawlers/arch/metadata
 audience: internal-developer-onboarding
 generated: 2026-04-01
-last_reviewed: 2026-04-04
+last_reviewed: 2026-04-10
 source_modules:
-  - crawlers/core/metadata.py
+  - crawlers/model/metadata.py
+  - crawlers/model/dataset.py
   - crawlers/metadata/datacite.py
   - crawlers/metadata/openaire.py
-  - crawlers/plugins/eodc/metadata.py
+  - crawlers/plugins/ecudo/parser.py
+  - crawlers/plugins/eodc/parser.py
 source_commits:
-  public-data-crawlers: bbd9be2e7
+  public-data-crawlers: cff14ee
 status: draft
 ---
 
 # Metadata Generation
 
-<sub>📄 `crawlers/core/metadata.py:12-27`</sub>
+<sub>📄 `crawlers/model/metadata.py:1-15`</sub>
 
 Crawled datasets need standards-compliant XML metadata embedded in
 their output records — Onedata uses this for discovery and
-interoperability. Metadata builders take a parsed dataset model and
-produce an XML string following either DataCite Kernel 4.5 or
-OpenAIRE v4.0. The
-[OnedataConverter](processing.md#onedataconverter) calls the builder
-as the final pipeline step.
-
-The base interface is intentionally minimal — a single generic
-abstract class with one method:
-
-```python
-class MetadataBuilder[DatasetT](ABC):
-    @abstractmethod
-    def build(self, dataset: DatasetT) -> str: ...
-```
-
-Both concrete builders extend this with a **template method pattern**
-that makes customization surgical: you override individual section
-builders rather than reimplementing the whole XML generation.
+interoperability. The framework provides two structured record
+types — [**DataCiteRecord**](#dataciterecord) and
+[**OpenAIRERecord**](#openairrecord) — that plugins populate with
+parsed fields and that produce XML via `to_xml()`. The record
+carries the data *and* knows how to serialize itself — no separate
+builder abstraction needed.
 
 ```mermaid
-classDiagram
-    class MetadataBuilder~DatasetT~ {
-        <<ABC>>
-        +build(dataset: DatasetT) str
-    }
+graph LR
+    RAW["🌐 Raw API data"]
+    PARSER["⚙️ Plugin parser"]
 
-    class DataCiteBuilder {
-        <<Kernel 4.5 · ElementTree>>
-        +build(dataset) str
-        +get_sections() list
-        +build_identifier_section()
-        +build_creators_section()
-        +build_titles_section()
-        +...other section builders()
-    }
+    subgraph Records["📋 Metadata Records"]
+        DC["DataCiteRecord"]
+        OA["OpenAIRERecord"]
+    end
 
-    class EODCDataCiteBuilder {
-        <<Sentinel-1 defaults>>
-        creator_name = "ESA"
-        publisher_name = "EODC"
-        default_subjects = [Sentinel-1, SAR, ...]
-    }
+    OD["📦 OnedataDataset"]
 
-    class OpenAIREBuilder {
-        <<v4.0 · string concat>>
-        +build(dataset) str
-        +get_sections() list
-        +build_title_section()
-        +build_creator_section()
-        +...other section builders()
-    }
+    RAW --> PARSER
+    PARSER -->|populates| DC
+    PARSER -->|populates| OA
+    DC -->|".to_xml()"| OD
+    OA -->|".to_xml()"| OD
 
-    class OnedataConverter {
-        +metadata_builder : MetadataBuilder
-        +process(dataset) Result
-    }
+    classDef external fill:#A8DADC,stroke:#1864AB,color:#000
+    classDef internal fill:#4ECDC4,stroke:#0B7285,color:#000
+    classDef record fill:#E6E6FA,stroke:#5B4B8A,color:#000
+    classDef output fill:#95D5B2,stroke:#2D6A4F,color:#000
 
-    MetadataBuilder <|-- DataCiteBuilder
-    MetadataBuilder <|-- OpenAIREBuilder
-    DataCiteBuilder <|-- EODCDataCiteBuilder
-    OnedataConverter ..> MetadataBuilder : calls build()
-
-    style MetadataBuilder fill:#E6E6FA,stroke:#5B4B8A,color:#000
-    style DataCiteBuilder fill:#4ECDC4,stroke:#0B7285,color:#000
-    style OpenAIREBuilder fill:#4ECDC4,stroke:#0B7285,color:#000
-    style EODCDataCiteBuilder fill:#FFE4B5,stroke:#E8890C,color:#000
-    style OnedataConverter fill:#A8DADC,stroke:#1864AB,color:#000
+    class RAW external
+    class PARSER internal
+    class DC,OA record
+    class OD output
 ```
 
+Both record types satisfy the
+[**MetadataRecord**](#metadatarecord-protocol) protocol — a
+single-method contract (`to_xml() → str`) that
+[OnedataDataset.build()](plugin-system.md#onedatadataset-assembly)
+uses to materialize XML eagerly, so the returned dataset carries no
+references to parser state.
 
-## Template Method Pattern
 
-<sub>📄 `crawlers/metadata/datacite.py:79-137`</sub>
+## MetadataRecord Protocol
 
-Both `DataCiteBuilder` and `OpenAIREBuilder` follow the same
-structure:
+<sub>📄 `crawlers/model/metadata.py:11-15`</sub>
 
-1. `build(dataset)` creates a context object from the dataset.
-2. `get_sections()` returns an ordered list of section builder
-   methods.
-3. Each section builder receives the context and produces its output
-   (XML elements for DataCite, string lines for OpenAIRE).
-4. The results are assembled into the final XML document.
+```python
+class MetadataRecord(Protocol):
+    def to_xml(self) -> str: ...
+```
 
-This design gives plugins three levels of customization:
+Any object with a `to_xml()` method satisfies this protocol. Both
+`DataCiteRecord` and `OpenAIRERecord` implement it. Plugins
+building custom metadata formats only need to provide an object
+with `to_xml()` — no base class to extend.
 
-- **Override a section method** — change how a specific section is
-  built (e.g. custom creator name, different subject terms).
-- **Override `get_sections()`** — reorder, add, or remove entire
-  sections.
-- **Override class-level defaults** — change values like
-  `creator_name` or `publisher_name` without touching any methods.
 
-## DataCiteBuilder
+## DataCiteRecord
 
-<sub>📄 `crawlers/metadata/datacite.py:62-296`</sub>
+<sub>📄 `crawlers/metadata/datacite.py:153-184`</sub>
 
 Generates XML compliant with
 [DataCite Metadata Schema 4.5](https://schema.datacite.org/meta/kernel-4.5/).
 Uses `xml.etree.ElementTree` for structured XML construction.
 
-### Dataset Protocol
-
-<sub>📄 `crawlers/metadata/datacite.py:41-52`</sub>
-
 ```mermaid
 classDiagram
-    direction LR
-
-    class DataCiteDataset {
-        <<Protocol>>
+    class DataCiteRecord {
         identifier : str
+        identifier_type : IdentifierType
+        creators : list~Creator~
         title : str
-        datetime : str | None
-        geometry : dict | None
-        files : Sequence~DataCiteFile~
-        self_link : str | None
+        publisher : str
+        publication_year : int
+        resource_type_general : str
+        resource_type_value : str
+        subjects : list~str~
+        dates : list~Date~
+        geo_locations : list~GeoLocationPolygon~
+        descriptions : list~Description~
+        related_identifiers : list~RelatedIdentifier~
+        rights_list : list~Rights~
+        version : str | None
+        +to_xml() str
     }
 
-    class DataCiteFile {
-        <<Protocol>>
-        url : str
+    class Creator {
+        name : str
+        name_type : NameType
+        identifiers : list~NameIdentifier~
     }
 
-    DataCiteDataset --> DataCiteFile : files
+    class Date {
+        value : str
+        date_type : DateType
+    }
 
-    style DataCiteDataset fill:#4ECDC4,stroke:#0B7285,color:#000
-    style DataCiteFile fill:#A8DADC,stroke:#1864AB,color:#000
+    class Description {
+        value : str
+        description_type : str
+    }
+
+    class RelatedIdentifier {
+        value : str
+        type : RelatedIdentifierType
+        relation : RelationType
+    }
+
+    class GeoLocationPolygon {
+        points : list~tuple~
+    }
+
+    class IdentifierType {
+        <<enumeration>>
+        DOI
+        URL
+        URN
+        OTHER
+    }
+
+    class DateType {
+        <<enumeration>>
+        COLLECTED
+        UPDATED
+        ISSUED
+        CREATED
+        SUBMITTED
+    }
+
+    class NameType {
+        <<enumeration>>
+        PERSONAL
+        ORGANIZATIONAL
+    }
+
+    DataCiteRecord --> Creator : creators
+    DataCiteRecord --> Date : dates
+    DataCiteRecord --> Description : descriptions
+    DataCiteRecord --> RelatedIdentifier : related_identifiers
+    DataCiteRecord --> GeoLocationPolygon : geo_locations
+    DataCiteRecord --> IdentifierType : identifier_type
+    Creator --> NameType : name_type
+    Date --> DateType : date_type
+
+    style DataCiteRecord fill:#4ECDC4,stroke:#0B7285,color:#000
+    style Creator fill:#A8DADC,stroke:#1864AB,color:#000
+    style Date fill:#A8DADC,stroke:#1864AB,color:#000
+    style Description fill:#A8DADC,stroke:#1864AB,color:#000
+    style RelatedIdentifier fill:#A8DADC,stroke:#1864AB,color:#000
+    style GeoLocationPolygon fill:#A8DADC,stroke:#1864AB,color:#000
+    style IdentifierType fill:#FFE4B5,stroke:#E8890C,color:#000
+    style DateType fill:#FFE4B5,stroke:#E8890C,color:#000
+    style NameType fill:#FFE4B5,stroke:#E8890C,color:#000
 ```
 
-`DataCiteDataset` uses structural typing — any dataclass with the
-required attributes satisfies it. The protocol requires spatial data
-as GeoJSON geometry (for the `geoLocations` section) and a
-`self_link` for the `relatedIdentifiers` section.
+Mandatory fields (M in DataCite Kernel 4.5) have no default — the
+dataclass constructor enforces their presence. Optional fields
+default to `None` or empty collections; XML sections for absent
+fields are not emitted.
 
 ### Sections
 
-DataCite defines 6 mandatory and 6 recommended sections. You'll
-typically override the defaults for creators, publisher, and
-subjects. Each section has a corresponding builder method:
+<sub>📄 `crawlers/metadata/datacite.py:192-346`</sub>
 
-<details>
-<summary>Section reference table</summary>
+DataCite Kernel 4.5 defines mandatory (M) and recommended (R)
+properties. The record supports:
 
-Mandatory (M) and recommended (R) per the DataCite schema:
+| Section | Status | Populated from |
+|---------|--------|----------------|
+| Identifier | M | `identifier`, `identifier_type` |
+| Creators | M | `creators` (with `NameIdentifier` support) |
+| Titles | M | `title` |
+| Publisher | M | `publisher` |
+| PublicationYear | M | `publication_year` |
+| ResourceType | M | `resource_type_general`, `resource_type_value` |
+| Subjects | R | `subjects` |
+| Dates | R | `dates` (with `DateType`) |
+| GeoLocations | R | `geo_locations` (polygon points) |
+| Descriptions | R | `descriptions` (with `description_type`) |
+| RelatedIdentifiers | R | `related_identifiers` (with type + relation) |
+| Rights | R | `rights_list` (with optional URI) |
+| Version | R | `version` |
 
-| Section | Status | Method |
-|---------|--------|--------|
-| Identifier | M | `build_identifier_section` |
-| Creators | M | `build_creators_section` |
-| Titles | M | `build_titles_section` |
-| Publisher | M | `build_publisher_section` |
-| PublicationYear | M | `build_publication_year_section` |
-| ResourceType | M | `build_resource_type_section` |
-| Subjects | R | `build_subjects_section` |
-| Dates | R | `build_dates_section` |
-| GeoLocations | R | `build_geo_locations_section` |
-| Descriptions | R | `build_descriptions_section` |
-| RelatedIdentifiers | R | `build_related_identifiers_section` |
-| Rights | R | `build_rights_section` |
+### Usage Pattern
 
-</details>
+<sub>📄 `crawlers/plugins/eodc/parser.py:118-143`</sub>
 
-### Class-level Defaults
+Plugins construct a `DataCiteRecord` directly in their parser,
+populating fields from the raw API data. EODC's parser shows the
+typical pattern — constants for source-specific defaults (creator,
+publisher, subjects), with per-item fields (identifier, title,
+dates, geometry) extracted from the STAC item:
 
-<sub>📄 `crawlers/metadata/datacite.py:70-77`</sub>
+```python
+metadata = DataCiteRecord(
+    identifier=item_id,
+    identifier_type=IdentifierType.OTHER,
+    creators=[Creator(name="European Space Agency", name_type=NameType.ORGANIZATIONAL)],
+    title=title,
+    publisher="EODC",
+    publication_year=year_from_iso(dt),
+    resource_type_general="Dataset",
+    resource_type_value="Earth observation data",
+    subjects=["Sentinel-1", "SAR", "GRD", "Copernicus"],
+    dates=[Date(value=dt, date_type=DateType.COLLECTED)] if dt else [],
+    geo_locations=polygons_from_geojson(geometry),
+)
+```
 
-Subclasses customize the builder by overriding these attributes —
-no method changes needed for common cases:
 
-| Attribute | Default | Purpose |
-|-----------|---------|---------|
-| `creator_name` | `"Unknown Creator"` | Name used in Creators |
-| `publisher_name` | `"Unknown Publisher"` | Name used in Publisher |
-| `resource_type_general` | `"Dataset"` | DataCite resourceTypeGeneral |
-| `resource_type_value` | `"dataset"` | DataCite resourceType value |
-| `default_subjects` | `[]` | Subject keywords |
-| `default_description` | `""` | Fallback description |
-| `default_rights` | `""` | Rights statement |
+## OpenAIRERecord
 
-<sub>📄 `crawlers/plugins/eodc/metadata.py:16-51`</sub>
-
-For example, `EODCDataCiteBuilder` overrides these with
-Sentinel-1/Copernicus-specific values (creator: ESA, publisher:
-EODC, subjects: Sentinel-1, SAR, GRD, Copernicus).
-
-<!-- FLAG: EODCDataCiteBuilder has a TODO comment (line 14)
-     acknowledging that these defaults are specific to Sentinel-1
-     GRD and may not apply to other EODC collections. No mechanism
-     currently exists to select different defaults per collection. -->
-
-## OpenAIREBuilder
-
-<sub>📄 `crawlers/metadata/openaire.py:99-415`</sub>
+<sub>📄 `crawlers/metadata/openaire.py:121-153`</sub>
 
 Generates XML compliant with
 [OpenAIRE Guidelines v4.0](https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/).
-Unlike DataCiteBuilder, it uses string concatenation rather than
-ElementTree — a legacy implementation choice. Plugin authors don't
-need to worry about this: escaping is handled internally, and the
-section-builder interface is identical to DataCiteBuilder.
-
-<!-- Q: Should we migrate OpenAIREBuilder to ElementTree for
-     consistency with DataCiteBuilder? -->
-
-### Dataset Protocol
-
-<sub>📄 `crawlers/metadata/openaire.py:71-87`</sub>
+Uses `xml.etree.ElementTree` with proper namespace handling.
 
 ```mermaid
 classDiagram
-    direction LR
-
-    class Dataset {
-        <<Protocol · OpenAIRE>>
-        identifier : str
+    class OpenAIRERecord {
         title : str
-        description : str
-        publisher : str
-        issued : str
-        files : Sequence~DatasetFile~
-        language : str
-        keywords : list~str~
-        access_level : str
-        spatial : str | None
-        temporal : str | None
+        creator : str
+        identifier : str
+        publication_date : str
+        access_rights : AccessRights
+        resource_type : ResourceType
+        language : str | None
+        publisher : str | None
+        description : str | None
+        subjects : list~str~
+        files : list~FileLocation~
+        temporal_coverage : str | None
+        spatial_coverage : BoundingBox | None
+        +to_xml() str
     }
 
-    class DatasetFile {
-        <<Protocol>>
+    class FileLocation {
         url : str
+        mime_type : str | None
     }
 
-    Dataset --> DatasetFile : files
+    class BoundingBox {
+        west : float
+        south : float
+        east : float
+        north : float
+    }
 
-    style Dataset fill:#4ECDC4,stroke:#0B7285,color:#000
-    style DatasetFile fill:#A8DADC,stroke:#1864AB,color:#000
+    class AccessRights {
+        <<enumeration>>
+        OPEN
+        EMBARGOED
+        RESTRICTED
+        METADATA_ONLY
+    }
+
+    class ResourceType {
+        <<enumeration>>
+        DATASET
+        TEXT
+        IMAGE
+    }
+
+    OpenAIRERecord --> FileLocation : files
+    OpenAIRERecord --> BoundingBox : spatial_coverage
+    OpenAIRERecord --> AccessRights : access_rights
+    OpenAIRERecord --> ResourceType : resource_type
+
+    style OpenAIRERecord fill:#4ECDC4,stroke:#0B7285,color:#000
+    style FileLocation fill:#A8DADC,stroke:#1864AB,color:#000
+    style BoundingBox fill:#A8DADC,stroke:#1864AB,color:#000
+    style AccessRights fill:#FFE4B5,stroke:#E8890C,color:#000
+    style ResourceType fill:#FFE4B5,stroke:#E8890C,color:#000
 ```
 
-OpenAIRE requires a richer set of attributes than DataCite — see the
-protocol diagram above. Like DataCite, the protocol uses structural
-typing.
+Like DataCite, mandatory fields have no default. `AccessRights`
+values carry
+[COAR vocabulary](https://vocabularies.coar-repositories.org/access_rights/)
+URIs and labels. `ResourceType` values carry COAR Resource Type
+URIs.
 
 ### Sections
 
-OpenAIRE has a richer set of mandatory and conditionally mandatory
-(MA) sections than DataCite.
+<sub>📄 `crawlers/metadata/openaire.py:160-319`</sub>
 
-<details>
-<summary>Section reference table</summary>
+| Section | Status | Populated from |
+|---------|--------|----------------|
+| Title | M | `title` (with `language` for `xml:lang`) |
+| Creator | M | `creator` (organizational name) |
+| Language | MA | `language` (ISO 639 code) |
+| Publisher | MA | `publisher` |
+| Publication Date | M | `publication_date` |
+| Resource Type | M | `resource_type` (COAR URI + label) |
+| Description | MA | `description` |
+| Identifier | M | `identifier` (URN type) |
+| Access Rights | M | `access_rights` (COAR URI + label) |
+| Subjects | MA | `subjects` (capped at 20) |
+| Temporal Coverage | R | `temporal_coverage` |
+| Geo Location | O | `spatial_coverage` (bounding box) |
+| Files | MA | `files` (URL + optional MIME type) |
 
-| Section | Status | Method |
-|---------|--------|--------|
-| Title | M | `build_title_section` |
-| Creator | M | `build_creator_section` |
-| Language | MA | `build_language_section` |
-| Publisher | MA | `build_publisher_section` |
-| Publication Date | M | `build_publication_date_section` |
-| Resource Type | M | `build_resource_type_section` |
-| Description | MA | `build_description_section` |
-| Identifier | M | `build_identifier_section` |
-| Access Rights | M | `build_access_rights_section` |
-| Subjects | MA | `build_subjects_section` |
-| Temporal | R | `build_temporal_section` |
-| Geo Location | R | `build_geo_location_section` |
-| Files | MA | `build_files_section` |
+(M = Mandatory, MA = Mandatory if Applicable, R = Recommended,
+O = Optional)
 
-(M = Mandatory, MA = Mandatory if Applicable, R = Recommended)
+### Usage Pattern
 
-</details>
+<sub>📄 `crawlers/plugins/ecudo/parser.py:117-133`</sub>
 
-### Implementation Notes
+Ecudo's parser constructs an `OpenAIRERecord` from JSON-LD fields,
+mapping eCUDO-specific conventions (access levels, spatial strings)
+to OpenAIRE-compatible values:
 
-<sub>📄 `crawlers/metadata/openaire.py:22-49`</sub>
-
-The OpenAIRE builder handles several format-specific concerns:
-access rights are mapped to COAR URIs (currently only `"public"` →
-open access), file sections infer MIME types from extensions (`.zip`,
-`.csv`, `.nc`, `.tiff`, etc.), and geo location sections convert
-GeoJSON polygon coordinates to bounding box bounds.
-
-## Extending Metadata Builders
-
-See [Writing Plugins](../guides/writing-plugins.md#custom-metadata-builder)
-for concrete code examples using the Ecudo and EODC plugins.
-
+```python
+metadata = OpenAIRERecord(
+    title=title,
+    creator=publisher,
+    identifier=identifier,
+    publication_date=str(raw.get("issued", "")),
+    access_rights=AccessRights.OPEN,
+    language=normalize_language_code(raw.get("language", "en")),
+    publisher=publisher,
+    description=raw.get("description"),
+    subjects=list(raw.get("keywords", [])),
+    files=[FileLocation(url=f.url, mime_type=infer_mime_type(f.url)) for f in files],
+    spatial_coverage=parse_bounding_box(raw.get("spatial")),
+)
+```
