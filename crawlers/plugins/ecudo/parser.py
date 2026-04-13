@@ -125,9 +125,7 @@ def parse_ecudo_record(raw: JsonObject) -> ParsedEcudoRecord | None:
         publisher=publisher,
         description=raw.get("description") or None,
         subjects=list(raw.get("keywords", [])),
-        files=[
-            FileLocation(url=f.url, mime_type=infer_mime_type(f.url)) for f in files
-        ],
+        files=[FileLocation(url=f.url, mime_type=infer_mime_type(f.url)) for f in files],
         temporal_coverage=raw.get("temporal"),
         spatial_coverage=_parse_bounding_box(raw.get("spatial")),
     )
@@ -162,8 +160,7 @@ def _validate_structure(raw: dict, identifier: str) -> None:
     access_level = raw.get("accessLevel")
     if access_level and access_level not in _KNOWN_ACCESS_LEVELS:
         console.warning(
-            f"Unknown accessLevel '{access_level}' in record {identifier} - verify COAR"
-            " mapping"
+            f"Unknown accessLevel '{access_level}' in record {identifier} - verify COAR" " mapping"
         )
 
     publisher = raw.get("publisher")
@@ -217,8 +214,7 @@ def _parse_publisher(publisher_data: Any, identifier: str) -> str:
         return publisher_data
 
     console.warning(
-        f"Unexpected publisher type {type(publisher_data).__name__} in record"
-        f" {identifier}"
+        f"Unexpected publisher type {type(publisher_data).__name__} in record" f" {identifier}"
     )
     return "Unknown Publisher"
 
@@ -228,9 +224,7 @@ def _resolve_access_rights(level: str | None) -> AccessRights:
         return _ACCESS_LEVEL_MAP[level]
 
     if level:
-        console.warning(
-            f"Unknown eCUDO accessLevel '{level}', defaulting to open access."
-        )
+        console.warning(f"Unknown eCUDO accessLevel '{level}', defaulting to open access.")
 
     return AccessRights.OPEN
 
@@ -246,9 +240,7 @@ def _parse_bounding_box(spatial: str | None) -> BoundingBox | None:
         return None
 
     if len(coords) != 4:
-        console.warning(
-            f"Expected 4 spatial coordinates, got {len(coords)}: '{spatial}'"
-        )
+        console.warning(f"Expected 4 spatial coordinates, got {len(coords)}: '{spatial}'")
         return None
 
     west, south, east, north = coords

@@ -138,9 +138,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
         # Summary
         output.always("")
         output.always(_SEPARATOR)
-        output.stats(
-            f"Complete: {summary.successful} successful, {summary.failed} failed"
-        )
+        output.stats(f"Complete: {summary.successful} successful, {summary.failed} failed")
         output.stats(
             f"Files: {summary.total_files_registered} registered, "
             f"{summary.total_files_skipped} skipped"
@@ -149,9 +147,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
         return summary
 
-    def _load_datasets(
-        self, datasets_file: Path, limit: Optional[int]
-    ) -> list[InputDataset]:
+    def _load_datasets(self, datasets_file: Path, limit: Optional[int]) -> list[InputDataset]:
         """
         Load datasets from JSON or JSONL file.
 
@@ -181,9 +177,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
         return datasets
 
-    def _load_datasets_json(
-        self, datasets_file: Path, limit: Optional[int]
-    ) -> list[InputDataset]:
+    def _load_datasets_json(self, datasets_file: Path, limit: Optional[int]) -> list[InputDataset]:
         """Load datasets from standard JSON file."""
         with open(datasets_file, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -199,9 +193,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
         return datasets
 
-    def _load_datasets_jsonl(
-        self, datasets_file: Path, limit: Optional[int]
-    ) -> list[InputDataset]:
+    def _load_datasets_jsonl(self, datasets_file: Path, limit: Optional[int]) -> list[InputDataset]:
         """
         Load datasets from JSONL file (one JSON object per line).
 
@@ -220,9 +212,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
                     data = json.loads(line)
                     datasets.append(InputDataset.from_dict(data))
                 except json.JSONDecodeError as e:
-                    raise json.JSONDecodeError(
-                        f"Line {line_no}: {e.msg}", e.doc, e.pos
-                    ) from e
+                    raise json.JSONDecodeError(f"Line {line_no}: {e.msg}", e.doc, e.pos) from e
 
                 if limit is not None and len(datasets) >= limit:
                     break
@@ -330,9 +320,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
             # Create share
             share_id = None
-            dir_file_id = self.oneprovider.lookup_file_id(
-                space_name=space_name, path=location
-            )
+            dir_file_id = self.oneprovider.lookup_file_id(space_name=space_name, path=location)
             if dir_file_id:
                 share_id = operations.find_or_create_share(
                     oneprovider=self.oneprovider,

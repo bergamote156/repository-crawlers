@@ -73,6 +73,4 @@ class ResourceCache:
         self.storages.clear()
 
     def __repr__(self) -> str:
-        return (
-            f"ResourceCache(spaces={len(self.spaces)}, storages={len(self.storages)})"
-        )
+        return f"ResourceCache(spaces={len(self.spaces)}, storages={len(self.storages)})"

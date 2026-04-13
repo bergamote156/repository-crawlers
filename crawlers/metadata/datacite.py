@@ -26,8 +26,7 @@ NS_DATACITE = "http://datacite.org/schema/kernel-4"
 NS_XSI = "http://www.w3.org/2001/XMLSchema-instance"
 
 _SCHEMA_LOCATION = (
-    "http://datacite.org/schema/kernel-4 "
-    "http://schema.datacite.org/meta/kernel-4.5/metadata.xsd"
+    "http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.5/metadata.xsd"
 )
 
 # Bind 'datacite:' prefix consistently with openaire.py to avoid mutating
@@ -210,9 +209,7 @@ def _build(record: DataCiteRecord) -> str:
     _add_version(root, record)
 
     ET.indent(root, space="  ")
-    return ET.tostring(
-        root, encoding="unicode", xml_declaration=True, short_empty_elements=False
-    )
+    return ET.tostring(root, encoding="unicode", xml_declaration=True, short_empty_elements=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -256,9 +253,7 @@ def _add_publisher(root: ET.Element, record: DataCiteRecord) -> None:
 
 
 def _add_publication_year(root: ET.Element, record: DataCiteRecord) -> None:
-    ET.SubElement(root, _q(NS_DATACITE, "publicationYear")).text = str(
-        record.publication_year
-    )
+    ET.SubElement(root, _q(NS_DATACITE, "publicationYear")).text = str(record.publication_year)
 
 
 def _add_resource_type(root: ET.Element, record: DataCiteRecord) -> None:
@@ -283,9 +278,9 @@ def _add_dates(root: ET.Element, record: DataCiteRecord) -> None:
         return
     dates = ET.SubElement(root, _q(NS_DATACITE, "dates"))
     for date in record.dates:
-        ET.SubElement(
-            dates, _q(NS_DATACITE, "date"), {"dateType": date.date_type.value}
-        ).text = date.value
+        ET.SubElement(dates, _q(NS_DATACITE, "date"), {"dateType": date.date_type.value}).text = (
+            date.value
+        )
 
 
 def _add_geo_locations(root: ET.Element, record: DataCiteRecord) -> None:

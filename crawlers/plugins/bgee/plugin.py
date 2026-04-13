@@ -35,9 +35,7 @@ class BgeePlugin(CrawlerPlugin[BgeeRawRecord, BgeeCrawlConfig]):
 
     # --- Lifecycle ---
 
-    async def setup(
-        self, ctx: RunContext[BgeeCrawlConfig], stack: AsyncExitStack
-    ) -> None:
+    async def setup(self, ctx: RunContext[BgeeCrawlConfig], stack: AsyncExitStack) -> None:
         """Open a shared `HttpClient` used for crawling and URL validation."""
         http = await stack.enter_async_context(HttpClient.from_config(ctx.config))
         self._api_client = BgeeClient(http)
@@ -57,9 +55,7 @@ class BgeePlugin(CrawlerPlugin[BgeeRawRecord, BgeeCrawlConfig]):
         async for record in self._api_client.iterate_datasets(opts):
             yield record
 
-    async def process(
-        self, raw: BgeeRawRecord, /
-    ) -> Result[OnedataDataset, Any] | None:
+    async def process(self, raw: BgeeRawRecord, /) -> Result[OnedataDataset, Any] | None:
         """Parse a schema.org Dataset node and build an `OnedataDataset`."""
         bgee_dataset = self._parser.parse(raw)
         if bgee_dataset is None:

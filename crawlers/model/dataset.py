@@ -131,16 +131,12 @@ class OnedataDataset:
         if not files:
             return Err(NoFilesFailure(pid=pid))
 
-        duplicates = sorted(
-            p for p, c in Counter(f.path for f in files).items() if c > 1
-        )
+        duplicates = sorted(p for p, c in Counter(f.path for f in files).items() if c > 1)
         if duplicates:
             return Err(DuplicatePathsFailure(pid=pid, paths=tuple(duplicates)))
 
         if http is not None:
-            checks = await asyncio.gather(
-                *(_check_file_registrable(http, f.url) for f in files)
-            )
+            checks = await asyncio.gather(*(_check_file_registrable(http, f.url) for f in files))
             for file, check in zip(files, checks, strict=True):
                 if isinstance(check, Err):
                     return Err(
@@ -167,8 +163,6 @@ class OnedataDataset:
         return asdict(self)
 
 
-async def _check_file_registrable(
-    http: HttpClient, url: str
-) -> Result[None, HttpFailure]:
+async def _check_file_registrable(http: HttpClient, url: str) -> Result[None, HttpFailure]:
     """Onedata's registrability policy: a file URL is OK if HEAD returns 200."""
     return await http.head(url)

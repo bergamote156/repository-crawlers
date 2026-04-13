@@ -86,9 +86,7 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
 
     # --- Lifecycle ---
 
-    async def setup(
-        self, ctx: RunContext[VipCrawlConfig], stack: AsyncExitStack
-    ) -> None:
+    async def setup(self, ctx: RunContext[VipCrawlConfig], stack: AsyncExitStack) -> None:
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = VipClient(http)
@@ -96,9 +94,7 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
 
     # --- Iteration & parse ---
 
-    async def iterate_datasets(
-        self, ctx: RunContext[VipCrawlConfig]
-    ) -> AsyncIterator[JsonObject]:
+    async def iterate_datasets(self, ctx: RunContext[VipCrawlConfig]) -> AsyncIterator[JsonObject]:
         """Yield raw Girder folder dicts (one per top-level dataset)."""
         async for folder in self._api_client.iterate_datasets(
             ctx.config.collection,
@@ -107,9 +103,7 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
         ):
             yield folder
 
-    async def process(
-        self, folder: JsonObject, /
-    ) -> Result[OnedataDataset, Any] | None:
+    async def process(self, folder: JsonObject, /) -> Result[OnedataDataset, Any] | None:
         """Resolve a folder's files and build an `OnedataDataset`."""
         files = await self._api_client.resolve_dataset_files(folder)
 
@@ -131,9 +125,7 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
     # ─────────────────────────────────────────────────────────────────────────────
 
     @command
-    async def list_collections(
-        self, config: VipApiConfig, stack: AsyncExitStack
-    ) -> None:
+    async def list_collections(self, config: VipApiConfig, stack: AsyncExitStack) -> None:
         """List all collections available in the VIP Girder instance."""
         http = await self._open_http(config, stack)
         client = VipClient(http)

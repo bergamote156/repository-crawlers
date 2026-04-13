@@ -181,9 +181,7 @@ def _build(record: OpenAIRERecord) -> str:
     _add_files(root, record)
 
     ET.indent(root, space="  ")
-    return ET.tostring(
-        root, encoding="unicode", xml_declaration=True, short_empty_elements=False
-    )
+    return ET.tostring(root, encoding="unicode", xml_declaration=True, short_empty_elements=False)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -209,9 +207,7 @@ def _add_creator(root: ET.Element, record: OpenAIRERecord) -> None:
     """2. Creator (M)."""
     creators = ET.SubElement(root, _q(NS_DATACITE, "creators"))
     creator = ET.SubElement(creators, _q(NS_DATACITE, "creator"))
-    name = ET.SubElement(
-        creator, _q(NS_DATACITE, "creatorName"), {"nameType": "Organizational"}
-    )
+    name = ET.SubElement(creator, _q(NS_DATACITE, "creatorName"), {"nameType": "Organizational"})
     name.text = record.creator
 
 
@@ -269,9 +265,7 @@ def _add_identifier(root: ET.Element, record: OpenAIRERecord) -> None:
 
 def _add_access_rights(root: ET.Element, record: OpenAIRERecord) -> None:
     """15. Access Rights (M) — COAR Access Rights Vocabulary."""
-    el = ET.SubElement(
-        root, _q(NS_DATACITE, "rights"), {"rightsURI": record.access_rights.uri}
-    )
+    el = ET.SubElement(root, _q(NS_DATACITE, "rights"), {"rightsURI": record.access_rights.uri})
     el.text = record.access_rights.label
 
 

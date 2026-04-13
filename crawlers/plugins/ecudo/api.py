@@ -73,9 +73,7 @@ class EcudoApiClient:
         result = await self._http.get_json_object(url)
         return result.map(_ecudo_page_metadata_ids)
 
-    async def get_dataset_metadata(
-        self, dataset_id: str
-    ) -> Result[JsonObject, HttpFailure]:
+    async def get_dataset_metadata(self, dataset_id: str) -> Result[JsonObject, HttpFailure]:
         """Fetch full JSON-LD metadata for one dataset."""
         return await self._http.get_json_object(f"/metadata/{dataset_id}/json-ld")
 

@@ -66,9 +66,9 @@ def test_mixed_collisions():
 
 
 def test_query_string_stripped():
-    assert resolve_path_collisions(
-        ["https://example.com/path/file.zip?token=abc123"]
-    ) == ["file.zip"]
+    assert resolve_path_collisions(["https://example.com/path/file.zip?token=abc123"]) == [
+        "file.zip"
+    ]
 
 
 def test_root_url_fallback():

@@ -120,9 +120,7 @@ async def run_parallel_crawl[RawT](
                 progress.update(task_id, advance=1)
 
                 if state_callback:
-                    total_done = (
-                        stats.processed + stats.rejected + stats.skipped + stats.failed
-                    )
+                    total_done = stats.processed + stats.rejected + stats.skipped + stats.failed
                     if total_done > 0 and total_done % state_save_interval == 0:
                         await state_callback(stats)
 

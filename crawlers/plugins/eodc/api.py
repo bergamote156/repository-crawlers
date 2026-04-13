@@ -39,9 +39,7 @@ class EODCClient:
     def __init__(self, http: HttpClient):
         self._http = http
 
-    async def iterate_items(
-        self, params: EODCSearchParams
-    ) -> AsyncIterator[JsonObject]:
+    async def iterate_items(self, params: EODCSearchParams) -> AsyncIterator[JsonObject]:
         """
         Iterate over STAC items matching the search criteria.
 

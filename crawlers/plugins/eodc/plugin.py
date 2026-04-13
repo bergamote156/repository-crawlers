@@ -105,9 +105,7 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
 
     # --- Lifecycle ---
 
-    async def setup(
-        self, ctx: RunContext[EODCCrawlConfig], stack: AsyncExitStack
-    ) -> None:
+    async def setup(self, ctx: RunContext[EODCCrawlConfig], stack: AsyncExitStack) -> None:
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = EODCClient(http)
@@ -115,9 +113,7 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
 
     # --- Iteration & parse ---
 
-    async def iterate_datasets(
-        self, ctx: RunContext[EODCCrawlConfig]
-    ) -> AsyncIterator[JsonObject]:
+    async def iterate_datasets(self, ctx: RunContext[EODCCrawlConfig]) -> AsyncIterator[JsonObject]:
         """Yield STAC item dicts from the configured collections."""
         async for item in self._api_client.iterate_items(
             EODCSearchParams(
@@ -150,9 +146,7 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
     # ─────────────────────────────────────────────────────────────────────────────
 
     @command
-    async def list_collections(
-        self, config: EODCApiConfig, stack: AsyncExitStack
-    ) -> None:
+    async def list_collections(self, config: EODCApiConfig, stack: AsyncExitStack) -> None:
         """List all available STAC collections from EODC."""
         http = await self._open_http(config, stack)
         client = EODCClient(http)

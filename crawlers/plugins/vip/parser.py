@@ -60,9 +60,7 @@ class ParsedVipRecord:
     files: list[VipFile]
 
 
-def parse_vip_record(
-    folder: JsonObject, files: Sequence[VipFile]
-) -> ParsedVipRecord | None:
+def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> ParsedVipRecord | None:
     """
     Map a Girder folder dict (with pre-collected files) into a `ParsedVipRecord`.
 
@@ -102,11 +100,7 @@ def parse_vip_record(
         resource_type_general="Dataset",
         resource_type_value=_VIP_RESOURCE_TYPE_VALUE,
         subjects=_subjects_from_meta(meta),
-        dates=(
-            [Date(value=datetime_val, date_type=DateType.UPDATED)]
-            if datetime_val
-            else []
-        ),
+        dates=([Date(value=datetime_val, date_type=DateType.UPDATED)] if datetime_val else []),
         descriptions=([Description(value=description)] if description else []),
         rights_list=[_VIP_RIGHTS],
     )

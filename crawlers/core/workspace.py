@@ -86,6 +86,4 @@ class RunContext[ConfigT]:
             "updated_at": datetime.now(timezone.utc).isoformat(),
             "stats": self._stats,
         }
-        (self.run_dir / "state.json").write_text(
-            json.dumps(data, indent=2, ensure_ascii=False)
-        )
+        (self.run_dir / "state.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))

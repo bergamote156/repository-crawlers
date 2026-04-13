@@ -70,8 +70,7 @@ class VipClient:
                 break
             offset += len(page)
             console.debug(
-                f"Fetched {len(all_collections)} collections so far, "
-                f"fetching next page..."
+                f"Fetched {len(all_collections)} collections so far, " f"fetching next page..."
             )
 
         console.info(f"Found {len(all_collections)} collection(s) total")
@@ -152,8 +151,7 @@ class VipClient:
                         return coll.get("_id")
                 available = [c.get("name", "?") for c in collections]
                 console.error(
-                    f"Collection {name!r} not found. "
-                    f"Available: {', '.join(available)}"
+                    f"Collection {name!r} not found. " f"Available: {', '.join(available)}"
                 )
                 return None
             case Err(value=err):
@@ -177,9 +175,7 @@ class VipClient:
         """Return (nFolders, nItems) for a folder."""
         match await self._http.get_json_object(f"/folder/{folder_id}/details"):
             case Ok(value=data):
-                return int(data.get("nFolders", 0) or 0), int(
-                    data.get("nItems", 0) or 0
-                )
+                return int(data.get("nFolders", 0) or 0), int(data.get("nItems", 0) or 0)
             case Err(value=err):
                 console.warning(f"Failed to get folder details for {folder_id}: {err}")
                 return 0, 0
@@ -202,21 +198,14 @@ class VipClient:
             case Ok(value=data):
                 return _as_girder_object_list(data)
             case Err(value=err):
-                console.warning(
-                    f"Failed to list folders ({parent_type}/{parent_id}): {err}"
-                )
+                console.warning(f"Failed to list folders ({parent_type}/{parent_id}): {err}")
                 return []
             case other:
                 assert_never(other)
 
-    async def _list_items(
-        self, folder_id: str, limit: int, offset: int
-    ) -> list[JsonObject]:
+    async def _list_items(self, folder_id: str, limit: int, offset: int) -> list[JsonObject]:
         """Fetch one page of items (files) inside a folder."""
-        url = (
-            f"/item?limit={limit}&offset={offset}&sort=name&sortdir=1"
-            f"&folderId={folder_id}"
-        )
+        url = f"/item?limit={limit}&offset={offset}&sort=name&sortdir=1" f"&folderId={folder_id}"
         match await self._http.get_json(url):
             case Ok(value=data):
                 return _as_girder_object_list(data)
@@ -242,9 +231,7 @@ class VipClient:
                 for item in items:
                     item_id = str(item.get("_id", "") or "")
                     item_name = str(item.get("name", item_id) or item_id)
-                    file_path = (
-                        f"{path_prefix}/{item_name}" if path_prefix else item_name
-                    )
+                    file_path = f"{path_prefix}/{item_name}" if path_prefix else item_name
                     base = (self._http.base_url or "").rstrip("/")
                     item_url = f"{base}/item/{item_id}/download"
                     files.append(VipFile(path=file_path, url=item_url))
@@ -255,20 +242,14 @@ class VipClient:
         if n_folders > 0:
             offset = 0
             while True:
-                subfolders = await self._list_folders(
-                    "folder", folder_id, page_size, offset
-                )
+                subfolders = await self._list_folders("folder", folder_id, page_size, offset)
                 if not subfolders:
                     break
                 for subfolder in subfolders:
                     sub_id = str(subfolder.get("_id", "") or "")
                     sub_name = str(subfolder.get("name", sub_id) or sub_id)
-                    sub_prefix = (
-                        f"{path_prefix}/{sub_name}" if path_prefix else sub_name
-                    )
-                    files.extend(
-                        await self._collect_files(sub_id, sub_prefix, page_size)
-                    )
+                    sub_prefix = f"{path_prefix}/{sub_name}" if path_prefix else sub_name
+                    files.extend(await self._collect_files(sub_id, sub_prefix, page_size))
                 offset += len(subfolders)
                 if offset >= n_folders:
                     break

@@ -104,9 +104,7 @@ class HttpClient:
                 decision and is logged as a warning on session start.
         """
         if extra_headers and "User-Agent" in extra_headers:
-            raise ValueError(
-                "Set User-Agent via the `user_agent` parameter, not `extra_headers`."
-            )
+            raise ValueError("Set User-Agent via the `user_agent` parameter, not `extra_headers`.")
 
         self.base_url = base_url
         self.timeout = timeout
@@ -191,9 +189,7 @@ class HttpClient:
         """POST `body` as JSON to `url` and return the response parsed as JSON."""
         return await self._request("POST", url, lambda r: r.json(), json=body, **kwargs)
 
-    async def get_json_object(
-        self, url: str, **kwargs
-    ) -> Result[JsonObject, HttpFailure]:
+    async def get_json_object(self, url: str, **kwargs) -> Result[JsonObject, HttpFailure]:
         """GET `url` and return the response body as a JSON object.
 
         Returns `Err(ResponseFailure)` if the response is valid JSON but not
@@ -209,9 +205,7 @@ class HttpClient:
         Returns `Err(ResponseFailure)` if the response is valid JSON but not
         an object (e.g. an array or primitive).
         """
-        return await self._expect_object(
-            "POST", url, await self.post_json(url, body, **kwargs)
-        )
+        return await self._expect_object("POST", url, await self.post_json(url, body, **kwargs))
 
     async def _expect_object(
         self,

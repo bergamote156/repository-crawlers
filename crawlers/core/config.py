@@ -272,18 +272,14 @@ def _unwrap_optional(annotation: type) -> tuple[type, bool]:
     return annotation, False
 
 
-def _build_cli_info(
-    field_name: str, metadata: dict[str, Any], actual_type: type
-) -> CliInfo | None:
+def _build_cli_info(field_name: str, metadata: dict[str, Any], actual_type: type) -> CliInfo | None:
     """Build CliInfo from field metadata, or None if CLI disabled."""
     if metadata.get("cli_disabled"):
         return None
 
     cli_explicit = metadata.get("cli")
     if cli_explicit:
-        names = (
-            (cli_explicit,) if isinstance(cli_explicit, str) else tuple(cli_explicit)
-        )
+        names = (cli_explicit,) if isinstance(cli_explicit, str) else tuple(cli_explicit)
     else:
         # auto-generate: my_field -> --my-field
         names = (f"--{field_name.replace('_', '-')}",)
@@ -309,6 +305,4 @@ def _build_cli_info(
         kwargs["default"] = None
         attr_name = field_name
 
-    return CliInfo(
-        names=names, kwargs=kwargs, is_positional=is_positional, attr_name=attr_name
-    )
+    return CliInfo(names=names, kwargs=kwargs, is_positional=is_positional, attr_name=attr_name)

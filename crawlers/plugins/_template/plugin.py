@@ -97,18 +97,14 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
 
     # --- Lifecycle hooks ---
 
-    async def setup(
-        self, ctx: RunContext[MyCrawlConfig], stack: AsyncExitStack
-    ) -> None:
+    async def setup(self, ctx: RunContext[MyCrawlConfig], stack: AsyncExitStack) -> None:
         """Open HTTP clients. Store on `self`; register on `stack` for cleanup."""
         self._http = await stack.enter_async_context(HttpClient.from_config(ctx.config))
         self._validation_http = None if ctx.config.no_url_validation else self._http
 
     # --- Core contract ---
 
-    async def iterate_datasets(
-        self, ctx: RunContext[MyCrawlConfig]
-    ) -> AsyncIterator[dict]:
+    async def iterate_datasets(self, ctx: RunContext[MyCrawlConfig]) -> AsyncIterator[dict]:
         """
         Yield raw items from the upstream API.
 
@@ -159,9 +155,7 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
         metadata = DataCiteRecord(
             identifier=pid,
             identifier_type=IdentifierType.URL,
-            creators=[
-                Creator(name="Example creator", name_type=NameType.ORGANIZATIONAL)
-            ],
+            creators=[Creator(name="Example creator", name_type=NameType.ORGANIZATIONAL)],
             title=title,
             publisher="Example publisher",
             publication_year=2026,
@@ -169,10 +163,7 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
             resource_type_value="Research data",
         )
 
-        files = [
-            OnedataFile(path=f["name"], url=f["download_url"])
-            for f in raw.get("files", [])
-        ]
+        files = [OnedataFile(path=f["name"], url=f["download_url"]) for f in raw.get("files", [])]
 
         return await OnedataDataset.build(
             pid=pid,
@@ -186,9 +177,7 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
     # --- Optional: extra commands ---
 
     @command
-    async def list_collections(
-        self, config: MyApiConfig, stack: AsyncExitStack
-    ) -> None:
+    async def list_collections(self, config: MyApiConfig, stack: AsyncExitStack) -> None:
         """List available collections."""
         http = await stack.enter_async_context(HttpClient.from_config(config))
         result = await http.get_json_object("/collections")

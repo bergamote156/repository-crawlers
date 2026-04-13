@@ -71,9 +71,7 @@ class OneproviderClient:
                     f"{json.dumps(error_body, indent=2)}"
                 )
             except json.JSONDecodeError:
-                output.error(
-                    f"Oneprovider API Error ({response.status_code}): {response.text}"
-                )
+                output.error(f"Oneprovider API Error ({response.status_code}): {response.text}")
             response.raise_for_status()
 
     # -------------------------------------------------------------------------

@@ -59,16 +59,12 @@ class BgeeClient:  # pylint: disable=too-few-public-methods
     def __init__(self, http: HttpClient):
         self._http = http
 
-    async def iterate_datasets(
-        self, opts: BgeeIteratorOpts
-    ) -> AsyncIterator[BgeeRawRecord]:
+    async def iterate_datasets(self, opts: BgeeIteratorOpts) -> AsyncIterator[BgeeRawRecord]:
         """Fetch start URL, discover species page links, yield `BgeeRawRecord` per dataset."""
         yielded = 0
         start_result = await self._http.get_text(opts.start_url)
         if isinstance(start_result, Err):
-            console.error(
-                f"Failed to fetch start URL {opts.start_url}: {start_result.value}"
-            )
+            console.error(f"Failed to fetch start URL {opts.start_url}: {start_result.value}")
             return
         _, discover_urls = self._parse_page(start_result.value, opts.start_url)
         console.info(f"Found {len(discover_urls)} pages to crawl")
@@ -88,9 +84,7 @@ class BgeeClient:  # pylint: disable=too-few-public-methods
                     return
         console.info(f"Total datasets extracted: {yielded}")
 
-    def _parse_page(
-        self, html: str, page_url: str
-    ) -> tuple[list[BgeeRawRecord], list[str]]:
+    def _parse_page(self, html: str, page_url: str) -> tuple[list[BgeeRawRecord], list[str]]:
         """Load JSON-LD into one rdflib Dataset; return records and discover URLs."""
         soup = BeautifulSoup(html, "html.parser")
         discover_urls = [
@@ -206,10 +200,7 @@ class BgeeParser:
                 if not url or url in seen_urls:
                     continue
                 seen_urls.add(url)
-                name = (
-                    _val(g, dist, "name")
-                    or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
-                )
+                name = _val(g, dist, "name") or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
                 files.append(BgeeFile(path=name, url=url))
         return files
 

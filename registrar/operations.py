@@ -74,9 +74,7 @@ def load_cache(
                 storage_id=space_storage_id,
                 details=details,
             )
-            output.debug(
-                f"Cached space: {space_name} ({space_id}) with storage {space_storage_id}"
-            )
+            output.debug(f"Cached space: {space_name} ({space_id}) with storage {space_storage_id}")
 
     output.info(f"Cached {len(cache.spaces)} spaces with HTTP readonly storages")
 
@@ -125,9 +123,7 @@ def ensure_space_and_storage(
     support_token = onezone.create_support_token(space_id)
 
     # Support the space with storage
-    onepanel.support_space(
-        storage_id=storage_id, support_token=support_token, size=default_size
-    )
+    onepanel.support_space(storage_id=storage_id, support_token=support_token, size=default_size)
 
     # Get space details and add to cache
     space_details = onepanel.get_space_details(space_id)

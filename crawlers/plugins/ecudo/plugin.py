@@ -78,9 +78,7 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
 
     # --- Lifecycle ---
 
-    async def setup(
-        self, ctx: RunContext[EcudoCrawlConfig], stack: AsyncExitStack
-    ) -> None:
+    async def setup(self, ctx: RunContext[EcudoCrawlConfig], stack: AsyncExitStack) -> None:
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = EcudoApiClient(http)
@@ -107,9 +105,7 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
 
     # --- Iteration & parse ---
 
-    async def iterate_datasets(
-        self, ctx: RunContext[EcudoCrawlConfig]
-    ) -> AsyncIterator[str]:
+    async def iterate_datasets(self, ctx: RunContext[EcudoCrawlConfig]) -> AsyncIterator[str]:
         """Yield dataset IDs to feed the worker pool."""
         async for dataset_id in self._api_client.iterate_dataset_ids(
             ctx.config.organization,
@@ -142,9 +138,7 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
     # ─────────────────────────────────────────────────────────────────────────────
 
     @command(name="list-orgs")
-    async def list_organizations(
-        self, config: EcudoApiConfig, stack: AsyncExitStack
-    ) -> None:
+    async def list_organizations(self, config: EcudoApiConfig, stack: AsyncExitStack) -> None:
         """List all available organizations from Ecudo."""
         http = await self._open_http(config, stack)
         api_client = EcudoApiClient(http)

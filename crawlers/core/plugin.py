@@ -426,29 +426,19 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
     def _print_banner(self, ctx: RunContext[ConfigT]) -> None:
         title = type(self).__name__
         subtitle = self.run_context_name(ctx.config)
-        content = (
-            f"[header]{title}[/]\n"
-            f"[muted]{subtitle}[/]\n"
-            f"[muted]Run: {ctx.run_dir}[/]"
-        )
+        content = f"[header]{title}[/]\n" f"[muted]{subtitle}[/]\n" f"[muted]Run: {ctx.run_dir}[/]"
         console.print(Panel(content, expand=False, border_style="cyan"))
         console.newline()
         console.debug(pformat(ctx.config))
 
-    def _print_summary(
-        self, status: str, stats: CrawlStats, ctx: RunContext[ConfigT]
-    ) -> None:
+    def _print_summary(self, status: str, stats: CrawlStats, ctx: RunContext[ConfigT]) -> None:
         setup_failed = status == "failed" and stats.queued == 0
 
         console.newline()
         if status == "interrupted":
-            console.print(
-                Panel("[warning]:warning: Crawl Interrupted[/]", border_style="yellow")
-            )
+            console.print(Panel("[warning]:warning: Crawl Interrupted[/]", border_style="yellow"))
         elif status == "failed":
-            console.print(
-                Panel("[error]:cross_mark: Crawl Failed[/]", border_style="red")
-            )
+            console.print(Panel("[error]:cross_mark: Crawl Failed[/]", border_style="red"))
         else:
             console.print(
                 Panel(
@@ -509,9 +499,7 @@ def _coerce(value: Any, target_type: type) -> Any:
     return value
 
 
-def _build_next_steps(
-    status: str, stats: CrawlStats, ctx: RunContext[Any]
-) -> list[str]:
+def _build_next_steps(status: str, stats: CrawlStats, ctx: RunContext[Any]) -> list[str]:
     """Produce next-step suggestions tailored to the run outcome."""
     steps: list[str] = []
 
