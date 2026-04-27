@@ -9,22 +9,22 @@ audience: internal-developer-onboarding
 generated: 2026-04-01
 last_reviewed: 2026-04-10
 source_modules:
-  - crawlers/core/plugin.py
-  - crawlers/core/http.py
-  - crawlers/core/runner.py
-  - crawlers/core/workspace.py
-  - crawlers/core/crawl_config.py
-  - crawlers/model/dataset.py
-  - crawlers/cli.py
-  - crawlers/plugins/__init__.py
+  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/runner.py
+  - apps/crawlers/src/crawlers/core/workspace.py
+  - apps/crawlers/src/crawlers/core/crawl_config.py
+  - apps/crawlers/src/crawlers/model/dataset.py
+  - apps/crawlers/src/crawlers/cli.py
+  - apps/crawlers/src/crawlers/plugins/__init__.py
 source_commits:
-  public-data-crawlers: cff14ee
+  repository-crawlers: cff14ee
 status: draft
 ---
 
 # Plugin System
 
-<sub>📄 `crawlers/core/plugin.py:128-269`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:128-269`</sub>
 
 A plugin is a self-contained crawler for one external data source.
 [**CrawlerPlugin**](#crawlerplugin) is the single base class that
@@ -89,7 +89,7 @@ guide.
 
 ## CrawlerPlugin
 
-<sub>📄 `crawlers/core/plugin.py:128-269`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:128-269`</sub>
 
 `CrawlerPlugin[RawT, ConfigT]` is the abstract base for all
 plugins. The two type parameters define the plugin's data flow:
@@ -108,7 +108,7 @@ auto-registered when `name` is a string — no decorator needed.
 
 ### Command Registration
 
-<sub>📄 `crawlers/core/plugin.py:36-90`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:36-90`</sub>
 
 Commands are declared with the `@command` decorator on async
 methods:
@@ -133,7 +133,7 @@ parent class is available in all subclasses unless overridden.
 
 ### CLI Generation and Dispatch
 
-<sub>📄 `crawlers/core/plugin.py:177-235`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:177-235`</sub>
 
 From the collected commands, `register_args(parser)` builds the
 full argparse structure — a global `-c / --config` option, a
@@ -187,7 +187,7 @@ plugin-specific fields at the top, shared framework fields below.
 
 ## HttpClient
 
-<sub>📄 `crawlers/core/http.py:66-314`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/http.py:66-314`</sub>
 
 Both `iterate_datasets()` and `process()` typically need to make
 HTTP calls — for API pagination, detail fetches, or URL validation.
@@ -231,7 +231,7 @@ The client offers typed convenience methods — all returning
 
 ### Error Types
 
-<sub>📄 `crawlers/core/http.py:29-63`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/http.py:29-63`</sub>
 
 Non-200 responses produce `ResponseFailure` (with status code,
 method, URL, and truncated body). Network/timeout errors after
@@ -247,7 +247,7 @@ pagination links that may point to a different host.
 
 ## Iteration and Processing
 
-<sub>📄 `crawlers/core/plugin.py:253-269`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:253-269`</sub>
 
 Once the CLI dispatches a crawl command and config is loaded, the
 framework calls the plugin's two core methods — the only abstract
@@ -291,7 +291,7 @@ state.
 
 ## OnedataDataset Assembly
 
-<sub>📄 `crawlers/model/dataset.py:91-163`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/model/dataset.py:91-163`</sub>
 
 Inside `process()`, after parsing raw data and constructing a
 [metadata record](metadata.md), the plugin calls
@@ -374,7 +374,7 @@ async def process(self, raw: dict, /) -> Result[OnedataDataset, Any] | None:
 
 ## Crawl Lifecycle
 
-<sub>📄 `crawlers/core/plugin.py:277-322`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:277-322`</sub>
 
 The sections above describe what a plugin provides — now here's the
 full sequence of how the framework orchestrates a crawl from start
@@ -445,7 +445,7 @@ outcome.
 
 ## Parallel Execution
 
-<sub>📄 `crawlers/core/runner.py:52-140`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/runner.py:52-140`</sub>
 
 Step 5 of the lifecycle above — `run_parallel_crawl()` — is where
 the actual dataset processing happens. It drives the crawl with a
@@ -508,7 +508,7 @@ preventing unbounded memory growth against a fast API.
 
 ### CrawlStats
 
-<sub>📄 `crawlers/core/runner.py:33-48`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/runner.py:33-48`</sub>
 
 The runner tracks five counters: `queued`, `processed`, `rejected`,
 `skipped`, and `failed`. These feed both the periodic state
@@ -517,7 +517,7 @@ persistence and the post-crawl summary display.
 
 ## Workspace and Run Management
 
-<sub>📄 `crawlers/core/workspace.py:22-91`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/workspace.py:22-91`</sub>
 
 All the output from parallel execution — processed datasets,
 rejected items, crawl statistics — lands in a **run directory**
@@ -545,7 +545,7 @@ with a fixed structure, managed by
 
 ## Display
 
-<sub>📄 `crawlers/core/plugin.py:426-484`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:426-484`</sub>
 
 After the crawl completes, `CrawlerPlugin` uses Rich to present
 a summary automatically — no plugin code needed. The output has
@@ -562,13 +562,13 @@ three phases:
 
 ## Plugin Registry
 
-<sub>📄 `crawlers/plugins/__init__.py:1-25` · `crawlers/cli.py:52-68`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/plugins/__init__.py:1-25` · `apps/crawlers/src/crawlers/cli.py:52-68`</sub>
 
 The [CLI generation](#cli-generation-and-dispatch) section above
 showed how a single plugin's commands become argparse subcommands —
 but how does the CLI discover plugins in the first place? Plugins
 are registered as a hardcoded list in
-`crawlers/plugins/__init__.py`. The CLI entry point iterates this
+`apps/crawlers/src/crawlers/plugins/__init__.py`. The CLI entry point iterates this
 list, creates an argparse subparser per plugin (using
 `plugin.name`), and calls `plugin.register_args()`. At runtime,
 the selected plugin's `run()` method is invoked via

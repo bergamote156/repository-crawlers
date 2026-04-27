@@ -1,4 +1,4 @@
-# Public Data Crawlers
+# Repository Crawlers
 
 Tools for automatic discovery and registration of public scientific datasets in
 [Onedata](https://onedata.org/).
@@ -22,9 +22,11 @@ graph LR
 Requires [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv sync              # install all dependencies
-uv sync --all-extras # include optional plugin dependencies (e.g. rdflib for bgee)
+make sync
 ```
+
+This installs all workspace packages, development tools, and optional plugin
+dependencies.
 
 ## Crawlers
 
@@ -84,7 +86,7 @@ uv run crawlers bgee crawl --base-url https://bgee.org/search/species -n 200
 
 ```bash
 uv run crawlers vip list-collections
-uv run crawlers vip crawl <collection>
+uv run crawlers vip crawl COLLECTION_NAME
 ```
 
 ### Configuration
@@ -191,6 +193,7 @@ framework design, data flow, and key decisions.
 ### Linting and Tests
 
 ```bash
+make sync     # install workspace packages and development dependencies
 make format   # auto-format with black + isort
 make lint     # black check + pylint + mypy
 make test     # run pytest

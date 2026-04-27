@@ -10,19 +10,19 @@ audience: internal-developer-onboarding
 generated: 2026-04-01
 last_reviewed: 2026-04-10
 source_modules:
-  - crawlers/core/plugin.py
-  - crawlers/core/http.py
-  - crawlers/core/runner.py
-  - crawlers/core/result.py
-  - crawlers/core/config.py
-  - crawlers/core/workspace.py
-  - crawlers/core/jsonl.py
-  - crawlers/model/dataset.py
-  - crawlers/model/metadata.py
-  - crawlers/metadata/datacite.py
-  - crawlers/metadata/openaire.py
+  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/runner.py
+  - apps/crawlers/src/crawlers/core/result.py
+  - apps/crawlers/src/crawlers/core/config.py
+  - apps/crawlers/src/crawlers/core/workspace.py
+  - apps/crawlers/src/crawlers/core/jsonl.py
+  - apps/crawlers/src/crawlers/model/dataset.py
+  - apps/crawlers/src/crawlers/model/metadata.py
+  - apps/crawlers/src/crawlers/metadata/datacite.py
+  - apps/crawlers/src/crawlers/metadata/openaire.py
 source_commits:
-  public-data-crawlers: cff14ee
+  repository-crawlers: cff14ee
 status: draft
 ---
 
@@ -67,18 +67,18 @@ graph TB
 
 The design separates concerns by rate of change:
 
-- **Core** (`crawlers/core/`) defines the stable vocabulary — the
+- **Core** (`apps/crawlers/src/crawlers/core/`) defines the stable vocabulary — the
   [plugin base class](plugin-system.md#crawlerplugin), HTTP client,
   Result type, [configuration system](configuration.md), and
   workspace runtime. These contracts rarely change.
 
-- **Metadata** (`crawlers/metadata/`) provides
+- **Metadata** (`apps/crawlers/src/crawlers/metadata/`) provides
   [DataCiteRecord and OpenAIRERecord](metadata.md) — structured
   records that produce standards-compliant XML via `to_xml()`.
   These evolve independently of plugins when metadata standards
   change.
 
-- **Plugins** (`crawlers/plugins/`) contain only the
+- **Plugins** (`apps/crawlers/src/crawlers/plugins/`) contain only the
   source-specific logic: an API client facade, a parser, a config,
   and a plugin class that wires them together.
 

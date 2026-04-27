@@ -10,20 +10,20 @@ audience: internal-developer-onboarding
 generated: 2026-04-01
 last_reviewed: 2026-04-10
 source_modules:
-  - crawlers/model/metadata.py
-  - crawlers/model/dataset.py
-  - crawlers/metadata/datacite.py
-  - crawlers/metadata/openaire.py
-  - crawlers/plugins/ecudo/parser.py
-  - crawlers/plugins/eodc/parser.py
+  - apps/crawlers/src/crawlers/model/metadata.py
+  - apps/crawlers/src/crawlers/model/dataset.py
+  - apps/crawlers/src/crawlers/metadata/datacite.py
+  - apps/crawlers/src/crawlers/metadata/openaire.py
+  - apps/crawlers/src/crawlers/plugins/ecudo/parser.py
+  - apps/crawlers/src/crawlers/plugins/eodc/parser.py
 source_commits:
-  public-data-crawlers: cff14ee
+  repository-crawlers: cff14ee
 status: draft
 ---
 
 # Metadata Generation
 
-<sub>📄 `crawlers/model/metadata.py:1-15`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/model/metadata.py:1-15`</sub>
 
 Crawled datasets need standards-compliant XML metadata embedded in
 their output records — Onedata uses this for discovery and
@@ -73,7 +73,7 @@ references to parser state.
 
 ## MetadataRecord Protocol
 
-<sub>📄 `crawlers/model/metadata.py:11-15`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/model/metadata.py:11-15`</sub>
 
 ```python
 class MetadataRecord(Protocol):
@@ -88,7 +88,7 @@ with `to_xml()` — no base class to extend.
 
 ## DataCiteRecord
 
-<sub>📄 `crawlers/metadata/datacite.py:153-184`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/datacite.py:153-184`</sub>
 
 Generates XML compliant with
 [DataCite Metadata Schema 4.5](https://schema.datacite.org/meta/kernel-4.5/).
@@ -191,7 +191,7 @@ fields are not emitted.
 
 ### Sections
 
-<sub>📄 `crawlers/metadata/datacite.py:192-346`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/datacite.py:192-346`</sub>
 
 DataCite Kernel 4.5 defines mandatory (M) and recommended (R)
 properties. The record supports:
@@ -214,7 +214,7 @@ properties. The record supports:
 
 ### Usage Pattern
 
-<sub>📄 `crawlers/plugins/eodc/parser.py:118-143`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/plugins/eodc/parser.py:118-143`</sub>
 
 Plugins construct a `DataCiteRecord` directly in their parser,
 populating fields from the raw API data. EODC's parser shows the
@@ -241,7 +241,7 @@ metadata = DataCiteRecord(
 
 ## OpenAIRERecord
 
-<sub>📄 `crawlers/metadata/openaire.py:121-153`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/openaire.py:121-153`</sub>
 
 Generates XML compliant with
 [OpenAIRE Guidelines v4.0](https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/).
@@ -313,7 +313,7 @@ URIs.
 
 ### Sections
 
-<sub>📄 `crawlers/metadata/openaire.py:160-319`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/openaire.py:160-319`</sub>
 
 | Section | Status | Populated from |
 |---------|--------|----------------|
@@ -336,7 +336,7 @@ O = Optional)
 
 ### Usage Pattern
 
-<sub>📄 `crawlers/plugins/ecudo/parser.py:117-133`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/plugins/ecudo/parser.py:117-133`</sub>
 
 Ecudo's parser constructs an `OpenAIRERecord` from JSON-LD fields,
 mapping eCUDO-specific conventions (access levels, spatial strings)

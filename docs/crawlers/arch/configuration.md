@@ -10,19 +10,19 @@ audience: internal-developer-onboarding
 generated: 2026-04-01
 last_reviewed: 2026-04-10
 source_modules:
-  - crawlers/core/config.py
-  - crawlers/core/plugin.py
-  - crawlers/core/crawl_config.py
-  - crawlers/plugins/ecudo/plugin.py
-  - crawlers/plugins/eodc/plugin.py
+  - apps/crawlers/src/crawlers/core/config.py
+  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/crawl_config.py
+  - apps/crawlers/src/crawlers/plugins/ecudo/plugin.py
+  - apps/crawlers/src/crawlers/plugins/eodc/plugin.py
 source_commits:
-  public-data-crawlers: cff14ee
+  repository-crawlers: cff14ee
 status: draft
 ---
 
 # Configuration System
 
-<sub>📄 `crawlers/core/plugin.py:326-412`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:326-412`</sub>
 
 Declare a config field once — as an annotated dataclass field with
 `opt()` — and the framework gives you CLI argument parsing, YAML
@@ -73,7 +73,7 @@ graph TB
 
 ## ConfigBase and opt()
 
-<sub>📄 `crawlers/core/config.py:21-52`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:21-52`</sub>
 
 Every config class inherits from
 [**ConfigBase**](glossary.md#configbase). The base class intercepts
@@ -81,7 +81,7 @@ subclass creation via `__init_subclass__`: it applies `@dataclass`
 and builds a `ConfigSchema` automatically. You never call
 `@dataclass` yourself.
 
-<sub>📄 `crawlers/core/config.py:54-111`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:54-111`</sub>
 
 Fields use `opt()` instead of `dataclasses.field()` to attach
 metadata describing how each value can be provided:
@@ -107,7 +107,7 @@ class HttpConfig(ConfigBase):
 
 ### Field Type Handling
 
-<sub>📄 `crawlers/core/config.py:261-273` · `crawlers/core/config.py:275-314`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:261-273` · `apps/crawlers/src/crawlers/core/config.py:275-314`</sub>
 
 The schema builder inspects field type annotations to configure
 argparse correctly:
@@ -123,7 +123,7 @@ argparse correctly:
 
 ### Positional Arguments
 
-<sub>📄 `crawlers/core/config.py:291-305`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:291-305`</sub>
 
 To create a positional CLI argument (like `organization` in Ecudo),
 set `cli` to a bare name without dashes:
@@ -141,14 +141,14 @@ registers it as a positional argument.
 
 ## Resolution Priority
 
-<sub>📄 `crawlers/core/plugin.py:388-412`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:388-412`</sub>
 
 The diagram above shows the full resolution chain. Here's how
 each source works in practice.
 
 ### How YAML Lookup Works
 
-<sub>📄 `crawlers/core/plugin.py:326-344`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:326-344`</sub>
 
 Given a config file loaded via `-c config.yaml`, the framework reads
 three sections and checks each field's `yaml_key` against them in
@@ -182,7 +182,7 @@ For the `page_size` field:
 
 ### Environment Variables
 
-<sub>📄 `crawlers/core/config.py:239-242`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:239-242`</sub>
 
 Every field gets an env var named `CRAWLER_<SUFFIX>` where `SUFFIX`
 defaults to the uppercase field name. You can override the suffix
@@ -193,7 +193,7 @@ a fallback for values not provided via CLI or config file.
 
 ## Config Inheritance
 
-<sub>📄 `crawlers/core/crawl_config.py:16-68`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/crawl_config.py:16-68`</sub>
 
 Config classes compose via multiple inheritance, which maps cleanly
 to argparse argument groups in `--help` output:
@@ -280,7 +280,7 @@ are too detailed for CLI flags but useful in config files.
 
 ## Schema Internals (Framework Maintainers)
 
-<sub>📄 `crawlers/core/config.py:116-165`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:116-165`</sub>
 
 > The following section is relevant if you're modifying the config
 > framework itself. Skip if you're writing plugins.
@@ -332,7 +332,7 @@ classDiagram
     style CliInfo fill:#FFE4B5,stroke:#E8890C,color:#000
 ```
 
-<sub>📄 `crawlers/core/config.py:170-258`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/config.py:170-258`</sub>
 
 Each field becomes a `ConfigFieldInfo` with:
 
@@ -344,7 +344,7 @@ Each field becomes a `ConfigFieldInfo` with:
 - **`nested_schema`** — recursive `ConfigSchema` for nested
   dataclass fields.
 
-<sub>📄 `crawlers/core/plugin.py:177-218`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:177-218`</sub>
 
 The `CrawlerPlugin.register_args()` method iterates schema groups
 and adds argparse arguments. The `_load_config()` method iterates

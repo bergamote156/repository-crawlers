@@ -316,7 +316,7 @@ async def _noop() -> None:
 def _default_user_agent() -> str:
     """Build the default `OnedataCrawler/<version>` UA string."""
     try:
-        ver = version("public-data-crawlers")
+        ver = version("repository-crawlers")
     except PackageNotFoundError:
         ver = "dev"
     return f"OnedataCrawler/{ver} (+https://onedata.org; mailto:info@onedata.org)"

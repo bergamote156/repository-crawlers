@@ -1,7 +1,7 @@
 """
 Example Plugin — minimal skeleton for a new crawler plugin.
 
-Copy this directory to `crawlers/plugins/<yourname>/` and adapt
+Copy this directory to `apps/crawlers/src/crawlers/plugins/<yourname>/` and adapt
 the placeholders.  The framework needs three things from you:
 
 1. **iterate_datasets** — yield raw items from the upstream API

@@ -9,18 +9,18 @@ audience: internal-developer-onboarding
 generated: 2026-04-01
 last_reviewed: 2026-04-10
 source_modules:
-  - crawlers/core/config.py
-  - crawlers/core/plugin.py
-  - crawlers/core/http.py
-  - crawlers/core/result.py
-  - crawlers/core/runner.py
-  - crawlers/core/workspace.py
-  - crawlers/model/metadata.py
-  - crawlers/model/dataset.py
-  - crawlers/metadata/datacite.py
-  - crawlers/metadata/openaire.py
+  - apps/crawlers/src/crawlers/core/config.py
+  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/result.py
+  - apps/crawlers/src/crawlers/core/runner.py
+  - apps/crawlers/src/crawlers/core/workspace.py
+  - apps/crawlers/src/crawlers/model/metadata.py
+  - apps/crawlers/src/crawlers/model/dataset.py
+  - apps/crawlers/src/crawlers/metadata/datacite.py
+  - apps/crawlers/src/crawlers/metadata/openaire.py
 source_commits:
-  public-data-crawlers: cff14ee
+  repository-crawlers: cff14ee
 status: draft
 ---
 

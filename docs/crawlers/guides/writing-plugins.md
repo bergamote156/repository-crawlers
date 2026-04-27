@@ -8,14 +8,14 @@ audience: external-plugin-author
 generated: 2026-04-01
 last_reviewed: 2026-04-09
 source_modules:
-  - crawlers/core/plugin.py
-  - crawlers/core/config.py
-  - crawlers/core/crawl_config.py
-  - crawlers/core/http.py
-  - crawlers/plugins/ecudo/plugin.py
-  - crawlers/plugins/eodc/plugin.py
-  - crawlers/plugins/_template/plugin.py
-  - crawlers/plugins/__init__.py
+  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/config.py
+  - apps/crawlers/src/crawlers/core/crawl_config.py
+  - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/plugins/ecudo/plugin.py
+  - apps/crawlers/src/crawlers/plugins/eodc/plugin.py
+  - apps/crawlers/src/crawlers/plugins/_template/plugin.py
+  - apps/crawlers/src/crawlers/plugins/__init__.py
 status: draft
 ---
 
@@ -25,7 +25,7 @@ By the end of this guide you'll have a working crawler runnable as
 `crawlers myapi crawl <collection>`.
 
 > A complete, copy-pasteable skeleton lives in
-> `crawlers/plugins/_template/plugin.py`.
+> `apps/crawlers/src/crawlers/plugins/_template/plugin.py`.
 
 ## What you need to implement
 
@@ -44,7 +44,7 @@ persistence, progress display, run directories, state management.
 ## Plugin directory structure
 
 ```
-crawlers/plugins/myapi/
+apps/crawlers/src/crawlers/plugins/myapi/
   __init__.py      # empty
   plugin.py        # plugin class + config
   api.py           # (optional) API client facade
@@ -161,7 +161,7 @@ any of these: `@command(name="ls", help="...")`.
 
 ## Step 5: Register the plugin
 
-Add your plugin to `crawlers/plugins/__init__.py`:
+Add your plugin to `apps/crawlers/src/crawlers/plugins/__init__.py`:
 
 ```python
 from crawlers.plugins.myapi.plugin import MyPlugin
