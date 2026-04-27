@@ -1,0 +1,29 @@
+[project]
+name = "repository-crawlers"
+version = "0.1.0"
+description = "CLI for discovering public scientific datasets."
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.8",
+    "PyYAML>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+bgee = [
+    "rdflib>=7.6",
+    "beautifulsoup4>=4.14",
+]
+all-plugins = [
+    "repository-crawlers[bgee]",
+]
+
+[project.scripts]
+crawlers = "crawlers.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crawlers"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

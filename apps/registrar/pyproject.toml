@@ -1,0 +1,21 @@
+[project]
+name = "repository-registrar"
+version = "0.1.0"
+description = "CLI for registering processed datasets in Onedata."
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.0",
+    "PyYAML>=6.0",
+    "requests>=2.31",
+    "urllib3>=2.0",
+]
+
+[project.scripts]
+registrar = "registrar.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/registrar"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

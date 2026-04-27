@@ -4,6 +4,9 @@ __pycache__
 .coverage
 .local/
 .cache/
+.venv/
 
 .cursor/
 data/
+
+*.iml

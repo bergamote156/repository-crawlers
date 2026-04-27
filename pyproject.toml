@@ -1,0 +1,72 @@
+[project]
+name = "repository-crawlers-workspace"
+version = "0.1.0"
+description = "Tools for discovery and registration of public scientific datasets in Onedata"
+requires-python = ">=3.12"
+dependencies = [
+    "repository-crawlers[all-plugins]",
+    "repository-registrar",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+repository-crawlers = { workspace = true }
+repository-registrar = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    "apps/crawlers",
+    "apps/registrar",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.15.12",
+    "types-PyYAML",
+    "types-requests",
+]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool configuration
+# ─────────────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = [
+    "apps/crawlers/src",
+    "apps/crawlers/tests",
+    "apps/registrar/src",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "PL",   # pylint-inspired rules
+]
+ignore = [
+    "FIX002",  # TODO comments are allowed in this codebase
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.mypy]
+python_version = "3.12"
