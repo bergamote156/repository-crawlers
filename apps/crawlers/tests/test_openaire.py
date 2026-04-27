@@ -1,14 +1,21 @@
 """Tests for the OpenAIRE metadata builder."""
 
+import xml.etree.ElementTree as ET
+
 import pytest
 
 from crawlers.metadata.openaire import (
+    NS_DATACITE,
     AccessRights,
     BoundingBox,
     FileLocation,
     OpenAIRERecord,
     ResourceType,
 )
+
+
+def _q(tag: str) -> str:
+    return f"{{{NS_DATACITE}}}{tag}"
 
 
 @pytest.fixture
@@ -41,13 +48,17 @@ class TestOpenAIREBuilder:
 
     def test_contains_title(self, sample_record):
         result = sample_record.to_xml()
+        root = ET.fromstring(result)
         assert "Test Ocean Dataset" in result
-        assert "datacite:title" in result
+        assert root.find(f".//{_q('title')}").text == "Test Ocean Dataset"
 
     def test_contains_identifier(self, sample_record):
         result = sample_record.to_xml()
+        root = ET.fromstring(result)
         assert "urn:SDN:CDI:iopan.pl:uuid:test-123" in result
-        assert "datacite:identifier" in result
+        identifier = root.find(f".//{_q('identifier')}")
+        assert identifier is not None
+        assert identifier.text == "urn:SDN:CDI:iopan.pl:uuid:test-123"
 
     def test_contains_publisher(self, sample_record):
         result = sample_record.to_xml()
@@ -61,8 +72,9 @@ class TestOpenAIREBuilder:
 
     def test_contains_subjects(self, sample_record):
         result = sample_record.to_xml()
-        for keyword in ("ocean", "temperature", "salinity"):
-            assert f"<datacite:subject>{keyword}</datacite:subject>" in result
+        root = ET.fromstring(result)
+        subjects = [el.text for el in root.findall(f".//{_q('subject')}")]
+        assert subjects == ["ocean", "temperature", "salinity"]
 
     def test_contains_file_location(self, sample_record):
         result = sample_record.to_xml()
@@ -72,9 +84,11 @@ class TestOpenAIREBuilder:
 
     def test_contains_geo_location(self, sample_record):
         result = sample_record.to_xml()
-        assert "datacite:geoLocationBox" in result
-        assert "<datacite:westBoundLongitude>18.0</datacite:westBoundLongitude>" in result
-        assert "<datacite:northBoundLatitude>55.0</datacite:northBoundLatitude>" in result
+        root = ET.fromstring(result)
+        box = root.find(f".//{_q('geoLocationBox')}")
+        assert box is not None
+        assert box.find(_q("westBoundLongitude")).text == "18.0"
+        assert box.find(_q("northBoundLatitude")).text == "55.0"
 
     def test_contains_temporal_coverage(self, sample_record):
         result = sample_record.to_xml()
@@ -117,5 +131,5 @@ class TestOpenAIREBuilder:
         assert "dc:language" not in result
         assert "dc:coverage" not in result
         assert "geoLocations" not in result
-        assert "datacite:subjects" not in result
+        assert ET.fromstring(result).find(f".//{_q('subjects')}") is None
         assert "oaire:file" not in result
