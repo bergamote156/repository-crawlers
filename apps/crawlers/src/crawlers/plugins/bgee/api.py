@@ -5,7 +5,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -50,7 +50,7 @@ _BGEE_RIGHTS = Rights(text="CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
 _BGEE_RESOURCE_TYPE_VALUE = "Gene expression data"
 
 
-class BgeeClient:  # pylint: disable=too-few-public-methods
+class BgeeClient:
     """
     Stateless façade over `HttpClient` that crawls Bgee species pages
     and extracts schema.org JSON-LD Dataset records.
@@ -104,7 +104,7 @@ class BgeeClient:  # pylint: disable=too-few-public-methods
             raw_parts.append(raw_json)
             try:
                 g.parse(data=raw_json, format="json-ld")
-            except Exception as e:  # pylint: disable=broad-except
+            except Exception as e:
                 console.warning(f"Failed to parse JSON-LD on {page_url}: {e}")
 
         records = [
@@ -114,11 +114,9 @@ class BgeeClient:  # pylint: disable=too-few-public-methods
         return records, discover_urls
 
 
-# pylint: disable=too-few-public-methods
 class BgeeParser:
     """Converts a `BgeeRawRecord` (rdflib graph + node) into a `BgeeDataset`."""
 
-    # pylint: disable=too-many-locals
     def parse(self, raw: BgeeRawRecord) -> BgeeDataset | None:  # noqa: A002
         """Parse `schema:Dataset` record from rdflib graph."""
         g = raw.graph

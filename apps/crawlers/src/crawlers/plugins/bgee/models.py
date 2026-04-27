@@ -1,14 +1,12 @@
 """Bgee Data Models."""
 
-# pylint: disable=too-few-public-methods
-
 __author__ = "Vincent Emonet"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 from rdflib import Dataset
 from rdflib.term import Node

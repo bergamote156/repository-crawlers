@@ -66,7 +66,7 @@ _TSV_TEMPLATE_PARAMS: tuple[tuple[str, str], ...] = (
 )
 
 
-class TopanatClient:  # pylint: disable=too-few-public-methods
+class TopanatClient:
     """Stateless façade over `HttpClient` for the EBI GWAS REST and OLS APIs."""
 
     def __init__(self, http: HttpClient):

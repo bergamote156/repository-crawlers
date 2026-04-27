@@ -33,8 +33,9 @@ from crawlers.plugins.eodc.api import EODCClient, EODCSearchParams
 from crawlers.plugins.eodc.parser import parse_eodc_item
 from crawlers.ui import console
 
+_DESCRIPTION_PREVIEW_LEN = 80
 
-# pylint: disable=too-few-public-methods
+
 class EODCApiConfig(HttpConfig):
     """Base configuration for EODC STAC API connections."""
 
@@ -44,7 +45,6 @@ class EODCApiConfig(HttpConfig):
     )
 
 
-# pylint: disable=too-few-public-methods
 class EODCCrawlConfig(EODCApiConfig, CrawlConfig, kw_only=True):
     """Configuration for EODC STAC crawling."""
 
@@ -172,8 +172,8 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
         for coll in collections:
             coll_id = coll.get("id", "unknown")
             title = coll.get("title", "-")
-            desc = coll.get("description", "")[:80]
-            if len(coll.get("description", "")) > 80:
+            desc = coll.get("description", "")[:_DESCRIPTION_PREVIEW_LEN]
+            if len(coll.get("description", "")) > _DESCRIPTION_PREVIEW_LEN:
                 desc += "..."
             table.add_row(coll_id, title, desc)
 

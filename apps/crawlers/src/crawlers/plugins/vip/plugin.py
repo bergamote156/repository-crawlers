@@ -34,6 +34,10 @@ from crawlers.plugins.vip.api import VipClient
 from crawlers.plugins.vip.parser import parse_vip_record
 from crawlers.ui import console
 
+_BYTES_PER_UNIT = 1024
+_DESCRIPTION_PREVIEW_LEN = 80
+_ELLIPSIS = "..."
+
 
 class VipApiConfig(HttpConfig):
     """Base configuration for VIP Girder API connections."""
@@ -153,8 +157,8 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
             coll_id = coll.get("_id", "unknown")
             name = coll.get("name", "-")
             desc = coll.get("description", "") or ""
-            if len(desc) > 80:
-                desc = desc[:77] + "..."
+            if len(desc) > _DESCRIPTION_PREVIEW_LEN:
+                desc = desc[: _DESCRIPTION_PREVIEW_LEN - len(_ELLIPSIS)] + _ELLIPSIS
             size = coll.get("size", 0)
             table.add_row(coll_id, name, desc, _format_size(size))
 
@@ -175,7 +179,7 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
 def _format_size(size_bytes: int) -> str:
     """Format byte size as a human-readable string."""
     for unit in ("B", "KB", "MB", "GB", "TB"):
-        if size_bytes < 1024:
+        if size_bytes < _BYTES_PER_UNIT:
             return f"{size_bytes:.1f} {unit}"
-        size_bytes //= 1024
+        size_bytes //= _BYTES_PER_UNIT
     return f"{size_bytes:.1f} PB"

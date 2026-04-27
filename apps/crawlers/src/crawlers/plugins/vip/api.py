@@ -10,8 +10,9 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import AsyncIterator, assert_never
+from typing import assert_never
 
 from crawlers.core import Err, HttpClient, HttpFailure, JsonObject, Ok, Result
 from crawlers.ui import console
@@ -70,7 +71,7 @@ class VipClient:
                 break
             offset += len(page)
             console.debug(
-                f"Fetched {len(all_collections)} collections so far, " f"fetching next page..."
+                f"Fetched {len(all_collections)} collections so far, fetching next page..."
             )
 
         console.info(f"Found {len(all_collections)} collection(s) total")
@@ -150,9 +151,7 @@ class VipClient:
                     if coll.get("name") == name:
                         return coll.get("_id")
                 available = [c.get("name", "?") for c in collections]
-                console.error(
-                    f"Collection {name!r} not found. " f"Available: {', '.join(available)}"
-                )
+                console.error(f"Collection {name!r} not found. Available: {', '.join(available)}")
                 return None
             case Err(value=err):
                 console.error(f"Failed to list collections: {err}")
@@ -205,7 +204,7 @@ class VipClient:
 
     async def _list_items(self, folder_id: str, limit: int, offset: int) -> list[JsonObject]:
         """Fetch one page of items (files) inside a folder."""
-        url = f"/item?limit={limit}&offset={offset}&sort=name&sortdir=1" f"&folderId={folder_id}"
+        url = f"/item?limit={limit}&offset={offset}&sort=name&sortdir=1&folderId={folder_id}"
         match await self._http.get_json(url):
             case Ok(value=data):
                 return _as_girder_object_list(data)

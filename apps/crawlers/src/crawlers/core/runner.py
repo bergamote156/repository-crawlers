@@ -48,8 +48,7 @@ class CrawlStats:
         )
 
 
-# pylint: disable=too-many-arguments,too-many-locals
-async def run_parallel_crawl[RawT](
+async def run_parallel_crawl[RawT](  # noqa: PLR0913, PLR0915
     source_iterator: AsyncIterable[RawT],
     parse_fn: Callable[[RawT], Awaitable[Result[OnedataDataset, Any] | None]],
     *,
@@ -84,7 +83,7 @@ async def run_parallel_crawl[RawT](
             async for item in source_iterator:
                 await queue.put(item)
                 stats.queued += 1
-        except BaseException as exc:  # pylint: disable=broad-exception-caught
+        except BaseException as exc:
             producer_error = exc
         finally:
             for _ in range(concurrency):
@@ -108,11 +107,10 @@ async def run_parallel_crawl[RawT](
                 elif isinstance(result, Err):
                     await rejection_sink.push(failure_to_json(result.value))
                     stats.rejected += 1
-            except Exception as exc:  # pylint: disable=broad-exception-caught
+            except Exception as exc:
                 item_str = str(item)[:50]
                 progress.console.print(
-                    f"[warning]:warning:[/] Worker {worker_id} error "
-                    f"processing {item_str}: {exc}"
+                    f"[warning]:warning:[/] Worker {worker_id} error processing {item_str}: {exc}"
                 )
                 stats.failed += 1
             finally:

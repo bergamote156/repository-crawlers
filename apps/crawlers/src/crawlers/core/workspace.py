@@ -13,7 +13,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from crawlers.core.jsonl import JSONLSink
@@ -61,7 +61,7 @@ class RunContext[ConfigT]:
                 json.dumps(config_snapshot, indent=2, ensure_ascii=False)
             )
 
-        self._started_at = datetime.now(timezone.utc).isoformat()
+        self._started_at = datetime.now(UTC).isoformat()
         self._write_state("running")
 
         await self.processed_sink.open()
@@ -83,7 +83,7 @@ class RunContext[ConfigT]:
         data = {
             "status": status,
             "started_at": self._started_at,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(UTC).isoformat(),
             "stats": self._stats,
         }
         (self.run_dir / "state.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))

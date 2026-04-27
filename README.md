@@ -194,8 +194,8 @@ framework design, data flow, and key decisions.
 
 ```bash
 make sync     # install workspace packages and development dependencies
-make format   # auto-format with black + isort
-make lint     # black check + pylint + mypy
+make format   # auto-format with ruff
+make lint     # ruff format/lint check + mypy
 make test     # run pytest
 ```
 

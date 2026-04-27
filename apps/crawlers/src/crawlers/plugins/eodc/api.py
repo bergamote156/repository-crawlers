@@ -10,8 +10,9 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import AsyncIterator, assert_never
+from typing import assert_never
 
 from crawlers.core import Err, HttpClient, HttpFailure, JsonObject, Ok, Result
 from crawlers.ui import console

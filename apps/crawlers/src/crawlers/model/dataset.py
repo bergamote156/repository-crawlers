@@ -103,9 +103,8 @@ class OnedataDataset:
     metadata_xml: str
     files: tuple[OnedataFile, ...] = field(default_factory=tuple)
 
-    # pylint: disable=too-many-arguments
     @classmethod
-    async def build(
+    async def build(  # noqa: PLR0913
         cls,
         *,
         pid: str,

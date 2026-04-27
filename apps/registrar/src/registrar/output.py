@@ -5,8 +5,6 @@ Centralized output handling with log levels.
 Provides consistent logging interface across all modules.
 """
 
-# pylint: disable=duplicate-code
-
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -52,7 +50,7 @@ def set_level(level: LogLevel | str) -> None:
     Args:
         level: LogLevel enum or string ('debug', 'info', 'warning', 'error', 'silent')
     """
-    global _level  # pylint: disable=global-statement
+    global _level  # noqa: PLW0603
 
     if isinstance(level, str):
         level = LogLevel[level.upper()]

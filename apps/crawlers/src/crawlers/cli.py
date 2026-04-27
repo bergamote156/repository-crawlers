@@ -105,7 +105,7 @@ def main() -> int:
         console.error(str(e))
         return 1
 
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:
         console.error(f"Execution failed: {e}")
         traceback.print_exc()
         return 1

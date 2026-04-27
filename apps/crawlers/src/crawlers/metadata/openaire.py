@@ -117,7 +117,6 @@ class FileLocation:
 
 
 @dataclass
-# pylint: disable=too-many-instance-attributes
 class OpenAIRERecord:
     """
     Structured record for building OpenAIRE XML.

@@ -92,5 +92,5 @@ class BgeePlugin(CrawlerPlugin[BgeeRawRecord, BgeeCrawlConfig]):
                     if line.strip() and not line.startswith("<?xml")
                 )
                 console.print(pretty_xml)
-        except Exception as e:  # pylint: disable=broad-except
+        except Exception as e:
             console.debug(f"Could not print first record DataCite XML: {e}")

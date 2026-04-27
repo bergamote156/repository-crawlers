@@ -23,12 +23,10 @@ members = [
 
 [dependency-groups]
 dev = [
-    "black>=25.12",
-    "isort>=7.0",
     "mypy>=1.19",
-    "pylint>=4.0",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
+    "ruff>=0.15.12",
     "types-PyYAML",
     "types-requests",
 ]
@@ -41,45 +39,34 @@ dev = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 
-[tool.black]
+[tool.ruff]
 line-length = 100
-target-version = ["py312"]
+target-version = "py312"
+src = [
+    "apps/crawlers/src",
+    "apps/crawlers/tests",
+    "apps/registrar/src",
+]
 
-[tool.isort]
-profile = "black"
-line_length = 100
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "PL",   # pylint-inspired rules
+]
+ignore = [
+    "FIX002",  # TODO comments are allowed in this codebase
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.12"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Pylint — only non-default settings carried over from rc_file
-# ─────────────────────────────────────────────────────────────────────────────
-
-[tool.pylint.main]
-py-version = "3.12"
-fail-under = 10
-
-[tool.pylint.format]
-max-line-length = 100
-
-[tool.pylint."messages control"]
-disable = [
-    "raw-checker-failed",
-    "bad-inline-option",
-    "locally-disabled",
-    "file-ignored",
-    "suppressed-message",
-    "useless-suppression",
-    "deprecated-pragma",
-    "use-implicit-booleaness-not-comparison-to-string",
-    "use-implicit-booleaness-not-comparison-to-zero",
-    "use-symbolic-message-instead",
-    "import-error",
-    "missing-function-docstring",
-    "missing-class-docstring",
-    "fixme",
-]
-
-[tool.pylint.similarities]
-min-similarity-lines = 40

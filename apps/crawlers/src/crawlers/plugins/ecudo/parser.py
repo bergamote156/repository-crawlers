@@ -36,6 +36,7 @@ _EXPECTED_TYPES = {
     "publisher": "org:Organization",
     "contactPoint": "vCard:contact",
 }
+_BOUNDING_BOX_COORDS = 4
 
 _KNOWN_ROOT_FIELDS = {
     "@context",
@@ -160,7 +161,7 @@ def _validate_structure(raw: dict, identifier: str) -> None:
     access_level = raw.get("accessLevel")
     if access_level and access_level not in _KNOWN_ACCESS_LEVELS:
         console.warning(
-            f"Unknown accessLevel '{access_level}' in record {identifier} - verify COAR" " mapping"
+            f"Unknown accessLevel '{access_level}' in record {identifier} - verify COAR mapping"
         )
 
     publisher = raw.get("publisher")
@@ -199,7 +200,7 @@ def _parse_files(distributions: list, identifier: str) -> list[EcudoFile]:
         urls.append(url)
 
     paths = resolve_path_collisions(urls)
-    return [EcudoFile(path=p, url=u) for p, u in zip(paths, urls)]
+    return [EcudoFile(path=p, url=u) for p, u in zip(paths, urls, strict=True)]
 
 
 def _parse_publisher(publisher_data: Any, identifier: str) -> str:
@@ -214,7 +215,7 @@ def _parse_publisher(publisher_data: Any, identifier: str) -> str:
         return publisher_data
 
     console.warning(
-        f"Unexpected publisher type {type(publisher_data).__name__} in record" f" {identifier}"
+        f"Unexpected publisher type {type(publisher_data).__name__} in record {identifier}"
     )
     return "Unknown Publisher"
 
@@ -239,7 +240,7 @@ def _parse_bounding_box(spatial: str | None) -> BoundingBox | None:
         console.warning(f"Could not parse spatial coordinates '{spatial}'")
         return None
 
-    if len(coords) != 4:
+    if len(coords) != _BOUNDING_BOX_COORDS:
         console.warning(f"Expected 4 spatial coordinates, got {len(coords)}: '{spatial}'")
         return None
 

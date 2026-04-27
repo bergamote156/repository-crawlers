@@ -148,7 +148,6 @@ class Rights:
 
 
 @dataclass
-# pylint: disable=too-many-instance-attributes
 class DataCiteRecord:
     """
     Structured record for building DataCite XML.
@@ -278,9 +277,9 @@ def _add_dates(root: ET.Element, record: DataCiteRecord) -> None:
         return
     dates = ET.SubElement(root, _q(NS_DATACITE, "dates"))
     for date in record.dates:
-        ET.SubElement(dates, _q(NS_DATACITE, "date"), {"dateType": date.date_type.value}).text = (
-            date.value
-        )
+        ET.SubElement(
+            dates, _q(NS_DATACITE, "date"), {"dateType": date.date_type.value}
+        ).text = date.value
 
 
 def _add_geo_locations(root: ET.Element, record: DataCiteRecord) -> None:

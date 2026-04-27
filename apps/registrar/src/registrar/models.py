@@ -9,7 +9,6 @@ __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass
@@ -54,14 +53,14 @@ class InputDataset:
 
 
 @dataclass
-class RegistrationResult:  # pylint: disable=too-many-instance-attributes
+class RegistrationResult:
     """Result of registering a single dataset."""
 
     dataset_name: str
     success: bool
     files_registered: int = 0
     files_skipped: int = 0
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass

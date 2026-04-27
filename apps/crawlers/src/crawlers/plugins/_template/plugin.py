@@ -46,14 +46,12 @@ from crawlers.model import OnedataDataset, OnedataFile
 # merges the shared HttpConfig ancestor correctly (diamond inheritance).
 
 
-# pylint: disable=too-few-public-methods
 class MyApiConfig(HttpConfig):
     """Configuration for MyAPI connections (used by non-crawl commands too)."""
 
     base_url: str = opt("https://api.example.com/v1", description="API base URL")
 
 
-# pylint: disable=too-few-public-methods
 class MyCrawlConfig(MyApiConfig, CrawlConfig, kw_only=True):
     """Full crawl configuration for MyAPI."""
 

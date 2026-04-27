@@ -9,8 +9,9 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any
 
 from rich.console import Console as RichConsole
 from rich.progress import (
@@ -31,7 +32,6 @@ from crawlers.ui.theme import THEME, Verbosity
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-# pylint: disable=too-few-public-methods
 class Console:
     """
     Thin wrapper holding console state.
@@ -49,12 +49,12 @@ class Console:
 # Global Console Instance (singleton)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_console: Console | None = None  # pylint: disable=invalid-name
+_console: Console | None = None
 
 
 def get_console() -> Console:
     """Get or create global console instance."""
-    global _console  # pylint: disable=global-statement
+    global _console  # noqa: PLW0603
     if _console is None:
         _console = Console()
     return _console
@@ -104,7 +104,7 @@ def debug(message: str) -> None:
         c.rich.print(f"[debug]DEBUG: {message}[/]")
 
 
-def print(*args: Any, **kwargs: Any) -> None:  # pylint: disable=redefined-builtin
+def print(*args: Any, **kwargs: Any) -> None:
     """Pass-through to rich console (respects verbosity)."""
     c = get_console()
     if c.verbosity >= Verbosity.NORMAL:

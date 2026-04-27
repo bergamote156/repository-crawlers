@@ -9,12 +9,12 @@ import asyncio
 import inspect
 import os
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from pprint import pformat
-from typing import Any, Callable, get_type_hints
+from typing import Any, get_type_hints
 
 import yaml
 from rich.panel import Panel
@@ -49,7 +49,7 @@ def command(
     *,
     name: str | None = None,
     config: type[ConfigBase] | None = None,
-    help: str | None = None,  # pylint: disable=redefined-builtin
+    help: str | None = None,
 ) -> Callable:
     """
     Register a method as a CLI command.
@@ -72,15 +72,8 @@ def command(
         cmd_config = config if config is not None else _infer_config_class(func)
         cmd_help = help if help is not None else _infer_help(func)
 
-        setattr(
-            func,
-            "_command_def",
-            CommandDef(
-                name=cmd_name,
-                help=cmd_help,
-                method_name=func.__name__,
-                config_class=cmd_config,
-            ),
+        func._command_def = CommandDef(  # type: ignore[attr-defined]
+            name=cmd_name, help=cmd_help, method_name=func.__name__, config_class=cmd_config
         )
         return func
 
@@ -159,7 +152,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
                 continue
             method = getattr(cls, attr_name, None)
             if callable(method) and hasattr(method, "_command_def"):
-                cmd_def: CommandDef = getattr(method, "_command_def")
+                cmd_def: CommandDef = method._command_def
                 cls._commands[cmd_def.name] = cmd_def
 
         # Auto-register the `crawl` command on concrete subclasses
@@ -243,18 +236,21 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         Store them on `self` and register async context managers on
         `stack` so they are closed automatically when the crawl ends.
         """
+        return None
 
     async def before_crawl(self, ctx: RunContext[ConfigT]) -> None:
         """Run once after `setup` and before the worker pool starts."""
+        return None
 
     async def after_crawl(self, ctx: RunContext[ConfigT]) -> None:
         """Run once after the worker pool finishes successfully."""
+        return None
 
     @abstractmethod
     async def iterate_datasets(self, ctx: RunContext[ConfigT]) -> AsyncIterator[RawT]:
         """Async-iterate raw items from the upstream API."""
         raise NotImplementedError
-        yield  # pragma: no cover  # pylint: disable=unreachable
+        yield  # pragma: no cover
 
     @abstractmethod
     async def process(self, raw: RawT, /) -> Result[OnedataDataset, Any] | None:
@@ -331,9 +327,8 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
     ) -> ConfigBase:
         """Build and validate configuration from ENV + YAML + CLI."""
         yaml_data: dict[str, Any] = {}
-        if config_path := getattr(cli_args, "config", None):
-            if config_path and config_path.exists():
-                yaml_data = yaml.safe_load(config_path.read_text()) or {}
+        if (config_path := getattr(cli_args, "config", None)) and config_path.exists():
+            yaml_data = yaml.safe_load(config_path.read_text()) or {}
 
         global_yaml = yaml_data.get("global", {})
         plugin_yaml = yaml_data.get("plugins", {}).get(self.name, {})
@@ -343,7 +338,6 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
             config_cls, global_yaml, plugin_yaml, command_yaml, cli_args
         )
 
-    # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
     def _instantiate_config(
         self,
         config_cls: type[ConfigBase],
@@ -426,7 +420,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
     def _print_banner(self, ctx: RunContext[ConfigT]) -> None:
         title = type(self).__name__
         subtitle = self.run_context_name(ctx.config)
-        content = f"[header]{title}[/]\n" f"[muted]{subtitle}[/]\n" f"[muted]Run: {ctx.run_dir}[/]"
+        content = f"[header]{title}[/]\n[muted]{subtitle}[/]\n[muted]Run: {ctx.run_dir}[/]"
         console.print(Panel(content, expand=False, border_style="cyan"))
         console.newline()
         console.debug(pformat(ctx.config))

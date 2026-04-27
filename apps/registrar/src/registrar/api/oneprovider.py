@@ -4,14 +4,11 @@ Oneprovider API Client
 Data operations on Oneprovider: file registration, lookups, shares.
 """
 
-# pylint: disable=duplicate-code
-
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
-from typing import Optional
 
 import requests
 import urllib3
@@ -78,7 +75,7 @@ class OneproviderClient:
     # File operations
     # -------------------------------------------------------------------------
 
-    def lookup_file_id(self, space_name: str, path: str) -> Optional[str]:
+    def lookup_file_id(self, space_name: str, path: str) -> str | None:
         """
         Lookup file ID by path in space.
 
@@ -106,7 +103,7 @@ class OneproviderClient:
 
         return None
 
-    def get_file_attrs(self, file_id: str) -> Optional[dict]:
+    def get_file_attrs(self, file_id: str) -> dict | None:
         """
         Get file attributes including shares.
 
@@ -130,13 +127,13 @@ class OneproviderClient:
 
         return None
 
-    def register_file(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def register_file(  # noqa: PLR0913
         self,
         storage_id: str,
         space_id: str,
         file_url: str,
         dest_path: str,
-        size: Optional[int] = None,
+        size: int | None = None,
         auto_detect: bool = True,
     ) -> str:
         """
@@ -212,7 +209,7 @@ class OneproviderClient:
 
         return share_id
 
-    def get_share_details(self, share_id: str) -> Optional[dict]:
+    def get_share_details(self, share_id: str) -> dict | None:
         """
         Get share details.
 

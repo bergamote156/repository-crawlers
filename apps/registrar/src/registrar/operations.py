@@ -9,7 +9,6 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from typing import Optional
 from urllib.parse import urlparse
 
 import requests
@@ -139,7 +138,7 @@ def ensure_space_and_storage(
     return space_id, domain, storage_id
 
 
-def register_dataset_files(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+def register_dataset_files(  # noqa: PLR0913
     oneprovider: OneproviderClient,
     space_name: str,
     space_id: str,
@@ -246,7 +245,7 @@ def find_or_register_handle(
     handle_service_id: str,
     share_id: str,
     metadata_xml: str,
-) -> Optional[str]:
+) -> str | None:
     """
     Find existing handle or register a new one for a share.
 
@@ -282,7 +281,7 @@ def find_or_register_handle(
     )
 
 
-def extract_domain_from_dataset(dataset: InputDataset) -> Optional[str]:
+def extract_domain_from_dataset(dataset: InputDataset) -> str | None:
     """
     Extract domain from dataset's first file URL.
 

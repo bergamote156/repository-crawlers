@@ -4,8 +4,6 @@ Onepanel API Client
 Admin operations on Oneprovider: storage management, space support.
 """
 
-# pylint: disable=duplicate-code
-
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -30,7 +28,7 @@ class OnepanelClient:
     Handles admin operations: storage management, space support.
     """
 
-    def __init__(  # pylint: disable=too-many-arguments,too-many-positional-arguments
+    def __init__(
         self,
         domain: str,
         token: str,

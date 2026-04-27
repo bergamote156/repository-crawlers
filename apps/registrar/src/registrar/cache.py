@@ -9,8 +9,6 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from typing import Optional
-
 
 class ResourceCache:
     """
@@ -33,7 +31,7 @@ class ResourceCache:
         # name -> {id, details}
         self.storages: dict[str, dict] = {}
 
-    def get_space_by_name(self, name: str) -> Optional[dict]:
+    def get_space_by_name(self, name: str) -> dict | None:
         """Get space from cache by name."""
         return self.spaces.get(name)
 
@@ -42,7 +40,7 @@ class ResourceCache:
         name: str,
         space_id: str,
         storage_id: str,
-        details: Optional[dict] = None,
+        details: dict | None = None,
     ) -> None:
         """Add space to cache."""
         self.spaces[name] = {
@@ -51,7 +49,7 @@ class ResourceCache:
             "details": details or {},
         }
 
-    def get_storage_by_name(self, name: str) -> Optional[dict]:
+    def get_storage_by_name(self, name: str) -> dict | None:
         """Get storage from cache by name."""
         return self.storages.get(name)
 
@@ -59,7 +57,7 @@ class ResourceCache:
         self,
         name: str,
         storage_id: str,
-        details: Optional[dict] = None,
+        details: dict | None = None,
     ) -> None:
         """Add storage to cache."""
         self.storages[name] = {

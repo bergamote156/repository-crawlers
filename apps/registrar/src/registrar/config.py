@@ -4,8 +4,6 @@ Registrar Configuration
 Hierarchical configuration management: env vars < config file < CLI args.
 """
 
-# pylint: disable=duplicate-code
-
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -13,9 +11,11 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import yaml
+
+_MASKED_TOKEN_MAX_LENGTH = 12
 
 
 @dataclass
@@ -71,8 +71,8 @@ class Config:
 
 
 def load_config(
-    config_file: Optional[Path] = None,
-    cli_overrides: Optional[dict] = None,
+    config_file: Path | None = None,
+    cli_overrides: dict | None = None,
 ) -> Config:
     """
     Load configuration with hierarchy: env vars < config file < CLI args.
@@ -130,7 +130,7 @@ def _mask_token(token: str) -> str:
     """Mask token for display, showing only first/last 4 chars."""
     if not token:
         return "(not set)"
-    if len(token) <= 12:
+    if len(token) <= _MASKED_TOKEN_MAX_LENGTH:
         return "****"
     return f"{token[:4]}...{token[-4:]}"
 
@@ -205,7 +205,7 @@ def _load_logging_env() -> dict[str, Any]:
     return logging
 
 
-def _get_env(key: str, default: Optional[str] = None) -> Optional[str]:
+def _get_env(key: str, default: str | None = None) -> str | None:
     """Get environment variable with REGISTRAR_ prefix."""
     return os.environ.get(f"REGISTRAR_{key}", default)
 
@@ -215,7 +215,7 @@ def _load_from_file(config_path: Path) -> dict:
     if not config_path.exists():
         return {}
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 

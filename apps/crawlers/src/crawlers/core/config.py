@@ -5,15 +5,14 @@ Base configuration classes and helpers for the crawler framework.
 Uses dataclasses for configuration definition.
 """
 
-# pylint: disable=too-few-public-methods
-
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from collections.abc import Iterator
 from dataclasses import MISSING, Field, dataclass, field, is_dataclass
 from types import NoneType, UnionType
-from typing import Any, ClassVar, Iterator, Union, get_args, get_origin, get_type_hints
+from typing import Any, ClassVar, Union, get_args, get_origin, get_type_hints
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Schema Data Structures
@@ -107,7 +106,6 @@ def opt(
     if default is not ...:
         field_kwargs["default"] = default
 
-    # pylint: disable=invalid-field-call
     return field(metadata=metadata, **field_kwargs)
 
 
@@ -129,8 +127,6 @@ class CliInfo:
 @dataclass
 class ConfigFieldInfo:
     """Complete info about a config field."""
-
-    # pylint: disable=too-many-instance-attributes
 
     name: str
     field_type: type  # Actual type after unwrapping Optional

@@ -1,7 +1,5 @@
 """Tests for the OpenAIRE metadata builder."""
 
-# pylint: disable=redefined-outer-name,missing-function-docstring
-
 import pytest
 
 from crawlers.metadata.openaire import (

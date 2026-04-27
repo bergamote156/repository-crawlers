@@ -7,6 +7,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
+from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, version
 from typing import Protocol, Self
 from urllib.parse import urljoin
@@ -78,8 +79,7 @@ class HttpClient:
     different host — useful e.g. for server-provided pagination links).
     """
 
-    # pylint: disable=too-many-arguments
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         *,
         base_url: str | None = None,
@@ -259,7 +259,7 @@ class HttpClient:
                 async with self.session.request(
                     method, resolved_url, allow_redirects=True, **kwargs
                 ) as resp:
-                    if 200 <= resp.status < 300:
+                    if HTTPStatus.OK <= resp.status < HTTPStatus.MULTIPLE_CHOICES:
                         return Ok(await read(resp))
 
                     text = await resp.text()
@@ -271,7 +271,7 @@ class HttpClient:
                             body=text[:200],
                         )
                     )
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (aiohttp.ClientError, TimeoutError) as exc:
                 if attempt < self.max_retries:
                     wait = 2**attempt
                     console.debug(

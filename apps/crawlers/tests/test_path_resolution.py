@@ -1,7 +1,5 @@
 """Tests for resolve_path_collisions util."""
 
-# pylint: disable=missing-function-docstring
-
 from crawlers.plugins.utils.paths import resolve_path_collisions
 
 

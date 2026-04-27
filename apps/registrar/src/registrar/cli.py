@@ -4,8 +4,6 @@ Registrar CLI
 Command-line interface for dataset registration in Onedata.
 """
 
-# pylint: disable=duplicate-code
-
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -111,7 +109,7 @@ def register(
     except KeyboardInterrupt:
         output.warning("\nInterrupted by user")
         sys.exit(130)
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except Exception as e:
         output.error(f"Fatal error: {e}")
         sys.exit(1)
 
@@ -230,7 +228,7 @@ def init_onepanel_with_cache(config: Config) -> tuple[OnepanelClient, ResourceCa
 
 def main():
     """Main entry point."""
-    cli()  # pylint: disable=no-value-for-parameter
+    cli()
 
 
 if __name__ == "__main__":

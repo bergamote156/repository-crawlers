@@ -7,7 +7,6 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from typing import Protocol
 
 
-# pylint: disable=too-few-public-methods
 class MetadataRecord(Protocol):
     """Protocol for metadata records."""
 

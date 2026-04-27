@@ -25,8 +25,7 @@ class JSONLSink:
     async def open(self) -> None:
         """Open the output file in append mode."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # pylint: disable=consider-using-with
-        self._file = open(self.path, "a", encoding="utf-8")
+        self._file = open(self.path, "a", encoding="utf-8")  # noqa: SIM115
 
     async def push(self, item: dict) -> None:
         """Write item as a JSON line."""

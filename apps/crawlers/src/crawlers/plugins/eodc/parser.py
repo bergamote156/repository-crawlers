@@ -93,7 +93,7 @@ def parse_eodc_item(raw: JsonObject) -> ParsedEODCItem | None:
 
     try:
         return _parse_item(raw, item_id)
-    except Exception as e:  # pylint: disable=broad-except
+    except Exception as e:
         console.warning(f"Failed to parse STAC item {item_id}: {e}")
         return None
 

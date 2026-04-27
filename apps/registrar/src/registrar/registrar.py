@@ -10,7 +10,6 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import requests
 
@@ -24,7 +23,7 @@ from registrar.models import InputDataset, RegistrationResult, RegistrationSumma
 _SEPARATOR = "=" * 70
 
 
-class DatasetRegistrar:  # pylint: disable=too-few-public-methods
+class DatasetRegistrar:
     """
     High-level orchestrator for dataset registration.
 
@@ -67,7 +66,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
     def run(
         self,
         datasets_file: Path,
-        limit: Optional[int] = None,
+        limit: int | None = None,
         dry_run: bool = False,
     ) -> RegistrationSummary:
         """
@@ -120,7 +119,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
         for idx, dataset in enumerate(datasets, 1):
             output.info(f"\n[{idx}/{len(datasets)}] Processing: {dataset.name}")
 
-            if dry_run:
+            if dry_run:  # noqa: SIM108
                 result = self._validate_dataset(dataset)
             else:
                 result = self._process_dataset(dataset)
@@ -129,8 +128,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
             if result.success:
                 output.info(
-                    f"  OK: {result.files_registered} registered, "
-                    f"{result.files_skipped} skipped"
+                    f"  OK: {result.files_registered} registered, {result.files_skipped} skipped"
                 )
             else:
                 output.error(f"  FAILED: {result.error}")
@@ -147,7 +145,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
         return summary
 
-    def _load_datasets(self, datasets_file: Path, limit: Optional[int]) -> list[InputDataset]:
+    def _load_datasets(self, datasets_file: Path, limit: int | None) -> list[InputDataset]:
         """
         Load datasets from JSON or JSONL file.
 
@@ -177,9 +175,9 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
         return datasets
 
-    def _load_datasets_json(self, datasets_file: Path, limit: Optional[int]) -> list[InputDataset]:
+    def _load_datasets_json(self, datasets_file: Path, limit: int | None) -> list[InputDataset]:
         """Load datasets from standard JSON file."""
-        with open(datasets_file, "r", encoding="utf-8") as f:
+        with open(datasets_file, encoding="utf-8") as f:
             data = json.load(f)
 
         # Handle both array and single object
@@ -193,7 +191,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
 
         return datasets
 
-    def _load_datasets_jsonl(self, datasets_file: Path, limit: Optional[int]) -> list[InputDataset]:
+    def _load_datasets_jsonl(self, datasets_file: Path, limit: int | None) -> list[InputDataset]:
         """
         Load datasets from JSONL file (one JSON object per line).
 
@@ -202,9 +200,9 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
         """
         datasets: list[InputDataset] = []
 
-        with open(datasets_file, "r", encoding="utf-8") as f:
-            for line_no, line in enumerate(f, 1):
-                line = line.strip()
+        with open(datasets_file, encoding="utf-8") as f:
+            for line_no, raw_line in enumerate(f, 1):
+                line = raw_line.strip()
                 if not line:  # Skip empty lines
                     continue
 
@@ -222,7 +220,7 @@ class DatasetRegistrar:  # pylint: disable=too-few-public-methods
     @staticmethod
     def _validate_dataset_basics(
         dataset: InputDataset,
-    ) -> tuple[Optional[RegistrationResult], Optional[str]]:
+    ) -> tuple[RegistrationResult | None, str | None]:
         """
         Validate basic dataset requirements.
 

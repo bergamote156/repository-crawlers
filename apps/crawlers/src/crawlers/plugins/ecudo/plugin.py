@@ -34,14 +34,12 @@ from crawlers.plugins.ecudo.parser import parse_ecudo_record
 from crawlers.ui import console
 
 
-# pylint: disable=too-few-public-methods
 class EcudoApiConfig(HttpConfig):
     """Configuration for Ecudo API connections."""
 
     base_url: str = opt("http://central.ecudo.pl", description="Ecudo API base URL")
 
 
-# pylint: disable=too-few-public-methods
 class EcudoCrawlConfig(EcudoApiConfig, CrawlConfig, kw_only=True):
     """Ecudo crawl configuration."""
 
