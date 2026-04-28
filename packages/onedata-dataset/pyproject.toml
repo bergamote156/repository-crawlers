@@ -1,0 +1,13 @@
+[project]
+name = "onedata-dataset"
+version = "0.1.0"
+description = "Onedata dataset contract — JSONL records exchanged between crawlers and registrar."
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/onedata_dataset"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
