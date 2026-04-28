@@ -2,7 +2,7 @@
 Ecudo JSON-LD parser.
 
 Maps a dcat JSON-LD record (as returned by the eCUDO REST API) to an
-`OpenAIRERecord` plus the list of downloadable files. This module has
+`OnedataDataset` carrying an OpenAIRE metadata payload. This module has
 no knowledge of the crawler lifecycle or HTTP — it is pure mapping and
 schema validation, so it can be unit-tested in isolation and so the
 plugin file stays focused on lifecycle wiring.
@@ -12,10 +12,9 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass
 from typing import Any
 
-from crawlers.core import JsonObject
+from crawlers.core import JsonObject, Ok
 from crawlers.metadata.openaire import (
     AccessRights,
     BoundingBox,
@@ -23,6 +22,7 @@ from crawlers.metadata.openaire import (
     OpenAIRERecord,
     ResourceType,
 )
+from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.utils.language import normalize_language_code
 from crawlers.plugins.utils.mime import infer_mime_type
 from crawlers.plugins.utils.paths import resolve_path_collisions
@@ -64,33 +64,12 @@ _ACCESS_LEVEL_MAP: dict[str, AccessRights] = {
 }
 
 
-# --- Public types ------------------------------------------------------------
-
-
-@dataclass
-class EcudoFile:
-    """A single downloadable file extracted from a dcat:Distribution."""
-
-    path: str
-    url: str
-
-
-@dataclass
-class ParsedEcudoRecord:
-    """Result of parsing a single eCUDO JSON-LD record."""
-
-    identifier: str
-    title: str
-    metadata: OpenAIRERecord
-    files: list[EcudoFile]
-
-
 # --- Entry point -------------------------------------------------------------
 
 
-def parse_ecudo_record(raw: JsonObject) -> ParsedEcudoRecord | None:
+def parse_ecudo_record(raw: JsonObject) -> Ok[OnedataDataset] | None:
     """
-    Map a raw eCUDO JSON-LD dict into a `ParsedEcudoRecord`.
+    Map a raw eCUDO JSON-LD dict into an `OnedataDataset`.
 
     Returns `None` when the record should be silently skipped (missing
     identifier, no distributions, no valid download URLs). Schema
@@ -131,11 +110,14 @@ def parse_ecudo_record(raw: JsonObject) -> ParsedEcudoRecord | None:
         spatial_coverage=_parse_bounding_box(raw.get("spatial")),
     )
 
-    return ParsedEcudoRecord(
-        identifier=identifier,
-        title=title,
-        metadata=metadata,
-        files=files,
+    return Ok(
+        OnedataDataset(
+            name=title,
+            target_dir=title.replace("/", "-"),
+            pid=identifier,
+            metadata_xml=metadata.to_xml(),
+            files=tuple(files),
+        )
     )
 
 
@@ -183,8 +165,8 @@ def _validate_structure(raw: dict, identifier: str) -> None:
             )
 
 
-def _parse_files(distributions: list, identifier: str) -> list[EcudoFile]:
-    """Parse a JSON-LD distribution array into a list of `EcudoFile`."""
+def _parse_files(distributions: list, identifier: str) -> list[OnedataFile]:
+    """Parse a JSON-LD distribution array into a list of `OnedataFile`."""
     urls: list[str] = []
     for dist in distributions:
         dist_type = dist.get("@type")
@@ -200,7 +182,7 @@ def _parse_files(distributions: list, identifier: str) -> list[EcudoFile]:
         urls.append(url)
 
     paths = resolve_path_collisions(urls)
-    return [EcudoFile(path=p, url=u) for p, u in zip(paths, urls, strict=True)]
+    return [OnedataFile(path=p, url=u) for p, u in zip(paths, urls, strict=True)]
 
 
 def _parse_publisher(publisher_data: Any, identifier: str) -> str:

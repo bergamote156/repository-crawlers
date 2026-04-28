@@ -28,7 +28,7 @@ from crawlers.core import (
     command,
     opt,
 )
-from crawlers.model.dataset import OnedataDataset, OnedataFile
+from crawlers.model import OnedataDataset
 from crawlers.plugins.eodc.api import EODCClient, EODCSearchParams
 from crawlers.plugins.eodc.parser import parse_eodc_item
 from crawlers.ui import console
@@ -95,7 +95,6 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
     config_class = EODCCrawlConfig
 
     _api_client: EODCClient
-    _validation_http: HttpClient | None
 
     # --- Banner / context plumbing ---
 
@@ -109,7 +108,6 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = EODCClient(http)
-        self._validation_http = None if ctx.config.no_url_validation else http
 
     # --- Iteration & parse ---
 
@@ -128,18 +126,7 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
 
     async def process(self, item: JsonObject, /) -> Result[OnedataDataset, Any] | None:
         """Map a STAC item into an `OnedataDataset`."""
-        parsed = parse_eodc_item(item)
-        if parsed is None:
-            return None
-
-        return await OnedataDataset.build(
-            pid=parsed.identifier,
-            name=parsed.title,
-            location=parsed.title.replace("/", "-"),
-            metadata=parsed.metadata,
-            files=[OnedataFile(path=f.path, url=f.url) for f in parsed.files],
-            http=self._validation_http,
-        )
+        return parse_eodc_item(item)
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Auxiliary commands

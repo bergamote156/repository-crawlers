@@ -4,6 +4,7 @@ requires-python = ">=3.12"
 
 [manifest]
 members = [
+    "onedata-dataset",
     "repository-crawlers",
     "repository-crawlers-workspace",
     "repository-registrar",
@@ -581,6 +582,11 @@ wheels = [
 ]
 
 [[package]]
+name = "onedata-dataset"
+version = "0.1.0"
+source = { editable = "packages/onedata-dataset" }
+
+[[package]]
 name = "packaging"
 version = "26.0"
 source = { registry = "https://pypi.org/simple" }
@@ -802,6 +808,7 @@ version = "0.1.0"
 source = { editable = "apps/crawlers" }
 dependencies = [
     { name = "aiohttp" },
+    { name = "onedata-dataset" },
     { name = "pyyaml" },
     { name = "rich" },
 ]
@@ -820,6 +827,7 @@ bgee = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.8" },
     { name = "beautifulsoup4", marker = "extra == 'bgee'", specifier = ">=4.14" },
+    { name = "onedata-dataset", editable = "packages/onedata-dataset" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rdflib", marker = "extra == 'bgee'", specifier = ">=7.6" },
     { name = "repository-crawlers", extras = ["bgee"], marker = "extra == 'all-plugins'", editable = "apps/crawlers" },
@@ -868,6 +876,7 @@ version = "0.1.0"
 source = { editable = "apps/registrar" }
 dependencies = [
     { name = "click" },
+    { name = "onedata-dataset" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "urllib3" },
@@ -876,6 +885,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.0" },
+    { name = "onedata-dataset", editable = "packages/onedata-dataset" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests", specifier = ">=2.31" },
     { name = "urllib3", specifier = ">=2.0" },

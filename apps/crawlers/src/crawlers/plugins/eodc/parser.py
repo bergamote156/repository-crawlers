@@ -2,7 +2,7 @@
 EODC STAC item parser.
 
 Maps a STAC item dict (as returned by the EODC `POST /search` endpoint)
-to a `DataCiteRecord` plus the list of downloadable assets. This module
+to an `OnedataDataset` carrying a DataCite metadata payload. This module
 has no knowledge of the crawler lifecycle or HTTP — it is pure mapping,
 so it can be unit-tested in isolation and the plugin file stays focused
 on lifecycle wiring.
@@ -12,9 +12,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass
-
-from crawlers.core import JsonObject
+from crawlers.core import JsonObject, Ok
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -29,6 +27,7 @@ from crawlers.metadata.datacite import (
     RelationType,
     Rights,
 )
+from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.utils.mime import extension_for_mime
 from crawlers.ui import console
@@ -60,27 +59,9 @@ _EODC_RIGHTS = Rights(text="Copernicus Open Access Licence")
 _DEFAULT_ASSET_EXTENSION = "tiff"
 
 
-@dataclass
-class EODCFile:
-    """A single downloadable asset from a STAC item."""
-
-    path: str
-    url: str
-
-
-@dataclass
-class ParsedEODCItem:
-    """Result of parsing a single EODC STAC item."""
-
-    identifier: str
-    title: str
-    metadata: DataCiteRecord
-    files: list[EODCFile]
-
-
-def parse_eodc_item(raw: JsonObject) -> ParsedEODCItem | None:
+def parse_eodc_item(raw: JsonObject) -> Ok[OnedataDataset] | None:
     """
-    Map a raw STAC item dict into a `ParsedEODCItem`.
+    Map a raw STAC item dict into an `OnedataDataset`.
 
     Returns `None` when the item should be silently skipped (missing id,
     no assets, no valid asset URLs). Unexpected errors are logged as
@@ -98,7 +79,7 @@ def parse_eodc_item(raw: JsonObject) -> ParsedEODCItem | None:
         return None
 
 
-def _parse_item(raw: dict, item_id: str) -> ParsedEODCItem | None:
+def _parse_item(raw: dict, item_id: str) -> Ok[OnedataDataset] | None:
     assets = raw.get("assets", {})
     if not assets:
         console.debug(f"Skipping {item_id}: no assets")
@@ -142,11 +123,14 @@ def _parse_item(raw: dict, item_id: str) -> ParsedEODCItem | None:
         rights_list=[_EODC_RIGHTS],
     )
 
-    return ParsedEODCItem(
-        identifier=item_id,
-        title=title,
-        metadata=metadata,
-        files=files,
+    return Ok(
+        OnedataDataset(
+            name=title,
+            target_dir=title.replace("/", "-"),
+            pid=item_id,
+            metadata_xml=metadata.to_xml(),
+            files=tuple(files),
+        )
     )
 
 
@@ -176,16 +160,16 @@ def _build_title(props: dict) -> str:
     return " ".join(title_parts)
 
 
-def _parse_assets(assets: dict) -> list[EODCFile]:
-    """Parse a STAC 'assets' dict into a list of `EODCFile`."""
-    files: list[EODCFile] = []
+def _parse_assets(assets: dict) -> list[OnedataFile]:
+    """Parse a STAC 'assets' dict into a list of `OnedataFile`."""
+    files: list[OnedataFile] = []
     for name, asset in assets.items():
         href = asset.get("href")
         if not href:
             continue
 
         ext = extension_for_mime(asset.get("type")) or _DEFAULT_ASSET_EXTENSION
-        files.append(EODCFile(path=f"{name}.{ext}", url=href))
+        files.append(OnedataFile(path=f"{name}.{ext}", url=href))
 
     return files
 

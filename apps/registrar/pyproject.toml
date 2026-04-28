@@ -5,6 +5,7 @@ description = "CLI for registering processed datasets in Onedata."
 requires-python = ">=3.12"
 dependencies = [
     "click>=8.0",
+    "onedata-dataset",
     "PyYAML>=6.0",
     "requests>=2.31",
     "urllib3>=2.0",

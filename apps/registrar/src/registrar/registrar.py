@@ -13,11 +13,12 @@ from pathlib import Path
 
 import requests
 
+from onedata_dataset import OnedataDataset
 from registrar import operations, output
 from registrar.api import OnepanelClient, OneproviderClient, OnezoneClient
 from registrar.cache import ResourceCache
 from registrar.config import Config
-from registrar.models import InputDataset, RegistrationResult, RegistrationSummary
+from registrar.models import RegistrationResult, RegistrationSummary
 
 # Output formatting constants
 _SEPARATOR = "=" * 70
@@ -145,7 +146,7 @@ class DatasetRegistrar:
 
         return summary
 
-    def _load_datasets(self, datasets_file: Path, limit: int | None) -> list[InputDataset]:
+    def _load_datasets(self, datasets_file: Path, limit: int | None) -> list[OnedataDataset]:
         """
         Load datasets from JSON or JSONL file.
 
@@ -158,7 +159,7 @@ class DatasetRegistrar:
             limit: Maximum number of datasets to load (None = all)
 
         Returns:
-            List of InputDataset objects
+            List of OnedataDataset objects
 
         Raises:
             ValueError: If file format is not supported
@@ -175,7 +176,7 @@ class DatasetRegistrar:
 
         return datasets
 
-    def _load_datasets_json(self, datasets_file: Path, limit: int | None) -> list[InputDataset]:
+    def _load_datasets_json(self, datasets_file: Path, limit: int | None) -> list[OnedataDataset]:
         """Load datasets from standard JSON file."""
         with open(datasets_file, encoding="utf-8") as f:
             data = json.load(f)
@@ -184,21 +185,21 @@ class DatasetRegistrar:
         if isinstance(data, dict):
             data = [data]
 
-        datasets = [InputDataset.from_dict(d) for d in data]
+        datasets = [OnedataDataset.from_json(d) for d in data]
 
         if limit is not None:
             datasets = datasets[:limit]
 
         return datasets
 
-    def _load_datasets_jsonl(self, datasets_file: Path, limit: int | None) -> list[InputDataset]:
+    def _load_datasets_jsonl(self, datasets_file: Path, limit: int | None) -> list[OnedataDataset]:
         """
         Load datasets from JSONL file (one JSON object per line).
 
         This format is memory-efficient for large files as it processes
         line by line and stops early if limit is reached.
         """
-        datasets: list[InputDataset] = []
+        datasets: list[OnedataDataset] = []
 
         with open(datasets_file, encoding="utf-8") as f:
             for line_no, raw_line in enumerate(f, 1):
@@ -208,7 +209,7 @@ class DatasetRegistrar:
 
                 try:
                     data = json.loads(line)
-                    datasets.append(InputDataset.from_dict(data))
+                    datasets.append(OnedataDataset.from_json(data))
                 except json.JSONDecodeError as e:
                     raise json.JSONDecodeError(f"Line {line_no}: {e.msg}", e.doc, e.pos) from e
 
@@ -219,7 +220,7 @@ class DatasetRegistrar:
 
     @staticmethod
     def _validate_dataset_basics(
-        dataset: InputDataset,
+        dataset: OnedataDataset,
     ) -> tuple[RegistrationResult | None, str | None]:
         """
         Validate basic dataset requirements.
@@ -267,7 +268,7 @@ class DatasetRegistrar:
 
         return None, domain
 
-    def _validate_dataset(self, dataset: InputDataset) -> RegistrationResult:
+    def _validate_dataset(self, dataset: OnedataDataset) -> RegistrationResult:
         """Validate dataset without registering (dry run)."""
         error_result, domain = self._validate_dataset_basics(dataset)
         if error_result:
@@ -276,7 +277,7 @@ class DatasetRegistrar:
         assert domain is not None  # Guaranteed by _validate_dataset_basics
         output.debug(f"  Domain: {domain}")
         output.debug(f"  Files: {len(dataset.files)}")
-        output.debug(f"  Location: {dataset.location}")
+        output.debug(f"  Location: {dataset.target_dir}")
 
         return RegistrationResult(
             dataset_name=dataset.name,
@@ -285,7 +286,7 @@ class DatasetRegistrar:
             files_skipped=len(dataset.files),
         )
 
-    def _process_dataset(self, dataset: InputDataset) -> RegistrationResult:
+    def _process_dataset(self, dataset: OnedataDataset) -> RegistrationResult:
         """Process a single dataset: register files, create share."""
         try:
             # Validate basic requirements
@@ -311,7 +312,7 @@ class DatasetRegistrar:
 
             # Register files
             # location = dataset.location.strip("/")  ## TODO
-            location = "bgee/" + dataset.location.strip("/")
+            location = "bgee/" + dataset.target_dir.strip("/")
             registered, skipped = operations.register_dataset_files(
                 oneprovider=self.oneprovider,
                 space_name=space_name,
@@ -329,7 +330,7 @@ class DatasetRegistrar:
                     oneprovider=self.oneprovider,
                     file_id=dir_file_id,
                     name=dataset.name,
-                    description=dataset.pid,
+                    description=dataset.name,
                 )
 
             # Register handle (if configured)

@@ -1,4 +1,4 @@
-"""TopAnat data models — config, seed entries, parsed dataset carrier."""
+"""TopAnat data models — config and seed entries."""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Literal
 
 from crawlers.core import ConfigBase, CrawlConfig, HttpConfig, opt
-from crawlers.metadata.datacite import DataCiteRecord
 
 # Path to the bundled seed list, resolved at import time so the plugin works
 # regardless of the caller's CWD.
@@ -50,7 +49,7 @@ class TopanatCrawlConfig(TopanatApiConfig, TopanatSeedsConfig, CrawlConfig, kw_o
 
     no_url_validation: bool = opt(
         True,
-        description="Disable HEAD-probe URL validation during parse",
+        description="Disable HEAD-probe URL validation before persistence",
     )
 
 
@@ -67,19 +66,3 @@ class TopanatEntry:
 
     kind: TopanatEntryKind
     id: str  # noqa: A003 — short form (e.g. "EFO_0003924") or PubMed ID
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Parser carrier
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@dataclass
-class ParsedTopanatRecord:
-    """Result of converting a fetched trait/publication into a registrable shape."""
-
-    identifier: str  # the canonical web URL — used as both `pid` and DataCite identifier
-    title: str
-    metadata: DataCiteRecord
-    json_url: str
-    tsv_url: str

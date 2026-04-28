@@ -9,14 +9,15 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+from collections.abc import Sequence
 from urllib.parse import urlparse
 
 import requests
 
+from onedata_dataset import OnedataDataset, OnedataFile
 from registrar import output
 from registrar.api import OnepanelClient, OneproviderClient, OnezoneClient
 from registrar.cache import ResourceCache
-from registrar.models import InputDataset, InputFile
 
 
 def load_cache(
@@ -144,7 +145,7 @@ def register_dataset_files(  # noqa: PLR0913
     space_id: str,
     storage_id: str,
     location: str,
-    files: list[InputFile],
+    files: Sequence[OnedataFile],
 ) -> tuple[int, int]:
     """
     Register all files for a dataset.
@@ -281,7 +282,7 @@ def find_or_register_handle(
     )
 
 
-def extract_domain_from_dataset(dataset: InputDataset) -> str | None:
+def extract_domain_from_dataset(dataset: OnedataDataset) -> str | None:
     """
     Extract domain from dataset's first file URL.
 

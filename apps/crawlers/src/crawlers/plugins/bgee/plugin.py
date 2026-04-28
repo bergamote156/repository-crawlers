@@ -11,7 +11,7 @@ from typing import Any
 from xml.dom import minidom
 
 from crawlers.core import CrawlerPlugin, HttpClient, Result, RunContext
-from crawlers.model.dataset import OnedataDataset, OnedataFile
+from crawlers.model import OnedataDataset
 from crawlers.plugins.bgee.api import BgeeClient, BgeeParser
 from crawlers.plugins.bgee.models import (
     BgeeCrawlConfig,
@@ -31,16 +31,14 @@ class BgeePlugin(CrawlerPlugin[BgeeRawRecord, BgeeCrawlConfig]):
 
     _api_client: BgeeClient
     _parser: BgeeParser
-    _validation_http: HttpClient | None
 
     # --- Lifecycle ---
 
     async def setup(self, ctx: RunContext[BgeeCrawlConfig], stack: AsyncExitStack) -> None:
-        """Open a shared `HttpClient` used for crawling and URL validation."""
+        """Open the shared HttpClient and build the API façade."""
         http = await stack.enter_async_context(HttpClient.from_config(ctx.config))
         self._api_client = BgeeClient(http)
         self._parser = BgeeParser()
-        self._validation_http = None if ctx.config.no_url_validation else http
 
     # --- Iteration & parse ---
 
@@ -56,19 +54,8 @@ class BgeePlugin(CrawlerPlugin[BgeeRawRecord, BgeeCrawlConfig]):
             yield record
 
     async def process(self, raw: BgeeRawRecord, /) -> Result[OnedataDataset, Any] | None:
-        """Parse a schema.org Dataset node and build an `OnedataDataset`."""
-        bgee_dataset = self._parser.parse(raw)
-        if bgee_dataset is None:
-            return None
-
-        return await OnedataDataset.build(
-            pid=bgee_dataset.identifier,
-            name=bgee_dataset.title,
-            location=bgee_dataset.title.replace("/", "-"),
-            metadata=bgee_dataset.metadata_record,
-            files=[OnedataFile(path=f.path, url=f.url) for f in bgee_dataset.files],
-            http=self._validation_http,
-        )
+        """Parse a schema.org Dataset node into an `OnedataDataset`."""
+        return self._parser.parse(raw)
 
     # --- Post-run hook (preserved from the original DefaultCrawlerPlugin impl) ---
 

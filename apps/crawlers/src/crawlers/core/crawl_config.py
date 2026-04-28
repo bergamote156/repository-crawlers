@@ -64,5 +64,5 @@ class CrawlConfig(HttpConfig, OutputConfig, ProcessingConfig, kw_only=True):
     )
     no_url_validation: bool = opt(
         False,
-        description="Disable HEAD-probe URL validation during parse",
+        description="Disable HEAD-probe URL validation before persistence",
     )

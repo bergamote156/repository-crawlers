@@ -1,10 +1,21 @@
 """Onedata data models — public API re-exports."""
 
-from crawlers.model.dataset import OnedataDataset, OnedataFile
-from crawlers.model.metadata import MetadataRecord
+from crawlers.model.dataset import (
+    DatasetValidator,
+    DuplicatePathsFailure,
+    InvalidUrlFailure,
+    NoFilesFailure,
+    OnedataDataset,
+    OnedataFile,
+    ValidationFailure,
+)
 
 __all__ = [
-    "MetadataRecord",
+    "DatasetValidator",
+    "DuplicatePathsFailure",
+    "InvalidUrlFailure",
+    "NoFilesFailure",
     "OnedataDataset",
     "OnedataFile",
+    "ValidationFailure",
 ]

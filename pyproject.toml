@@ -14,11 +14,13 @@ package = false
 [tool.uv.sources]
 repository-crawlers = { workspace = true }
 repository-registrar = { workspace = true }
+onedata-dataset = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "apps/crawlers",
     "apps/registrar",
+    "packages/onedata-dataset",
 ]
 
 [dependency-groups]
@@ -46,6 +48,7 @@ src = [
     "apps/crawlers/src",
     "apps/crawlers/tests",
     "apps/registrar/src",
+    "packages/onedata-dataset/src",
 ]
 
 [tool.ruff.lint]

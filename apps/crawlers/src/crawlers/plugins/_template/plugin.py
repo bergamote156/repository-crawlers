@@ -9,7 +9,7 @@ the placeholders.  The framework needs three things from you:
 3. **config** — declare your CLI/YAML/ENV fields
 
 Everything else (parallel execution, JSONL persistence, progress
-display, state management) is handled by the framework.
+display, state management, URL validation) is handled by the framework.
 """
 
 from collections.abc import AsyncIterator
@@ -22,6 +22,7 @@ from crawlers.core import (
     Err,
     HttpClient,
     HttpConfig,
+    Ok,
     Result,
     RunContext,
     command,
@@ -74,20 +75,13 @@ class MyCrawlConfig(MyApiConfig, CrawlConfig, kw_only=True):
 
 
 class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
-    """
-    Plugin for MyAPI.
-
-    Commands:
-    - crawl:             fetch datasets from a collection
-    - list-collections:  list available collections
-    """
+    """Plugin for MyAPI."""
 
     name = "myapi"  # CLI name: `crawlers myapi crawl ...`
     description = "Crawler for MyAPI datasets"
     config_class = MyCrawlConfig
 
     _http: HttpClient
-    _validation_http: HttpClient | None
 
     def run_context_name(self, config: MyCrawlConfig) -> str:
         """Appended to the run directory name (e.g. runs/2026-…_myapi_<this>/)."""
@@ -98,7 +92,6 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
     async def setup(self, ctx: RunContext[MyCrawlConfig], stack: AsyncExitStack) -> None:
         """Open HTTP clients. Store on `self`; register on `stack` for cleanup."""
         self._http = await stack.enter_async_context(HttpClient.from_config(ctx.config))
-        self._validation_http = None if ctx.config.no_url_validation else self._http
 
     # --- Core contract ---
 
@@ -145,8 +138,6 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
             Err(failure) — persisted to rejected.jsonl (with failure details)
             None         — silently skipped (not counted as rejection)
         """
-        # Map `raw` into OpenAIRE / DataCite / other `MetadataRecord` as needed.
-
         title = raw.get("title", "Untitled")
         pid = raw.get("doi", raw.get("id", "unknown"))
 
@@ -161,16 +152,18 @@ class MyPlugin(CrawlerPlugin[dict, MyCrawlConfig]):
             resource_type_value="Research data",
         )
 
-        files = [OnedataFile(path=f["name"], url=f["download_url"]) for f in raw.get("files", [])]
-
-        return await OnedataDataset.build(
-            pid=pid,
+        dataset = OnedataDataset(
             name=title,
-            location=title.replace("/", "-"),
-            metadata=metadata,
-            files=files,
-            http=self._validation_http,
+            target_dir=title.replace("/", "-"),
+            pid=pid,
+            metadata_xml=metadata.to_xml(),
+            files=tuple(
+                OnedataFile(path=f["name"], url=f["download_url"]) for f in raw.get("files", [])
+            ),
         )
+
+        # The framework validates successful datasets before persistence.
+        return Ok(dataset)
 
     # --- Optional: extra commands ---
 

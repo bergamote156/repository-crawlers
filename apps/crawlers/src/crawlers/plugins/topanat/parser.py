@@ -2,7 +2,7 @@
 TopAnat parser.
 
 Maps a fetched `TraitInfo` / `PublicationInfo` (plus the two known data-file
-URLs) into a `ParsedTopanatRecord` carrying a complete `DataCiteRecord`.
+URLs) into an `OnedataDataset` carrying a complete DataCite metadata payload.
 Pure mapping — no I/O, no HTTP — so it can be unit-tested in isolation
 and the plugin file stays focused on lifecycle wiring.
 """
@@ -26,14 +26,12 @@ from crawlers.metadata.datacite import (
     RelationType,
     Rights,
 )
+from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.topanat.api import (
     PublicationInfo,
     TraitInfo,
     build_publication_json_url,
-    build_publication_tsv_url,
-    build_trait_tsv_url,
 )
-from crawlers.plugins.topanat.models import ParsedTopanatRecord
 from crawlers.plugins.utils.datetime import year_from_iso
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -56,8 +54,8 @@ _RIGHTS = Rights(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def build_trait_record(info: TraitInfo) -> ParsedTopanatRecord:
-    """Build a `ParsedTopanatRecord` for a fetched EFO/MONDO trait."""
+def build_trait_record(info: TraitInfo) -> OnedataDataset:
+    """Build an `OnedataDataset` for a fetched EFO/MONDO trait."""
     pid = f"https://www.ebi.ac.uk/gwas/efotraits/{info.short_form}"
     title = f"Trait: {info.label}" if info.label else f"Trait: {info.short_form}"
 
@@ -96,17 +94,17 @@ def build_trait_record(info: TraitInfo) -> ParsedTopanatRecord:
         rights_list=[_RIGHTS],
     )
 
-    return ParsedTopanatRecord(
-        identifier=pid,
-        title=title,
-        metadata=record,
-        json_url=info.associations_url,
-        tsv_url=build_trait_tsv_url(info.short_form),
+    return OnedataDataset(
+        name=title,
+        target_dir=title.replace("/", "-"),
+        pid=pid,
+        metadata_xml=record.to_xml(),
+        files=(OnedataFile(path="data.json", url=info.associations_url),),
     )
 
 
-def build_publication_record(info: PublicationInfo) -> ParsedTopanatRecord:
-    """Build a `ParsedTopanatRecord` for a fetched GWAS publication."""
+def build_publication_record(info: PublicationInfo) -> OnedataDataset:
+    """Build an `OnedataDataset` for a fetched GWAS publication."""
     pid = f"https://www.ebi.ac.uk/gwas/publications/{info.pmid}"
     title = info.title or f"Publication: {info.pmid}"
 
@@ -144,10 +142,10 @@ def build_publication_record(info: PublicationInfo) -> ParsedTopanatRecord:
         rights_list=[_RIGHTS],
     )
 
-    return ParsedTopanatRecord(
-        identifier=pid,
-        title=title,
-        metadata=record,
-        json_url=build_publication_json_url(info.pmid),
-        tsv_url=build_publication_tsv_url(info.pmid),
+    return OnedataDataset(
+        name=title,
+        target_dir=title.replace("/", "-"),
+        pid=pid,
+        metadata_xml=record.to_xml(),
+        files=(OnedataFile(path="data.json", url=build_publication_json_url(info.pmid)),),
     )

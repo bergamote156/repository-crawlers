@@ -1,55 +1,15 @@
 """
 Registrar Data Models
 
-Data structures for dataset registration input and output.
+Data structures for dataset registration output. Input datasets use
+the shared `OnedataDataset`/`OnedataFile` contract from `onedata_dataset`.
 """
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass, field
-
-
-@dataclass
-class InputFile:
-    """A file to be registered in Onedata."""
-
-    path: str  # Relative path within dataset
-    url: str  # Download URL
-
-
-@dataclass
-class InputDataset:
-    """
-    A dataset to be registered in Onedata.
-
-    This structure matches the output format from the ecudo crawler.
-    """
-
-    name: str
-    location: str  # Directory path in space (e.g., "datasets/123")
-    pid: str  # Persistent identifier (DOI, etc.)
-    metadata_xml: str  # OpenAIRE/DataCite XML metadata
-    files: list[InputFile] = field(default_factory=list)
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "InputDataset":
-        """Create InputDataset from dictionary (e.g., from JSON)."""
-        files = [
-            InputFile(
-                url=f.get("url", ""),
-                path=f.get("path", ""),
-            )
-            for f in data["files"]
-        ]
-        return cls(
-            name=data["name"],
-            location=data["location"],
-            pid=data["pid"],
-            metadata_xml=data["metadata_xml"],
-            files=files,
-        )
+from dataclasses import dataclass
 
 
 @dataclass

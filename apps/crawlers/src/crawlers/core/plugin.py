@@ -22,10 +22,11 @@ from rich.table import Table
 
 from crawlers.core.config import ConfigBase
 from crawlers.core.crawl_config import CrawlConfig
+from crawlers.core.http import HttpClient
 from crawlers.core.result import Result
 from crawlers.core.runner import CrawlStats, run_parallel_crawl
 from crawlers.core.workspace import RunContext, make_run_dir
-from crawlers.model.dataset import OnedataDataset
+from crawlers.model.dataset import DatasetValidator, OnedataDataset
 from crawlers.ui import console
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -258,7 +259,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         Convert a raw item into an `OnedataDataset`.
 
         Returns:
-            - `Ok(dataset)`: persisted to `processed.jsonl`
+            - `Ok(dataset)`: validated by the framework, then persisted to `processed.jsonl`
             - `Err(failure)`: persisted to `rejected.jsonl`
             - `None`: silently skipped
         """
@@ -290,12 +291,15 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         self._print_banner(ctx)
 
         try:
+            validator = await self._open_validator(config, stack)
+
             await self.setup(ctx, stack)
             await self.before_crawl(ctx)
 
             stats = await run_parallel_crawl(
                 source_iterator=self.iterate_datasets(ctx),
-                parse_fn=self.process,
+                process_fn=self.process,
+                validator=validator,
                 processed_sink=ctx.processed_sink,
                 rejection_sink=ctx.rejection_sink,
                 concurrency=config.concurrency,
@@ -414,6 +418,15 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
             context=self.run_context_name(config),
         )
         return RunContext(run_dir=run_dir, config=config)
+
+    @staticmethod
+    async def _open_validator(config: CrawlConfig, stack: AsyncExitStack) -> DatasetValidator:
+        """Construct the run's `DatasetValidator`, opening a HEAD-probe client when enabled."""
+        if config.no_url_validation:
+            return DatasetValidator()
+
+        http = await stack.enter_async_context(HttpClient.from_config(config))
+        return DatasetValidator(http=http)
 
     # --- Display ---
 
