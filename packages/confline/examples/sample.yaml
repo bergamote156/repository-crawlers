@@ -1,0 +1,15 @@
+# Sample config for the demo CommandApp.
+# Pass with: python demo_app.py serve -c packages/confline/examples/sample.yaml
+db:
+  host: db.staging.local
+  port: 5433
+  name: myapp_staging
+
+log_level: debug
+workers: 8
+mode: async
+api_token: STG-XXXX-1234
+
+extra_origins:
+  - https://staging.example.com
+  - https://internal.example.com
