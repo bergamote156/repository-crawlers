@@ -15,6 +15,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from collections.abc import Sequence
 
 from crawlers.core import JsonObject
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -25,7 +26,6 @@ from crawlers.metadata.datacite import (
     NameType,
     Rights,
 )
-from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.vip.api import VipFile
 from crawlers.ui import console

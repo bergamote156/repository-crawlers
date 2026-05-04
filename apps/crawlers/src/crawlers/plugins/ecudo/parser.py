@@ -15,6 +15,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 from typing import Any
 
 from crawlers.core import JsonObject, Ok
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.openaire import (
     AccessRights,
     BoundingBox,
@@ -22,7 +23,6 @@ from crawlers.metadata.openaire import (
     OpenAIRERecord,
     ResourceType,
 )
-from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.utils.language import normalize_language_code
 from crawlers.plugins.utils.mime import infer_mime_type
 from crawlers.plugins.utils.paths import resolve_path_collisions

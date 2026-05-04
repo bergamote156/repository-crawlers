@@ -56,46 +56,85 @@ _COMMAND_FLAG = "__confline_command__"
 
 
 def command(
-    name: str | None = None,
+    fn: Callable[..., Any] | None = None,
+    /,
     *,
+    name: str | None = None,
     config_class: type[ConfigBase] | None = None,
     aliases: Sequence[str] = (),
     description: str | None = None,
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+) -> Any:
     """Mark a method as a command handler.
 
-    Default name is the method's own `__name__`. `config_class` is
-    inferred from the first `ConfigBase`-annotated argument if not
-    given explicitly. Aliases are wired into the argparse subparser.
+    Two call forms are accepted:
+
+    - bare `@command` (no parens) — name and config_class are inferred
+    - `@command(name=..., config_class=..., ...)` — explicit overrides
+
+    Default name is the method's `__name__` with `_` replaced by `-`
+    (so `def list_orgs(...)` → `list-orgs`); this matches Click and
+    Typer conventions for kebab-case CLIs. Pass `name="snake_form"`
+    to keep underscores.
+
+    `config_class` is inferred from the first `ConfigBase`-annotated
+    argument if not given explicitly. Aliases are wired into the
+    argparse subparser.
 
     `description` is the one-liner shown in top-level `--help`. When
     omitted, the first non-blank line of the method's docstring is
     used — keeps the source of truth on the handler itself:
 
-        @command()
+        @command
         def serve(self, config: ServeConfig):
             \"\"\"Start the HTTP server.\"\"\"
             ...
     """
+    if fn is not None:
+        # @command (bare) — `fn` is the decorated method
+        return _attach_command_meta(
+            fn,
+            name=name,
+            config_class=config_class,
+            aliases=aliases,
+            description=description,
+        )
 
-    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-        cls = config_class or _infer_config_class(fn)
-        if cls is None:
-            raise CommandRegistrationError(
-                f"@command on {fn.__name__}: cannot infer config_class. "
-                "Annotate the config argument or pass config_class= explicitly.",
-            )
-
-        meta = {
-            "name": name or fn.__name__,
-            "config_class": cls,
-            "aliases": tuple(aliases),
-            "description": description if description is not None else _first_doc_line(fn),
-        }
-        setattr(fn, _COMMAND_FLAG, meta)
-        return fn
+    # @command(...) form — return a decorator
+    def decorator(inner: Callable[..., Any]) -> Callable[..., Any]:
+        return _attach_command_meta(
+            inner,
+            name=name,
+            config_class=config_class,
+            aliases=aliases,
+            description=description,
+        )
 
     return decorator
+
+
+def _attach_command_meta(
+    fn: Callable[..., Any],
+    *,
+    name: str | None,
+    config_class: type[ConfigBase] | None,
+    aliases: Sequence[str],
+    description: str | None,
+) -> Callable[..., Any]:
+    cls = config_class or _infer_config_class(fn)
+    if cls is None:
+        raise CommandRegistrationError(
+            f"@command on {fn.__name__}: cannot infer config_class. "
+            "Annotate the config argument or pass config_class= explicitly.",
+        )
+
+    meta = {
+        "name": name if name is not None else fn.__name__.replace("_", "-"),
+        "config_class": cls,
+        "aliases": tuple(aliases),
+        "description": description if description is not None else _first_doc_line(fn),
+    }
+    setattr(fn, _COMMAND_FLAG, meta)
+    return fn
 
 
 def _first_doc_line(fn: Callable[..., Any]) -> str:

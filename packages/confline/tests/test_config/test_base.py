@@ -80,6 +80,53 @@ def test_subclass_with_no_docstring_keeps_none():
     assert C.__doc__ is None
 
 
+def test_group_description_uses_first_paragraph_only():
+    """`--help` shows the group's one-line summary, not the full PEP 257
+    docstring. Authors keep details in the body for developer reading;
+    the operator-facing render stays tight."""
+
+    class C(ConfigBase):
+        """One-line summary.
+
+        Longer body that explains design tradeoffs and is useful for
+        developers reading the source — but would crowd the help block.
+        """
+
+        x: int = opt(0)
+
+    group = C.__config_schema__.groups[0]
+    assert group.description == "One-line summary."
+
+
+def test_group_description_handles_multiline_first_paragraph():
+    """The first paragraph can wrap across multiple lines; only a blank
+    line ends it. Newlines inside the paragraph stay collapsed."""
+
+    class C(ConfigBase):
+        """Summary that wraps because the
+        author indented continuation lines.
+
+        Body paragraph after the blank line.
+        """
+
+        x: int = opt(0)
+
+    group = C.__config_schema__.groups[0]
+    # `inspect.cleandoc` joins the wrapped lines with `\n`, preserving
+    # paragraph structure but removing common indent.
+    assert group.description == (
+        "Summary that wraps because the\nauthor indented continuation lines."
+    )
+
+
+def test_group_description_none_when_no_docstring():
+    class C(ConfigBase):
+        x: int = opt(0)
+
+    group = C.__config_schema__.groups[0]
+    assert group.description is None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MRO + grouping
 # ─────────────────────────────────────────────────────────────────────────────

@@ -14,9 +14,10 @@ display, state management, URL validation) is handled by the framework.
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Annotated, Any
 
 from crawlers.core import (
+    CliPositional,
     CrawlConfig,
     CrawlerPlugin,
     Err,
@@ -28,8 +29,8 @@ from crawlers.core import (
     command,
     opt,
 )
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import Creator, DataCiteRecord, IdentifierType, NameType
-from crawlers.model import OnedataDataset, OnedataFile
 
 # OpenAIRE example: `from crawlers.metadata.openaire import OpenAIRERecord`
 
@@ -58,14 +59,12 @@ class MyCrawlConfig(MyApiConfig, CrawlConfig, kw_only=True):
 
     # Add plugin-specific fields here as needed.
     #
-    # Positional CLI arg — note explicit `cli=` for positionals:
-    collection: str = opt(
-        ...,
-        cli="collection",
+    # Positional CLI arg — annotate with `CliPositional`:
+    collection: Annotated[str, CliPositional] = opt(
         description="Collection to crawl",
     )
 
-    # Optional CLI flag:
+    # Optional CLI flag (auto-derived from field name):
     page_size: int = opt(100, description="Items per API page")
 
 

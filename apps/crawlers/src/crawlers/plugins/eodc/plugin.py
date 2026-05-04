@@ -12,11 +12,14 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Annotated, Any
 
 from rich.table import Table
 
 from crawlers.core import (
+    CliAlias,
+    CliPositional,
+    CliSource,
     CrawlConfig,
     CrawlerPlugin,
     Err,
@@ -26,9 +29,10 @@ from crawlers.core import (
     Result,
     RunContext,
     command,
+    model_validator,
     opt,
 )
-from crawlers.model import OnedataDataset
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.eodc.api import EODCClient, EODCSearchParams
 from crawlers.plugins.eodc.parser import parse_eodc_item
 from crawlers.ui import console
@@ -48,34 +52,31 @@ class EODCApiConfig(HttpConfig):
 class EODCCrawlConfig(EODCApiConfig, CrawlConfig, kw_only=True):
     """Configuration for EODC STAC crawling."""
 
-    collections: str = opt(
-        ...,
-        # Explicit CLI is needed for positional args to be detected correctly
-        # (otherwise '--' will be prepended)
-        cli="collections",
+    collections: Annotated[str, CliPositional] = opt(
         description="STAC collections to crawl (comma-separated)",
     )
 
     intersects: JsonObject | None = opt(
         None,
-        cli=False,
-        yaml_key="intersects",
+        excluded_from=[CliSource],
         description="GeoJSON geometry for spatial filter",
     )
 
-    datetime_range: str | None = opt(
+    datetime_range: Annotated[str | None, CliAlias("--datetime", "-d")] = opt(
         None,
-        cli=("--datetime", "-d"),
         description="ISO datetime range (e.g. 2025-01-01/2025-01-31)",
     )
 
     page_size: int = opt(100, description="Items per STAC search page")
 
-    def __post_init__(self):
+    @model_validator
+    def _normalize_collections(self) -> None:
         if not self.collections or self.collections.isspace():
             raise ValueError("Collections cannot be empty")
-
-        self.collections = self.collections.strip()
+        # `__init_subclass__` applies @dataclass without `frozen=True`, so
+        # in-place rewrite is safe; keeps the contract that consumers see
+        # the stripped form everywhere.
+        object.__setattr__(self, "collections", self.collections.strip())
 
     def get_collections_list(self) -> list[str]:
         """Return collections as a list of stripped strings."""

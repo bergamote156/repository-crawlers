@@ -299,6 +299,46 @@ def test_describe_provenance_falls_through_to_lower_priority_file(tmp_path):
     assert src.describe_provenance(_f("host")) == f"yaml {a}"
 
 
+def test_scope_origins_repeats_file_across_scopes_from_one_file(tmp_path):
+    """Scoped layouts (one file → many scopes, e.g. global / plugin /
+    command sections) repeat the same origin across the parallel
+    `scope_origins` so that any field resolved from any scope still
+    names the right file."""
+    cfg_path = tmp_path / "app.yaml"
+    cfg_path.write_text("# scoped layout\n", encoding="utf-8")
+
+    src = YamlSource(
+        scopes=[{}, {"host": "x"}, {}],
+        scope_origins=[cfg_path, cfg_path, cfg_path],
+    )
+
+    assert src.describe_provenance(_f("host")) == f"yaml {cfg_path}"
+
+
+def test_scope_origins_with_none_for_inline_scopes(tmp_path):
+    """Mixed origins: some scopes come from a file, others are inlined
+    by the app (defaults baked into a launcher, env-derived overrides).
+    The `None` entries leave their scopes without per-file provenance,
+    falling back to `display_label`."""
+    cfg_path = tmp_path / "app.yaml"
+    cfg_path.write_text("host: x\n", encoding="utf-8")
+
+    src = YamlSource(
+        scopes=[{"host": "from-inline"}, {"host": "x"}],
+        scope_origins=[None, cfg_path],
+    )
+
+    # The first scope wins for `host` and has no file origin → None.
+    assert src.describe_provenance(_f("host")) is None
+
+
+def test_scope_origins_must_be_parallel_to_scopes():
+    """Length mismatch is a programmer error — fail fast at construction
+    rather than silently dropping origins."""
+    with pytest.raises(ValueError, match="parallel to scopes"):
+        YamlSource(scopes=[{}, {}], scope_origins=[None])
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # describe_unset_hint()
 # ─────────────────────────────────────────────────────────────────────────────

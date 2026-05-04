@@ -23,9 +23,9 @@ from typing import Any, assert_never
 
 from rich.progress import Progress, TaskID
 
+from crawlers.core.dataset import DatasetValidator, OnedataDataset
 from crawlers.core.jsonl import JSONLSink
 from crawlers.core.result import Err, Ok, Result, failure_to_json
-from crawlers.model.dataset import DatasetValidator, OnedataDataset
 from crawlers.ui import console
 
 _SENTINEL = object()

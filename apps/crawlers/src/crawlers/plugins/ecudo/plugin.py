@@ -13,11 +13,12 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Annotated, Any
 
 from rich.table import Table
 
 from crawlers.core import (
+    CliPositional,
     CrawlConfig,
     CrawlerPlugin,
     Err,
@@ -28,7 +29,7 @@ from crawlers.core import (
     command,
     opt,
 )
-from crawlers.model import OnedataDataset
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.ecudo.api import EcudoApiClient
 from crawlers.plugins.ecudo.parser import parse_ecudo_record
 from crawlers.ui import console
@@ -43,11 +44,7 @@ class EcudoApiConfig(HttpConfig):
 class EcudoCrawlConfig(EcudoApiConfig, CrawlConfig, kw_only=True):
     """Ecudo crawl configuration."""
 
-    organization: str = opt(
-        ...,
-        # Explicit CLI is needed for positional args to be detected correctly
-        # (otherwise '--' will be prepended)
-        cli="organization",
+    organization: Annotated[str, CliPositional] = opt(
         description="Organization ID (e.g. iopan)",
     )
 

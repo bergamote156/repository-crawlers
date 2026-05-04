@@ -13,6 +13,7 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from datetime import UTC, datetime
 
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -26,7 +27,6 @@ from crawlers.metadata.datacite import (
     RelationType,
     Rights,
 )
-from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.topanat.api import (
     PublicationInfo,
     TraitInfo,

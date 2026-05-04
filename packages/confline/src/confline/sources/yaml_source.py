@@ -70,6 +70,9 @@ class YamlSource(Source):
     when the source is built via `from_files()` — each scope keeps a
     pointer to the file it came from, so the renderer can name the
     actual file that supplied the field rather than the merged set.
+    Apps that build scopes by hand (scoped layouts, multi-section
+    files) can pass `scope_origins=` to get the same per-field
+    rendering — see the `__init__` docstring.
     """
 
     name: ClassVar[str] = "yaml"
@@ -85,16 +88,44 @@ class YamlSource(Source):
         scopes: Sequence[Mapping[str, Any]],
         *,
         files: Sequence["Path | FileOrigin"] = (),
+        scope_origins: "Sequence[Path | FileOrigin | None] | None" = None,
     ) -> None:
+        """Build a `YamlSource` from pre-extracted scopes.
+
+        `scopes` is highest-priority-first. `files` is display-only
+        metadata for the operator-facing diagnostics: it lists the
+        source files in their original input order regardless of how
+        the caller chose to break them into scopes.
+
+        `scope_origins` is the (optional) parallel-to-`scopes` mapping
+        that lets `describe_provenance` name the actual file each
+        scope came from. Apps that explode one file into N scopes
+        (scoped layouts: `global` / `plugin` / `command` sections of
+        the same YAML) repeat the same `FileOrigin` N times. Pass
+        `None` for scopes that didn't come from a file.
+
+        Default behaviour (no `scope_origins`) leaves provenance as
+        `None`, so the renderer falls back to `display_label`. To
+        avoid a silent footgun, length is checked: if `scope_origins`
+        is given it must match `len(scopes)`.
+        """
         self._scopes = tuple(scopes)
         self._files: tuple[FileOrigin, ...] = tuple(
             f if isinstance(f, FileOrigin) else FileOrigin(path=f) for f in files
         )
-        # Parallel to `_scopes`. `from_files()` populates with the
-        # FileOrigin each scope came from; manual construction leaves
-        # all entries `None`, so `describe_provenance` returns `None`
-        # and the renderer falls back to `display_label`.
-        self._scope_origins: tuple[FileOrigin | None, ...] = (None,) * len(self._scopes)
+        if scope_origins is None:
+            self._scope_origins: tuple[FileOrigin | None, ...] = (None,) * len(self._scopes)
+        else:
+            if len(scope_origins) != len(self._scopes):
+                raise ValueError(
+                    f"scope_origins must be parallel to scopes "
+                    f"(got {len(scope_origins)} origins for "
+                    f"{len(self._scopes)} scopes)"
+                )
+            self._scope_origins = tuple(
+                None if o is None else (o if isinstance(o, FileOrigin) else FileOrigin(path=o))
+                for o in scope_origins
+            )
 
     def validate_schema(self, schema: ConfigSchema) -> None:
         seen: dict[FieldPath, str] = {}
@@ -184,12 +215,11 @@ class YamlSource(Source):
 
         # `_scopes` is highest-priority-first (last input file first);
         # `_files` keeps input order for display.
-        instance = cls(
+        return cls(
             scopes=list(reversed(scopes_in_input_order)),
             files=tuple(normalized),
+            scope_origins=list(reversed(normalized)),
         )
-        instance._scope_origins = tuple(reversed(normalized))
-        return instance
 
     @classmethod
     def _read_one(cls, path: Path) -> Mapping[str, Any] | None:

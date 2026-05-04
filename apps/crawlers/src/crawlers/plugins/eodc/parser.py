@@ -13,6 +13,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from crawlers.core import JsonObject, Ok
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -27,7 +28,6 @@ from crawlers.metadata.datacite import (
     RelationType,
     Rights,
 )
-from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.utils.mime import extension_for_mime
 from crawlers.ui import console

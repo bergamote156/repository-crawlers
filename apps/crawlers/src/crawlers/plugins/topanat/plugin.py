@@ -31,7 +31,7 @@ from crawlers.core import (
     RunContext,
     command,
 )
-from crawlers.model import OnedataDataset
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.topanat.api import TopanatClient
 from crawlers.plugins.topanat.models import (
     TopanatCrawlConfig,

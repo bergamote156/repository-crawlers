@@ -14,6 +14,7 @@ from rdflib.namespace import RDF
 from rdflib.term import Node
 
 from crawlers.core import Err, HttpClient, Ok
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -28,7 +29,6 @@ from crawlers.metadata.datacite import (
     RelationType,
     Rights,
 )
-from crawlers.model import OnedataDataset, OnedataFile
 from crawlers.plugins.bgee.models import (
     BgeeIteratorOpts,
     BgeeRawRecord,

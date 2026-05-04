@@ -13,11 +13,12 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Annotated, Any
 
 from rich.table import Table
 
 from crawlers.core import (
+    CliPositional,
     CrawlConfig,
     CrawlerPlugin,
     Err,
@@ -28,9 +29,10 @@ from crawlers.core import (
     Result,
     RunContext,
     command,
+    model_validator,
     opt,
 )
-from crawlers.model import OnedataDataset
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.vip.api import VipClient
 from crawlers.plugins.vip.parser import parse_vip_record
 from crawlers.ui import console
@@ -52,21 +54,17 @@ class VipApiConfig(HttpConfig):
 class VipCrawlConfig(VipApiConfig, CrawlConfig, kw_only=True):
     """Configuration for VIP Girder collection crawling."""
 
-    collection: str = opt(
-        ...,
-        # Explicit CLI is needed for positional args to be detected correctly
-        # (otherwise '--' will be prepended)
-        cli="collection",
+    collection: Annotated[str, CliPositional] = opt(
         description="Name of the VIP collection to crawl",
     )
 
     page_size: int = opt(100, description="Items per API page")
 
-    def __post_init__(self):
+    @model_validator
+    def _normalize_collection(self) -> None:
         if not self.collection or self.collection.isspace():
             raise ValueError("Collection name cannot be empty")
-
-        self.collection = self.collection.strip()
+        object.__setattr__(self, "collection", self.collection.strip())
 
 
 class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):

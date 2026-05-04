@@ -7,6 +7,8 @@ re-exported here so plugins can keep importing it from
 `crawlers.model.dataset` as before.
 """
 
+## TODO moved from model/ -> update docs?
+
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
@@ -117,11 +119,13 @@ class DatasetValidator:
             - `Err(InvalidUrlFailure)` — HEAD probe failed for some file
         """
         if not dataset.files:
-            return Err(NoFilesFailure(name=dataset.name))
+            return Err(NoFilesFailure(name=dataset.pid or dataset.name))
 
         duplicates = sorted(p for p, c in Counter(f.path for f in dataset.files).items() if c > 1)
         if duplicates:
-            return Err(DuplicatePathsFailure(name=dataset.name, paths=tuple(duplicates)))
+            return Err(
+                DuplicatePathsFailure(name=dataset.pid or dataset.name, paths=tuple(duplicates))
+            )
 
         if self._http is not None:
             checks = await asyncio.gather(*(self._http.head(f.url) for f in dataset.files))
@@ -129,7 +133,7 @@ class DatasetValidator:
                 if isinstance(check, Err):
                     return Err(
                         InvalidUrlFailure(
-                            name=dataset.name,
+                            name=dataset.pid or dataset.name,
                             path=file.path,
                             url=file.url,
                             failure=check.value,

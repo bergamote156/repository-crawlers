@@ -27,13 +27,31 @@ class _CrawlConfig(ConfigBase):
     workers: int = opt(4)
 
 
-def test_command_decorator_records_metadata():
+def test_command_decorator_derives_kebab_name_from_method():
     @command()
     def my_cmd(self, config: _RegConfig):
         return config.target
 
-    assert my_cmd.__confline_command__["name"] == "my_cmd"
+    # Default conversion `_` → `-` matches Click/Typer kebab-case CLIs.
+    assert my_cmd.__confline_command__["name"] == "my-cmd"
     assert my_cmd.__confline_command__["config_class"] is _RegConfig
+
+
+def test_command_decorator_bare_works_without_parens():
+    @command
+    def my_cmd(self, config: _RegConfig):
+        return config.target
+
+    assert my_cmd.__confline_command__["name"] == "my-cmd"
+    assert my_cmd.__confline_command__["config_class"] is _RegConfig
+
+
+def test_command_decorator_explicit_name_preserves_underscores():
+    @command(name="my_cmd")
+    def my_cmd(self, config: _RegConfig):
+        return config.target
+
+    assert my_cmd.__confline_command__["name"] == "my_cmd"
 
 
 def test_command_decorator_explicit_config_class():

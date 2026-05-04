@@ -11,7 +11,7 @@ from typing import Any
 from xml.dom import minidom
 
 from crawlers.core import CrawlerPlugin, HttpClient, Result, RunContext
-from crawlers.model import OnedataDataset
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.bgee.api import BgeeClient, BgeeParser
 from crawlers.plugins.bgee.models import (
     BgeeCrawlConfig,

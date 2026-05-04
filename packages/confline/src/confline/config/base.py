@@ -14,6 +14,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+import inspect
 from dataclasses import MISSING, Field, dataclass, is_dataclass
 from dataclasses import fields as dc_fields
 from types import NoneType, UnionType
@@ -21,6 +22,7 @@ from typing import (
     Any,
     ClassVar,
     Union,
+    dataclass_transform,
     get_args,
     get_origin,
     get_type_hints,
@@ -76,7 +78,7 @@ def _build_schema(config_cls: type) -> ConfigSchema:
         groups.append(
             ConfigGroup(
                 name=cls.__name__,
-                description=cls.__doc__,
+                description=_first_paragraph(cls.__doc__),
                 fields=tuple(new_fields),
                 is_mutex=is_mutex,
                 mutex_required=mutex_required,
@@ -89,6 +91,24 @@ def _build_schema(config_cls: type) -> ConfigSchema:
         model_validators=collect_model_validators(config_cls),
         field_validators=collect_field_validators(config_cls),
     )
+
+
+def _first_paragraph(doc: str | None) -> str | None:
+    """First paragraph of `doc` — text up to the first blank line.
+
+    PEP 257 docstrings put a one-sentence summary first, then a blank
+    line, then details. The summary is what `--help` shows under each
+    argument group; the rest is reference material for developers and
+    would only crowd the help output. Returns `None` for missing or
+    blank docstrings.
+    """
+    if not doc:
+        return None
+    cleaned = inspect.cleandoc(doc)
+    if not cleaned:
+        return None
+    paragraph = cleaned.split("\n\n", 1)[0].strip()
+    return paragraph or None
 
 
 def _own_field_names(cls: type) -> list[str]:
@@ -177,6 +197,7 @@ def _unwrap_optional(annotation: Any) -> tuple[Any, bool]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+@dataclass_transform(kw_only_default=True)
 class ConfigBase:
     """Base class for declarative config objects.
 
