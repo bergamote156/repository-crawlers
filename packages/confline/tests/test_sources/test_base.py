@@ -146,7 +146,9 @@ class _Cfg(ConfigBase):
 
 
 def _f(name: str) -> ConfigFieldInfo:
-    return _Cfg.__config_schema__.find_field(name)
+    result = _Cfg.__config_schema__.find_field(name)
+    assert result is not None
+    return result
 
 
 def test_supports_field_default_returns_true():
@@ -213,7 +215,8 @@ def _builtins() -> list[tuple[Source, str]]:
 
 @pytest.mark.parametrize(("source", "expected_label"), _builtins())
 def test_built_in_describe_provenance_returns_none(
-    source: Source, expected_label: str,
+    source: Source,
+    expected_label: str,
 ):
     """No built-in source carries per-instance provenance by default —
     only `YamlSource.from_files` does. The renderer falls back to

@@ -167,6 +167,7 @@ def test_describe_field_for_nested_field_uses_dashed_path():
 def test_describe_field_for_positional_uses_metavar():
     """Positionals don't have a flag form — their label is the last
     path segment as upper metavar, matching argparse's usage line."""
+
     class C(ConfigBase):
         input_path: Annotated[str, CliPositional] = opt("in.txt")
 

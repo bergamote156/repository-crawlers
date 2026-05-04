@@ -26,13 +26,13 @@ from typing import (
     get_type_hints,
 )
 
-from confline.config.types import SECRET_PLACEHOLDER, FieldPath, Provenance
 from confline.config.schema import (
     _OPT_SENTINEL,
     ConfigFieldInfo,
     ConfigGroup,
     ConfigSchema,
 )
+from confline.config.types import SECRET_PLACEHOLDER, FieldPath, Provenance
 from confline.config.validators import collect_field_validators, collect_model_validators
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -231,9 +231,7 @@ class ConfigBase:
         root" from "this instance was hand-built without load_config"
         from "this field was never produced by any source".
         """
-        key: FieldPath = (
-            tuple(path.split(".")) if isinstance(path, str) else tuple(path)
-        )
+        key: FieldPath = tuple(path.split(".")) if isinstance(path, str) else tuple(path)
         path_repr = ".".join(key)
 
         provenance = self._get_provenance()

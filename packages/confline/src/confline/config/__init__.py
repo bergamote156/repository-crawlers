@@ -10,13 +10,13 @@ from confline.config.base import (
     is_config_class,
     is_list_of_config_base,
 )
+from confline.config.schema import ConfigFieldInfo, ConfigGroup, ConfigSchema, opt
 from confline.config.types import (
     MISSING_DEFAULT,
     SECRET_PLACEHOLDER,
     FieldPath,
     Provenance,
 )
-from confline.config.schema import ConfigFieldInfo, ConfigGroup, ConfigSchema, opt
 from confline.config.validators import field_validator, model_validator
 
 __all__ = [

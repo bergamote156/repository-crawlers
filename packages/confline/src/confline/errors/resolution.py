@@ -127,11 +127,7 @@ class MissingRequiredError(ConfigError):
         self.sources_tried = tuple(sources_tried)
 
         names = [f.path for f in self.fields]
-        suffix = (
-            f" (sources tried: {', '.join(self.sources_tried)})"
-            if self.sources_tried
-            else ""
-        )
+        suffix = f" (sources tried: {', '.join(self.sources_tried)})" if self.sources_tried else ""
         super().__init__(f"missing required field(s): {', '.join(names)}{suffix}")
 
 
@@ -197,13 +193,7 @@ class MutexViolationError(ConfigError):
 
         names_str = ", ".join(self.field_paths)
         if required:
-            verdict = (
-                f"exactly one of [{names_str}] must be set "
-                f"(got {len(self.provided)})"
-            )
+            verdict = f"exactly one of [{names_str}] must be set (got {len(self.provided)})"
         else:
-            verdict = (
-                f"at most one of [{names_str}] may be set "
-                f"(got {len(self.provided)})"
-            )
+            verdict = f"at most one of [{names_str}] may be set (got {len(self.provided)})"
         super().__init__(verdict)

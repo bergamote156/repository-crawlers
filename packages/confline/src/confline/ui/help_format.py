@@ -62,14 +62,14 @@ def help_text(field: ConfigFieldInfo) -> str:
 # option header for attention.
 _STYLES: dict[str, Any] = {
     **RawDescriptionRichHelpFormatter.styles,
-    "confline.label": "dim",            # "default:", "env:", "yaml:" prefixes
-    "confline.value": "default",        # default value rendering
-    "confline.envvar": "yellow",        # MYAPP_PORT
-    "confline.yamlpath": "magenta",     # db.host
-    "confline.separator": "dim",        # " · " between metadata segments
-    "confline.required": "bold red",    # `<required>` in the default segment
-    "confline.tag": "italic dim",       # [deprecated], [mutex: ...]
-    "confline.secret": "bold red",      # [secret]
+    "confline.label": "dim",  # "default:", "env:", "yaml:" prefixes
+    "confline.value": "default",  # default value rendering
+    "confline.envvar": "yellow",  # MYAPP_PORT
+    "confline.yamlpath": "magenta",  # db.host
+    "confline.separator": "dim",  # " · " between metadata segments
+    "confline.required": "bold red",  # `<required>` in the default segment
+    "confline.tag": "italic dim",  # [deprecated], [mutex: ...]
+    "confline.secret": "bold red",  # [secret]
 }
 
 _SEGMENT_SEPARATOR = " · "
@@ -164,11 +164,7 @@ def _render_tag_line(
         tags.append(Text("[secret]", style="confline.secret"))
 
     if field.deprecated:
-        label = (
-            "[deprecated]"
-            if field.deprecated is True
-            else f"[deprecated: {field.deprecated}]"
-        )
+        label = "[deprecated]" if field.deprecated is True else f"[deprecated: {field.deprecated}]"
         tags.append(Text(label, style="confline.tag"))
 
     mutex_group = getattr(action, "_confline_mutex_group", None)

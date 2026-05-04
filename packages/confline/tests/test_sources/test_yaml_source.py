@@ -92,18 +92,22 @@ def test_yaml_path_marker_overrides_dict_walk():
 
 
 def test_higher_priority_scope_wins():
-    src = YamlSource(scopes=[
-        {"host": "high"},
-        {"host": "low"},
-    ])
+    src = YamlSource(
+        scopes=[
+            {"host": "high"},
+            {"host": "low"},
+        ]
+    )
     assert src.resolve(_f("host")) == "high"
 
 
 def test_lower_priority_fills_missing_key():
-    src = YamlSource(scopes=[
-        {},
-        {"host": "fallback"},
-    ])
+    src = YamlSource(
+        scopes=[
+            {},
+            {"host": "fallback"},
+        ]
+    )
     assert src.resolve(_f("host")) == "fallback"
 
 
@@ -301,9 +305,7 @@ def test_describe_provenance_falls_through_to_lower_priority_file(tmp_path):
 
 
 def test_unset_hint_names_yaml_key():
-    assert YamlSource(scopes=[]).describe_unset_hint("output.path") == (
-        " — remove output.path"
-    )
+    assert YamlSource(scopes=[]).describe_unset_hint("output.path") == (" — remove output.path")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -328,10 +330,12 @@ def test_validate_schema_ignores_yaml_excluded_field():
     """A field excluded from YAML resolution can carry a `YamlPath`
     that nominally collides — validation must skip it because the
     field is not addressable through this source."""
+
     class C(ConfigBase):
         host: str = opt("localhost")
         legacy_host: Annotated[str, YamlPath("host")] = opt(
-            "localhost", excluded_from=[YamlSource],
+            "localhost",
+            excluded_from=[YamlSource],
         )
 
     YamlSource(scopes=[]).validate_schema(C.__config_schema__)

@@ -116,10 +116,16 @@ def test_render_for_cli_omits_prefix_when_no_prog():
                 group_name="_Mode",
                 field_paths=["port", "socket"],
                 provided=[
-                    _provided("port", "argparse", value=9090, key="--port",
-                              source_label="command line"),
-                    _provided("socket", "env", value="/tmp/x", key="MYAPP_SOCKET",
-                              source_label="environment"),
+                    _provided(
+                        "port", "argparse", value=9090, key="--port", source_label="command line"
+                    ),
+                    _provided(
+                        "socket",
+                        "env",
+                        value="/tmp/x",
+                        key="MYAPP_SOCKET",
+                        source_label="environment",
+                    ),
                 ],
                 required=False,
             ),
@@ -134,7 +140,9 @@ def test_render_for_cli_omits_prefix_when_no_prog():
         ),
         (
             lambda: UnknownCommandError(
-                "migate", available=("migrate", "serve"), suggestions=("migrate",),
+                "migate",
+                available=("migrate", "serve"),
+                suggestions=("migrate",),
             ),
             lambda err, **kw: format_unknown_command(err, prog=kw.get("prog")),
         ),
@@ -218,9 +226,13 @@ def test_format_value_error_header_is_styled_red():
     Checks the *style*, not the exact colour string — keeps the
     assertion stable across palette tweaks (`red` → `bright_red`)."""
     record = SourceValueRecord(
-        path="port", type_desc="integer", secret=False,
-        source_label="env", source_native_key="MYAPP_PORT",
-        value="abc", suggestions=(),
+        path="port",
+        type_desc="integer",
+        secret=False,
+        source_label="env",
+        source_native_key="MYAPP_PORT",
+        value="abc",
+        suggestions=(),
     )
     rendered = format_value_error(record, prog="myapp")
     assert _has_style(rendered, "red")
@@ -235,11 +247,13 @@ def test_format_missing_required_renders_template():
     """Single missing field renders header + body + Try-one-of suggestions
     matching the `format_value_error` template shape."""
     error = MissingRequiredError(
-        [MissingFieldRecord(
-            path="host",
-            type_desc="string",
-            suggestions=("  MYAPP_HOST=example", "  yaml: `host: example`"),
-        )],
+        [
+            MissingFieldRecord(
+                path="host",
+                type_desc="string",
+                suggestions=("  MYAPP_HOST=example", "  yaml: `host: example`"),
+            )
+        ],
         sources_tried=("argparse", "env", "default"),
     )
 
@@ -260,10 +274,10 @@ def test_format_missing_required_handles_multiple_fields():
     and one body block per field."""
     error = MissingRequiredError(
         [
-            MissingFieldRecord(path="host", type_desc="string",
-                               suggestions=("  MYAPP_HOST=example",)),
-            MissingFieldRecord(path="port", type_desc="integer",
-                               suggestions=("  MYAPP_PORT=0",)),
+            MissingFieldRecord(
+                path="host", type_desc="string", suggestions=("  MYAPP_HOST=example",)
+            ),
+            MissingFieldRecord(path="port", type_desc="integer", suggestions=("  MYAPP_PORT=0",)),
         ],
         sources_tried=("env", "default"),
     )
@@ -287,15 +301,17 @@ def test_format_mutex_error_too_many_providers_lists_each_with_source():
         group_name="_Mode",
         field_paths=["port", "socket"],
         provided=[
-            _provided("port", "argparse", value=9090, key="--port",
-                      source_label="command line"),
-            _provided("socket", "env", value="/tmp/x", key="MYAPP_SOCKET",
-                      source_label="environment"),
+            _provided("port", "argparse", value=9090, key="--port", source_label="command line"),
+            _provided(
+                "socket", "env", value="/tmp/x", key="MYAPP_SOCKET", source_label="environment"
+            ),
         ],
         required=False,
     )
     out = format_mutex_error(
-        error, prog="myapp", command="serve",
+        error,
+        prog="myapp",
+        command="serve",
         label_sources=_builtin_label_sources(),
     )
 
@@ -313,13 +329,16 @@ def test_format_mutex_error_renders_values_in_source_native_form():
         group_name="_Mode",
         field_paths=["port", "socket"],
         provided=[
-            _provided("socket", "env", value="/tmp/x", key="MYAPP_SOCKET",
-                      source_label="environment"),
+            _provided(
+                "socket", "env", value="/tmp/x", key="MYAPP_SOCKET", source_label="environment"
+            ),
         ],
         required=False,
     )
     out = format_mutex_error(
-        error, prog="myapp", command="serve",
+        error,
+        prog="myapp",
+        command="serve",
         label_sources=_builtin_label_sources(),
     )
 
@@ -350,7 +369,9 @@ def test_format_mutex_error_renders_values_in_source_native_form():
     ],
 )
 def test_format_mutex_error_three_field_uses_oxford_comma_and_all(
-    provided, expected_header, expected_verb,
+    provided,
+    expected_header,
+    expected_verb,
 ):
     """3+ field groups read naturally: oxford comma + "all" (not "both")."""
     error = MutexViolationError(
@@ -360,7 +381,9 @@ def test_format_mutex_error_three_field_uses_oxford_comma_and_all(
         required=False,
     )
     out = format_mutex_error(
-        error, prog="myapp", command="serve",
+        error,
+        prog="myapp",
+        command="serve",
         label_sources=_builtin_label_sources(),
     )
     assert f"{expected_header} {expected_verb}" in out
@@ -374,17 +397,18 @@ def test_format_mutex_error_emits_per_source_action_hints():
         group_name="_OutputModes",
         field_paths=["port", "socket", "pipe"],
         provided=[
-            _provided("port", "argparse", value=9090, key="--port",
-                      source_label="command line"),
-            _provided("socket", "env", value="/tmp/x", key="MYAPP_SOCKET",
-                      source_label="environment"),
-            _provided("pipe", "yaml", value="/tmp/p", key="pipe",
-                      source_label="yaml /etc/app.yml"),
+            _provided("port", "argparse", value=9090, key="--port", source_label="command line"),
+            _provided(
+                "socket", "env", value="/tmp/x", key="MYAPP_SOCKET", source_label="environment"
+            ),
+            _provided("pipe", "yaml", value="/tmp/p", key="pipe", source_label="yaml /etc/app.yml"),
         ],
         required=False,
     )
     out = format_mutex_error(
-        error, prog="myapp", command="serve",
+        error,
+        prog="myapp",
+        command="serve",
         label_sources=_builtin_label_sources(),
     )
 
@@ -407,7 +431,9 @@ def test_format_mutex_error_omits_hint_for_unknown_source():
         required=False,
     )
     out = format_mutex_error(
-        error, prog="myapp", command="serve",
+        error,
+        prog="myapp",
+        command="serve",
         label_sources=_builtin_label_sources(),
     )
 
@@ -440,15 +466,29 @@ def test_format_mutex_error_secret_value_is_redacted():
         group_name="_Tokens",
         field_paths=["token", "key"],
         provided=[
-            _provided("token", "env", value=SECRET_PLACEHOLDER, key="MYAPP_TOKEN",
-                      source_label="environment", secret=True),
-            _provided("key", "argparse", value=SECRET_PLACEHOLDER, key="--key",
-                      source_label="command line", secret=True),
+            _provided(
+                "token",
+                "env",
+                value=SECRET_PLACEHOLDER,
+                key="MYAPP_TOKEN",
+                source_label="environment",
+                secret=True,
+            ),
+            _provided(
+                "key",
+                "argparse",
+                value=SECRET_PLACEHOLDER,
+                key="--key",
+                source_label="command line",
+                secret=True,
+            ),
         ],
         required=False,
     )
     out = format_mutex_error(
-        error, prog="myapp", command="serve",
+        error,
+        prog="myapp",
+        command="serve",
         label_sources=_builtin_label_sources(),
     )
 
@@ -476,12 +516,20 @@ def test_mutex_renderer_falls_back_to_display_label_when_source_label_empty():
         field_paths=["a", "b"],
         provided=[
             ProvidedField(
-                path="a", source_name="vault", source_label="",
-                value="x", source_native_key=None, secret=False,
+                path="a",
+                source_name="vault",
+                source_label="",
+                value="x",
+                source_native_key=None,
+                secret=False,
             ),
             ProvidedField(
-                path="b", source_name="vault", source_label="",
-                value="y", source_native_key=None, secret=False,
+                path="b",
+                source_name="vault",
+                source_label="",
+                value="y",
+                source_native_key=None,
+                secret=False,
             ),
         ],
         required=False,
@@ -495,7 +543,8 @@ def test_mutex_renderer_falls_back_to_display_label_when_source_label_empty():
     [("argparse", "cyan"), ("env", "yellow"), ("yaml", "magenta")],
 )
 def test_format_mutex_error_provider_line_styles_key_per_source(
-    source_name, expected_style,
+    source_name,
+    expected_style,
 ):
     """Defensive: provider keys are coloured by source so the visual
     cue matches `help_format` (env=yellow, yaml=magenta, cli=cyan).
@@ -511,7 +560,9 @@ def test_format_mutex_error_provider_line_styles_key_per_source(
         required=False,
     )
     rendered = format_mutex_error(
-        error, prog="myapp", label_sources=_builtin_label_sources(),
+        error,
+        prog="myapp",
+        label_sources=_builtin_label_sources(),
     )
     assert _has_style(rendered, expected_style)
 
@@ -545,7 +596,9 @@ def test_format_unknown_command_section_headers_styled_orange_items_cyan():
     this assertion a refactor that drops the section helpers passes
     the plain-text checks above silently."""
     error = UnknownCommandError(
-        "x", available=("serve",), suggestions=("serve",),
+        "x",
+        available=("serve",),
+        suggestions=("serve",),
     )
     rendered = format_unknown_command(error, prog="myapp")
     assert _has_style(rendered, "dark_orange")
@@ -582,7 +635,8 @@ class _Mode(MutuallyExclusiveGroup, required=False):
 
 
 def test_command_app_renders_mutex_violation_to_stderr_and_exits_usage(
-    monkeypatch, capsys,
+    monkeypatch,
+    capsys,
 ):
     monkeypatch.setenv("MYAPP_SOCKET", "/tmp/x")
 

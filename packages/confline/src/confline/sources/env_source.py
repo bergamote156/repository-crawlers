@@ -18,8 +18,8 @@ from dataclasses import dataclass
 from typing import Any, ClassVar
 
 from confline.config.base import is_list_of_config_base
-from confline.config.types import FieldPath
 from confline.config.schema import ConfigFieldInfo, ConfigSchema
+from confline.config.types import FieldPath
 from confline.errors import EnvKeyCollisionError
 from confline.sources.base import NO_VALUE, Source
 
@@ -130,7 +130,9 @@ def _validate_schema_for_env_source(
             dotted = ".".join(full)
             if key in seen and seen[key] != dotted:
                 raise EnvKeyCollisionError(
-                    key=key, field_a=seen[key], field_b=dotted,
+                    key=key,
+                    field_a=seen[key],
+                    field_b=dotted,
                 )
             seen[key] = dotted
 

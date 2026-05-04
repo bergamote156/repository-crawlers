@@ -174,9 +174,11 @@ def test_independent_mutex_groups_enforced_separately():
     cfg = load_config(
         App,
         sources=[
-            YamlSource(scopes=[
-                {"output": {"json": True}, "input_": {"stdin": True}},
-            ]),
+            YamlSource(
+                scopes=[
+                    {"output": {"json": True}, "input_": {"stdin": True}},
+                ]
+            ),
             DefaultSource(),
         ],
     )

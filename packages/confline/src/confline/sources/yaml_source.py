@@ -19,8 +19,8 @@ from typing import Any, ClassVar
 
 import yaml
 
-from confline.config.types import FieldPath
 from confline.config.schema import ConfigFieldInfo, ConfigSchema
+from confline.config.types import FieldPath
 from confline.errors import (
     ConfigFileNotFoundError,
     YamlParseError,

@@ -11,9 +11,9 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import MISSING, dataclass
-from typing import Final, TypeAlias
+from typing import Final
 
-FieldPath: TypeAlias = tuple[str, ...]
+type FieldPath = tuple[str, ...]
 """Dotted schema path as a tuple — `("db", "host")` for `db.host`."""
 
 SECRET_PLACEHOLDER: Final[str] = "******"

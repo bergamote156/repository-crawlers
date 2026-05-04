@@ -46,6 +46,7 @@ def test_command_decorator_explicit_config_class():
 
 def test_command_decorator_without_annotation_raises():
     with pytest.raises(CommandRegistrationError, match="config_class"):
+
         @command()
         def my_cmd(self, config):  # no annotation, no explicit
             return config
@@ -211,6 +212,7 @@ def test_command_app_unknown_command_renders_stderr_and_exits_usage(capsys):
 
 def test_command_app_name_collision_raises():
     with pytest.raises(CommandRegistrationError, match="collision"):
+
         class App(CommandApp):
             @command(name="reg")
             def reg(self, config: _RegConfig):
@@ -223,6 +225,7 @@ def test_command_app_name_collision_raises():
 
 def test_command_app_alias_collision_raises():
     with pytest.raises(CommandRegistrationError, match="alias"):
+
         class App(CommandApp):
             @command(aliases=["x"])
             def reg(self, config: _RegConfig):
@@ -296,59 +299,112 @@ def test_subclass_extends_parent_commands():
     ("exc_factory", "expected_code"),
     [
         # 66 EX_NOINPUT
-        (lambda: __import__(
-            "confline.errors", fromlist=["ConfigFileNotFoundError"],
-        ).ConfigFileNotFoundError(__import__("pathlib").Path("/missing.yaml")), 66),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["ConfigFileNotFoundError"],
+            ).ConfigFileNotFoundError(__import__("pathlib").Path("/missing.yaml")),
+            66,
+        ),
         # 65 EX_DATAERR — YAML and value errors
-        (lambda: __import__(
-            "confline.errors", fromlist=["YamlParseError"],
-        ).YamlParseError(__import__("pathlib").Path("/bad.yaml")), 65),
-        (lambda: __import__(
-            "confline.errors", fromlist=["YamlSchemaError"],
-        ).YamlSchemaError(__import__("pathlib").Path("/bad.yaml"), reason="x"), 65),
-        (lambda: __import__(
-            "confline.errors", fromlist=["YamlSizeLimitError"],
-        ).YamlSizeLimitError(
-            __import__("pathlib").Path("/big.yaml"), size=1024, limit=10,
-        ), 65),
-        (lambda: __import__(
-            "confline.errors", fromlist=["SourceValueError"],
-        ).SourceValueError("bad value"), 65),
-        # 64 EX_USAGE — operator-side
-        (lambda: __import__(
-            "confline.errors", fromlist=["MutexViolationError", "ProvidedField"],
-        ).MutexViolationError(
-            group_name="g", field_paths=("a", "b"),
-            provided=(
-                __import__(
-                    "confline.errors", fromlist=["ProvidedField"],
-                ).ProvidedField(
-                    path="a", source_name="argparse", source_label="command line",
-                    value=1, source_native_key="--a", secret=False,
-                ),
-                __import__(
-                    "confline.errors", fromlist=["ProvidedField"],
-                ).ProvidedField(
-                    path="b", source_name="env", source_label="environment",
-                    value=2, source_native_key="B", secret=False,
-                ),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["YamlParseError"],
+            ).YamlParseError(__import__("pathlib").Path("/bad.yaml")),
+            65,
+        ),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["YamlSchemaError"],
+            ).YamlSchemaError(__import__("pathlib").Path("/bad.yaml"), reason="x"),
+            65,
+        ),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["YamlSizeLimitError"],
+            ).YamlSizeLimitError(
+                __import__("pathlib").Path("/big.yaml"),
+                size=1024,
+                limit=10,
             ),
-            required=False,
-        ), 64),
-        (lambda: __import__(
-            "confline.errors", fromlist=["UnknownCommandError"],
-        ).UnknownCommandError("nope", available=("ok",)), 64),
-        (lambda: __import__(
-            "confline.errors", fromlist=["MissingRequiredError"],
-        ).MissingRequiredError(()), 64),
+            65,
+        ),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["SourceValueError"],
+            ).SourceValueError("bad value"),
+            65,
+        ),
+        # 64 EX_USAGE — operator-side
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["MutexViolationError", "ProvidedField"],
+            ).MutexViolationError(
+                group_name="g",
+                field_paths=("a", "b"),
+                provided=(
+                    __import__(
+                        "confline.errors",
+                        fromlist=["ProvidedField"],
+                    ).ProvidedField(
+                        path="a",
+                        source_name="argparse",
+                        source_label="command line",
+                        value=1,
+                        source_native_key="--a",
+                        secret=False,
+                    ),
+                    __import__(
+                        "confline.errors",
+                        fromlist=["ProvidedField"],
+                    ).ProvidedField(
+                        path="b",
+                        source_name="env",
+                        source_label="environment",
+                        value=2,
+                        source_native_key="B",
+                        secret=False,
+                    ),
+                ),
+                required=False,
+            ),
+            64,
+        ),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["UnknownCommandError"],
+            ).UnknownCommandError("nope", available=("ok",)),
+            64,
+        ),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["MissingRequiredError"],
+            ).MissingRequiredError(()),
+            64,
+        ),
         # 78 EX_CONFIG — framework-detected misconfig
-        (lambda: __import__(
-            "confline.errors", fromlist=["EnvKeyCollisionError"],
-        ).EnvKeyCollisionError(key="K", field_a="a", field_b="b"), 78),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["EnvKeyCollisionError"],
+            ).EnvKeyCollisionError(key="K", field_a="a", field_b="b"),
+            78,
+        ),
         # Fallback for raw ConfigError
-        (lambda: __import__(
-            "confline.errors", fromlist=["ConfigError"],
-        ).ConfigError("generic"), 78),
+        (
+            lambda: __import__(
+                "confline.errors",
+                fromlist=["ConfigError"],
+            ).ConfigError("generic"),
+            78,
+        ),
     ],
     ids=[
         "ConfigFileNotFoundError-66",
@@ -415,6 +471,7 @@ def test_handle_meta_flags_can_be_overridden(capsys):
                 return short
             if getattr(parsed, "_dry_run", False):
                 import sys
+
                 sys.stdout.write(f"DRY RUN: {cmd.name}\n")
                 return 7
             return None

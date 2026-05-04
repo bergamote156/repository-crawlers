@@ -158,7 +158,9 @@ def test_formatter_uses_custom_source_help_extra_text():
 def test_formatter_skips_excluded_source_lines():
     class C(ConfigBase):
         host: str = opt(
-            "localhost", description="Host", excluded_from=[EnvSource],
+            "localhost",
+            description="Host",
+            excluded_from=[EnvSource],
         )
 
     out = _format_help(C, label_sources=[EnvSource({}, prefix="APP_"), YamlSource(scopes=())])
@@ -197,7 +199,8 @@ def test_formatter_uses_display_label_not_wire_id():
         port: int = opt(8080, description="Port")
 
     out = _format_help(
-        C, label_sources=[EnvSource({}, prefix="MYAPP_"), YamlSource(scopes=())],
+        C,
+        label_sources=[EnvSource({}, prefix="MYAPP_"), YamlSource(scopes=())],
     )
     assert "environment:" in out
     assert "env: MYAPP_PORT" not in out  # wire-id must not surface
@@ -278,7 +281,10 @@ def test_tags_separated_by_middle_dot():
 
     class C(ConfigBase):
         token: str = opt(
-            "tok", description="Token", secret=True, deprecated=True,
+            "tok",
+            description="Token",
+            secret=True,
+            deprecated=True,
         )
 
     out = _format_help(C)
@@ -300,7 +306,8 @@ def test_formatter_styles_metadata_segments_with_named_styles(monkeypatch):
         port: int = opt(8080, description="Port")
 
     parser = build_argparse_parser(
-        C, label_sources=[EnvSource({}, prefix="MYAPP_"), YamlSource(scopes=())],
+        C,
+        label_sources=[EnvSource({}, prefix="MYAPP_"), YamlSource(scopes=())],
     )
     rendered = parser.format_help()
     # Style names appear as ANSI escapes in the rendered output. We

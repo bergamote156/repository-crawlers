@@ -38,7 +38,8 @@ class HeterogeneousTupleAction(argparse.Action):
         seq = list(values) if isinstance(values, (list, tuple)) else [values]
         if len(seq) != len(self._types):
             raise argparse.ArgumentError(
-                self, f"expected {len(self._types)} values, got {len(seq)}",
+                self,
+                f"expected {len(self._types)} values, got {len(seq)}",
             )
         coerced: list[Any] = []
         for parser_callable, raw in zip(self._types, seq, strict=False):

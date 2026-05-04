@@ -51,9 +51,7 @@ class MutexEnforcer:
     ) -> None:
         self._root = root
         self._provenance = provenance
-        self._sources_by_name: dict[str, Source] = {
-            s.name: s for s in context.sources
-        }
+        self._sources_by_name: dict[str, Source] = {s.name: s for s in context.sources}
         self._fallback_names: frozenset[str] = frozenset(
             s.name for s in context.sources if s.is_fallback
         )

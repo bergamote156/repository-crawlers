@@ -231,7 +231,8 @@ class CommandApp:
         return self.dispatch_command(cmd, config)
 
     def _prepare(
-        self, argv: Sequence[str] | None,
+        self,
+        argv: Sequence[str] | None,
     ) -> "tuple[Any, Command, list[Source]] | None":
         """Build parser → parse argv → look up command → build sources.
 
@@ -322,8 +323,7 @@ class CommandApp:
         free-form and surface in operator-facing diagnostics.
         """
         return [
-            FileOrigin(path=p, origin="cli")
-            for p in getattr(parsed, "_config_files", None) or []
+            FileOrigin(path=p, origin="cli") for p in getattr(parsed, "_config_files", None) or []
         ]
 
     def _label_sources(self) -> list[Source]:
@@ -339,6 +339,7 @@ class CommandApp:
         # local import: argparse is implementation-detail of the
         # default backend, not a contract of CommandApp.
         from argparse import Namespace  # noqa: PLC0415
+
         return [
             CliSource(Namespace()),
             EnvSource({}, prefix=self.env_prefix),
@@ -409,7 +410,7 @@ class CommandApp:
             return self._command_aliases[name]
 
         available = sorted(self._commands.keys())
-        suggestions = ()
+        suggestions: list[str] = []
         if name is not None:
             suggestions = difflib.get_close_matches(name, available, n=3, cutoff=0.6)
 
@@ -435,7 +436,10 @@ class CommandApp:
         prog = self.prog or _derive_prog()
         command_name = cmd.name if cmd is not None else None
         rendered = render_for_cli(
-            exc, prog=prog, command=command_name, label_sources=sources,
+            exc,
+            prog=prog,
+            command=command_name,
+            label_sources=sources,
         )
         # `Console(file=stderr)` auto-detects tty and `NO_COLOR`, so we
         # don't need to branch on environment ourselves. `highlight=False`

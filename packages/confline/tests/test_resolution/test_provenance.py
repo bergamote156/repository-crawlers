@@ -142,7 +142,7 @@ def test_source_of_on_hand_built_instance_raises_with_hint():
 
 def test_provenance_record_is_frozen():
     prov = Provenance(name="yaml", label="yaml /etc/app.yaml")
-    with pytest.raises(Exception):  # noqa: BLE001 — dataclass-frozen raises FrozenInstanceError or AttributeError depending on slots.
+    with pytest.raises(Exception):  # noqa: B017, BLE001 — dataclass-frozen raises FrozenInstanceError or AttributeError depending on slots.
         prov.name = "argparse"  # type: ignore[misc]
 
 
@@ -177,7 +177,8 @@ def test_describe_provenance_failure_falls_back_to_display_label(caplog):
     assert cfg.host == "value-from-buggy"
     assert cfg.source_of("host").label == "buggy vault"
     matching = [
-        r for r in caplog.records
+        r
+        for r in caplog.records
         if r.name == "confline" and "describe_provenance failed" in r.getMessage()
     ]
     assert matching, "expected DEBUG log naming the failed describe_provenance"

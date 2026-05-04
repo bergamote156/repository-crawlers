@@ -86,7 +86,10 @@ def load_config(
 
     provenance: dict[FieldPath, Provenance] = {}
     instance = _resolve_schema(
-        schema, prefix=(), context=context, provenance=provenance,
+        schema,
+        prefix=(),
+        context=context,
+        provenance=provenance,
     )
     instance._attach_provenance(provenance)
     enforce_mutex_groups(instance, provenance, context)
@@ -169,10 +172,18 @@ def _resolve_field(
 
         prov_label = safe_describe_provenance(source, field)
         value = _coerce_field_value(
-            field, source, raw, source_label=prov_label, context=context,
+            field,
+            source,
+            raw,
+            source_label=prov_label,
+            context=context,
         )
         value = _run_optional_validator(
-            field, source, value, source_label=prov_label, context=context,
+            field,
+            source,
+            value,
+            source_label=prov_label,
+            context=context,
         )
         return _ResolvedField(value=value, source_name=source.name, source_label=prov_label)
 
@@ -329,7 +340,10 @@ def _run_validators(
                     # record with.
                     raise SourceValueError(str(exc)) from exc
                 _raise_source_value_error(
-                    exc, field=field, raw_value=current, context=context,
+                    exc,
+                    field=field,
+                    raw_value=current,
+                    context=context,
                 )
 
             setattr(instance, field_name, new_value)
@@ -346,7 +360,7 @@ def _run_validators(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _raise_source_value_error(
+def _raise_source_value_error(  # noqa: PLR0913
     exc: Exception,
     *,
     field: ConfigFieldInfo,

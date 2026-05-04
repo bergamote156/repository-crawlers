@@ -67,11 +67,13 @@ def test_nested_env_uses_double_underscore_delimiter():
     cfg = load_config(
         App,
         sources=[
-            EnvSource({
-                "DB__ADDR": "from-env",
-                "DB__PORT": "9999",
-                "AUTH__USER": "alice",
-            }),
+            EnvSource(
+                {
+                    "DB__ADDR": "from-env",
+                    "DB__PORT": "9999",
+                    "AUTH__USER": "alice",
+                }
+            ),
             DefaultSource(),
         ],
     )
@@ -111,11 +113,15 @@ def test_nested_yaml_dict_walk_via_field_path():
     cfg = load_config(
         App,
         sources=[
-            YamlSource(scopes=[{
-                "db": {"addr": "yaml-host", "port": 6543},
-                "auth": {"user": "yaml-user"},
-                "workers": 16,
-            }]),
+            YamlSource(
+                scopes=[
+                    {
+                        "db": {"addr": "yaml-host", "port": 6543},
+                        "auth": {"user": "yaml-user"},
+                        "workers": 16,
+                    }
+                ]
+            ),
             DefaultSource(),
         ],
     )

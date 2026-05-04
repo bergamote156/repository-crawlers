@@ -63,7 +63,9 @@ def safe_describe_field(source: Source, field: ConfigFieldInfo) -> str | None:
     except Exception:  # noqa: BLE001 — never crash on a label call
         logger.debug(
             "describe_field failed for source %r on field %r",
-            source.name, ".".join(field.path), exc_info=True,
+            source.name,
+            ".".join(field.path),
+            exc_info=True,
         )
         return None
 
@@ -81,7 +83,9 @@ def safe_describe_provenance(source: Source, field: ConfigFieldInfo) -> str:
     except Exception:  # noqa: BLE001 — never crash on a label call
         logger.debug(
             "describe_provenance failed for source %r on field %r",
-            source.name, ".".join(field.path), exc_info=True,
+            source.name,
+            ".".join(field.path),
+            exc_info=True,
         )
         return source.display_label
 

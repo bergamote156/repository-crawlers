@@ -1,5 +1,6 @@
-SRC_FILES := apps/crawlers/src apps/crawlers/tests apps/registrar/src
-TEST_PATHS := apps/crawlers/tests
+SRC_FILES  := $(shell find apps packages -maxdepth 3 -type d \( -name src -o -name tests \) | grep -v '\.venv' | sort)
+SRC_TYPED  := $(shell find apps packages -maxdepth 3 -type d -name src | grep -v '\.venv' | sort)
+TEST_PATHS := $(shell find apps packages -maxdepth 3 -type d -name tests | grep -v '\.venv' | sort)
 UV_RUN := uv run --group dev
 
 .PHONY: sync format format-check static-analysis type-check lint test
@@ -44,7 +45,7 @@ static-analysis:
 
 type-check:
 	$(call print_target)
-	$(UV_RUN) mypy --install-types --non-interactive $(SRC_FILES)
+	$(UV_RUN) mypy --install-types --non-interactive $(SRC_TYPED)
 
 lint: format-check static-analysis type-check
 	@:

@@ -10,7 +10,9 @@ from confline.config.base import ConfigBase
 
 
 def assert_field_resolved_from(
-    config: ConfigBase, dotted_path: str, expected_source: str,
+    config: ConfigBase,
+    dotted_path: str,
+    expected_source: str,
 ) -> None:
     """Assert `config` resolved `dotted_path` from `expected_source`."""
     try:
@@ -18,6 +20,5 @@ def assert_field_resolved_from(
     except KeyError:
         actual = None
     assert actual == expected_source, (
-        f"expected field {dotted_path!r} from source {expected_source!r}, "
-        f"got {actual!r}"
+        f"expected field {dotted_path!r} from source {expected_source!r}, got {actual!r}"
     )

@@ -250,8 +250,7 @@ def _build_inherited_epilog(spec: CliSpec) -> str:
         return ""
     flag_str = ", ".join(spec.config_option)
     return (
-        "Inherited from root:\n"
-        f"  {flag_str} FILE   Load YAML config (repeatable; later files win)."
+        f"Inherited from root:\n  {flag_str} FILE   Load YAML config (repeatable; later files win)."
     )
 
 

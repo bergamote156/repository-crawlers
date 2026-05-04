@@ -63,11 +63,17 @@ def render_for_cli(
             )
         case MissingRequiredError():
             return format_missing_required(
-                error, prog=prog, command=command, label_sources=label_sources,
+                error,
+                prog=prog,
+                command=command,
+                label_sources=label_sources,
             )
         case MutexViolationError():
             return format_mutex_error(
-                error, prog=prog, command=command, label_sources=label_sources,
+                error,
+                prog=prog,
+                command=command,
+                label_sources=label_sources,
             )
         case UnknownCommandError():
             return format_unknown_command(error, prog=prog)
@@ -271,7 +277,9 @@ def format_missing_required(
 
     lines: list[Text | str | None] = [
         _header_line(
-            prog, command, f"missing required {pluralize}: {_oxford_join(names)}",
+            prog,
+            command,
+            f"missing required {pluralize}: {_oxford_join(names)}",
         ),
     ]
 
@@ -331,19 +339,17 @@ def format_mutex_error(
     """
     if error.required and len(error.provided) == 0:
         opts = ", ".join(error.field_paths)
-        return _join_lines([
-            _header_line(prog, command, f"exactly one of [{opts}] must be set"),
-            "",
-            "These options form a required mutex group; pick one.",
-        ])
+        return _join_lines(
+            [
+                _header_line(prog, command, f"exactly one of [{opts}] must be set"),
+                "",
+                "These options form a required mutex group; pick one.",
+            ]
+        )
 
     provided_paths = [p.path for p in error.provided]
     header = _oxford_join(provided_paths or error.field_paths)
-    verb = (
-        "cannot both be set"
-        if len(provided_paths) == _MUTEX_VERB_BOTH
-        else "cannot all be set"
-    )
+    verb = "cannot both be set" if len(provided_paths) == _MUTEX_VERB_BOTH else "cannot all be set"
 
     lines: list[Text | str | None] = [
         _header_line(prog, command, f"{header} {verb}"),

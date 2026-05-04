@@ -127,10 +127,7 @@ def test_safe_describe_field_returns_none_when_source_raises(caplog):
         result = safe_describe_field(_ExplodingSource(), _f("host"))
 
     assert result is None
-    matching = [
-        r for r in caplog.records
-        if "describe_field failed" in r.getMessage()
-    ]
+    matching = [r for r in caplog.records if "describe_field failed" in r.getMessage()]
     assert matching, "expected DEBUG log naming the failed describe_field"
     assert matching[0].exc_info is not None
 
@@ -185,9 +182,6 @@ def test_safe_describe_provenance_falls_back_to_display_label_on_raise(caplog):
         label = safe_describe_provenance(_BuggySource(), _f("host"))
 
     assert label == "buggy fallback"
-    matching = [
-        r for r in caplog.records
-        if "describe_provenance failed" in r.getMessage()
-    ]
+    matching = [r for r in caplog.records if "describe_provenance failed" in r.getMessage()]
     assert matching, "expected DEBUG log naming the failed describe_provenance"
     assert matching[0].exc_info is not None

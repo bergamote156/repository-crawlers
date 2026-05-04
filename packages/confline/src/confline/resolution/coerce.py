@@ -33,7 +33,6 @@ from uuid import UUID
 
 from confline.config.schema import ConfigFieldInfo
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Type spec — one row in the registry
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,15 +133,15 @@ def _parse_uuid(value: Any) -> UUID:
 
 def _build_default_specs() -> dict[type, TypeSpec]:
     return {
-        bool:     TypeSpec(_parse_bool,     "true or false",     "true"),
-        int:      TypeSpec(_parse_int,      "integer",           "8080"),
-        float:    TypeSpec(_parse_float,    "number",            "1.5"),
-        str:      TypeSpec(_parse_str,      "string",            "<value>"),
-        Path:     TypeSpec(_parse_path,     "path",              "/path/to/file"),
+        bool: TypeSpec(_parse_bool, "true or false", "true"),
+        int: TypeSpec(_parse_int, "integer", "8080"),
+        float: TypeSpec(_parse_float, "number", "1.5"),
+        str: TypeSpec(_parse_str, "string", "<value>"),
+        Path: TypeSpec(_parse_path, "path", "/path/to/file"),
         datetime: TypeSpec(_parse_datetime, "ISO 8601 datetime", "<value>"),
-        date:     TypeSpec(_parse_date,     "ISO 8601 date",     "<value>"),
-        time:     TypeSpec(_parse_time,     "ISO 8601 time",     "<value>"),
-        UUID:     TypeSpec(_parse_uuid,     "UUID",              "<value>"),
+        date: TypeSpec(_parse_date, "ISO 8601 date", "<value>"),
+        time: TypeSpec(_parse_time, "ISO 8601 time", "<value>"),
+        UUID: TypeSpec(_parse_uuid, "UUID", "<value>"),
     }
 
 
@@ -182,7 +181,7 @@ def register_type(
     and `example` in 'Try one of' hints; both fall back to sane
     defaults (`target.__name__` / `<value>`) when omitted.
     """
-    global _TYPE_SPECS
+    global _TYPE_SPECS  # noqa: PLW0603
     with _TYPE_SPECS_LOCK:
         new = dict(_TYPE_SPECS)
         new[target] = TypeSpec(
@@ -198,7 +197,7 @@ def register_type(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def coerce(value: Any, target: type) -> Any:
+def coerce(value: Any, target: type) -> Any:  # noqa: PLR0911
     """Coerce `value` to `target`."""
     if value is None:
         return None
@@ -344,7 +343,7 @@ def container_info(target: type) -> tuple[type | None, tuple[Any, ...]]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def describe_field_type(field: ConfigFieldInfo) -> str:
+def describe_field_type(field: ConfigFieldInfo) -> str:  # noqa: PLR0911
     """Plain-English rendering of a field's expected type.
 
     Reads `_TYPE_SPECS` for built-ins and registered types; falls back

@@ -14,6 +14,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from argparse import Namespace
+from collections.abc import Sequence
 from typing import Any, ClassVar
 
 from confline.config.base import is_list_of_config_base
@@ -77,7 +78,7 @@ class CliSource(Source):
     def from_argv(
         cls,
         config_class: type,
-        argv: "list[str] | tuple[str, ...] | None" = None,
+        argv: "Sequence[str] | None" = None,
     ) -> "CliSource":
         """Build a parser for `config_class`, parse `argv`, return a `CliSource`.
 

@@ -52,7 +52,7 @@ def capture_logs() -> Iterator[list[logging.LogRecord]]:
     """Capture log records emitted by the `confline` logger."""
     records: list[logging.LogRecord] = []
     handler = logging.Handler()
-    handler.emit = records.append
+    handler.emit = records.append  # type: ignore[method-assign, assignment]
     logger = logging.getLogger("confline")
     logger.addHandler(handler)
     prior_level = logger.level

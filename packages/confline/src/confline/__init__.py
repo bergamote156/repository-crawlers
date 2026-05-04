@@ -43,6 +43,10 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 # ─────────────────────────────────────────────────────────────────────────────
 # Schema authoring
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# CommandApp orchestration
+# ─────────────────────────────────────────────────────────────────────────────
+from confline.commands import CommandApp, command
 from confline.config import (
     SECRET_PLACEHOLDER,
     ConfigBase,
@@ -54,15 +58,22 @@ from confline.config import (
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Errors users typically catch by type
+# ─────────────────────────────────────────────────────────────────────────────
+from confline.errors import (
+    ConfigError,
+    ConfigFileNotFoundError,
+    MissingRequiredError,
+    MutexViolationError,
+    SourceValueError,
+    UnknownCommandError,
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Resolution / loading
 # ─────────────────────────────────────────────────────────────────────────────
 from confline.resolution.api import load_default, load_or_exit
 from confline.resolution.resolver import load_config
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CommandApp orchestration
-# ─────────────────────────────────────────────────────────────────────────────
-from confline.commands import CommandApp, command
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Built-in sources + source-side annotations
@@ -77,18 +88,6 @@ from confline.sources import (
     Source,
     YamlPath,
     YamlSource,
-)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Errors users typically catch by type
-# ─────────────────────────────────────────────────────────────────────────────
-from confline.errors import (
-    ConfigError,
-    ConfigFileNotFoundError,
-    MissingRequiredError,
-    MutexViolationError,
-    SourceValueError,
-    UnknownCommandError,
 )
 
 __all__ = [
