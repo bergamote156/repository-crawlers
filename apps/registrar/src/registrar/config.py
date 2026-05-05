@@ -197,6 +197,13 @@ class RegisterConfig(CommonConfig):
             "If omitted, inferred from the first file URL in the input."
         ),
     )
+    storage_default_size: int = opt(
+        1099511627776,  # 1 TiB
+        description=(
+            "Default support size in bytes used when this run adds storage support "
+            "for the resolved space."
+        ),
+    )
     dataset_root: str = opt(
         "",
         description=(

@@ -6,7 +6,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from typing import Final
+from typing import Final, NotRequired, TypedDict
 
 import requests
 
@@ -24,6 +24,26 @@ disable_ssl_warnings()
 
 SERVICE_NAME: Final[str] = "Onepanel"
 DEFAULT_STORAGE_SUPPORT_SIZE: Final[int] = 1099511627776  # 1 TiB
+
+
+class SpaceDetails(TypedDict):
+    """Onepanel `GET /provider/spaces/{id}` payload (subset used by registrar)."""
+
+    name: str
+    storageId: str
+
+
+class StorageDetails(TypedDict):
+    """Onepanel `GET /provider/storages/{id}` payload (subset used by registrar).
+
+    `endpoint` is the only optional field — only HTTP storages carry it.
+    """
+
+    name: str
+    type: str
+    readonly: bool
+    importedStorage: bool
+    endpoint: NotRequired[str]
 
 
 class OnepanelClient:
@@ -79,7 +99,7 @@ class OnepanelClient:
         handle_error(response, service=SERVICE_NAME)
         return response.json().get("ids", [])
 
-    def get_storage_details(self, storage_id: str) -> dict:
+    def get_storage_details(self, storage_id: str) -> StorageDetails:
         """Return the full configuration object for `storage_id`."""
         url = f"{self._base_url}/provider/storages/{storage_id}"
         response = requests.get(
@@ -135,7 +155,7 @@ class OnepanelClient:
         handle_error(response, service=SERVICE_NAME)
         return response.json().get("ids", [])
 
-    def get_space_details(self, space_id: str) -> dict:
+    def get_space_details(self, space_id: str) -> SpaceDetails:
         """Return the full support details for `space_id`."""
         url = f"{self._base_url}/provider/spaces/{space_id}"
         response = requests.get(
