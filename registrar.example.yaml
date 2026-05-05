@@ -1,0 +1,99 @@
+# Example configuration for `registrar` (apps/registrar).
+#
+# Resolution order, lowest → highest:
+#   1. defaults (the values below)
+#   2. environment variables (REGISTRAR_* with `__` for nested keys,
+#      e.g. REGISTRAR_TOKENS__ADMIN_TOKEN)
+#   3. this YAML, passed via `-c FILE` or `--config FILE`
+#   4. CLI flags
+#
+# Run `registrar register --help` to see every flag, its env var, and
+# its YAML key annotated together.
+#
+# Copy this file to e.g. `registrar.yaml` and customise. Only set what
+# differs from the defaults — every key here is optional.
+
+
+# ─── Connection ──────────────────────────────────────────────────────────────
+onedata:
+  oz_domain: demo.onedata.org
+  op_domain: provider.demo.onedata.org
+  op_panel_port: 443
+  verify_ssl: true
+
+
+# ─── Authentication ──────────────────────────────────────────────────────────
+# Prefer environment variables over YAML for tokens — the values land in
+# logs and shell history less easily that way.
+#
+#   REGISTRAR_TOKENS__ADMIN_TOKEN
+#   REGISTRAR_TOKENS__SPACE_OWNER_TOKEN
+tokens:
+  admin_token: ""        # Onepanel admin (storage/support operations)
+  space_owner_token: ""  # Onezone/Oneprovider user (spaces, files, shares, handles)
+
+
+# ─── Target selection (used by `register` only) ──────────────────────────────
+# Pick the destination space — by name (use-or-create) OR by ID
+# (use-existing). At most one of `name`/`id` may be set; leaving both
+# empty makes the registrar infer the space name from the first file
+# URL in the dataset input.
+space:
+  name: ""
+  # id: ""
+
+# Pick the storage backing the space. Same name-or-id rule. When neither
+# is set the registrar reuses the single compatible HTTP readonly
+# storage already supporting the space, or creates one named after the
+# space.
+storage:
+  name: ""
+  # id: ""
+
+# Endpoint used when the registrar creates a new HTTP storage. Inferred
+# from the first file URL in the dataset input when empty.
+storage_endpoint: ""
+
+# Relative path inside the space where dataset directories will be
+# created. Empty means each dataset's `target_dir` is a top-level
+# directory under the space root.
+dataset_root: ""
+
+# Accept a deterministic plan without prompting. Refuses to auto-resolve
+# ambiguity even when set. The key is quoted because YAML 1.1 parses
+# `yes` as a boolean keyword — unquoted `yes: true` becomes `{True: True}`
+# and the field is silently ignored.
+"yes": false
+
+
+# ─── Public-data records (used by `register` only) ───────────────────────────
+public_data_records:
+  # Create or reuse a public data record per dataset share. Set false to
+  # create only the share and skip records/handles.
+  register: true
+
+  # Handle service ID. Required when `register` is true and
+  # `public_identifier_type` is "handle-service".
+  handle_service_id: ""
+
+  # Identifier kind to mint when a new identifier is needed:
+  #   onedata-url     — reuse the share's public URL.
+  #   handle-service  — request an identifier from the configured handle service.
+  public_identifier_type: onedata-url
+
+  # How to treat the per-dataset `pid` from the input:
+  #   always-generate-new      — ignore input PIDs.
+  #   always-reuse-existing    — every dataset must provide one.
+  #   generate-new-if-missing  — reuse when present, mint otherwise.
+  identifier_policy: generate-new-if-missing
+
+
+# ─── Output and logging ──────────────────────────────────────────────────────
+output:
+  dir: ./data
+  log_file: registration.log
+
+logging:
+  level: info       # debug | info | warning | error | silent
+  quiet: false      # warnings, errors, and the final summary only
+  verbose: false    # debug-level output (overrides `quiet`)
