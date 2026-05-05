@@ -150,5 +150,3 @@ class OnezoneClient:
         handle_id = id_from_location(response) or response.json().get("handleId")
         output.info(f"Registered handle for share {share_id}: {handle_id}")
         return handle_id
-
-

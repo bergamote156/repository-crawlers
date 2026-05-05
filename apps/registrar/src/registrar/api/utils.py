@@ -49,8 +49,7 @@ def handle_error(response: requests.Response, *, service: str) -> None:
     try:
         error_body = response.json()
         output.error(
-            f"{service} API Error ({response.status_code}): "
-            f"{json.dumps(error_body, indent=2)}",
+            f"{service} API Error ({response.status_code}): {json.dumps(error_body, indent=2)}",
         )
     except json.JSONDecodeError:
         output.error(f"{service} API Error ({response.status_code}): {response.text}")
@@ -80,8 +79,7 @@ class MissingTokenError(RuntimeError):
     def __init__(self, path: str) -> None:
         env_var = env_var_for(path)
         super().__init__(
-            f"{path} is not set — provide it via {env_var}, "
-            f"YAML config, or the matching CLI flag.",
+            f"{path} is not set — provide it via {env_var}, YAML config, or the matching CLI flag.",
         )
         self.path = path
         self.env_var = env_var

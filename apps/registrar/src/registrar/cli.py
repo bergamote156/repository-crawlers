@@ -10,7 +10,6 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from confline import CommandApp, command
-
 from registrar.commands import list_spaces, list_storages, register
 from registrar.config import ListSpacesConfig, ListStoragesConfig, RegisterConfig
 
