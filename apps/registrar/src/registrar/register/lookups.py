@@ -89,11 +89,6 @@ def find_storages_by_name(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def is_storage_compatible(storage: StorageDetails) -> bool:
-    """True for HTTP readonly imported storages (the only kind registrar can use)."""
-    return storage["type"] == "http" and storage["readonly"] and storage["importedStorage"]
-
-
 def infer_domain(url: str) -> str:
     """Domain part of `url`, or `""` when the URL has no netloc."""
     return urlparse(url).netloc or ""

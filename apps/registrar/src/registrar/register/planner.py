@@ -21,18 +21,17 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from onedata_dataset import OnedataDataset
-from registrar.api.onepanel import OnepanelClient
+from registrar.api.onepanel import OnepanelClient, is_storage_compatible
 from registrar.config import RegisterConfig, SpaceSelection, StorageSelection
-from registrar.target.lookups import (
+from registrar.register.lookups import (
     choose_endpoint,
     find_spaces_by_name,
     find_storages_by_name,
     infer_domain,
-    is_storage_compatible,
     lookup_space_by_id,
     lookup_storage_by_id,
 )
-from registrar.target.plan import TargetPlan
+from registrar.register.types import TargetPlan
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Errors
