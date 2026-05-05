@@ -1,4 +1,10 @@
-"""Plan rendering and the interactive confirmation prompt."""
+"""
+Operator-visible output for `registrar register`.
+
+Covers everything the operator sees during a register run: the pre-confirm
+plan block, the y/N prompt, the per-dataset progress tail, the closing
+summary, and the ambiguity-error message the orchestrator prints to stderr.
+"""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
@@ -7,7 +13,8 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import sys
 
 from registrar.config import RegisterConfig
-from registrar.target.plan import TargetPlan
+from registrar.register.planner import AmbiguityError
+from registrar.register.types import DatasetOutcome, Summary, TargetPlan
 
 
 def render_plan(plan: TargetPlan, config: RegisterConfig) -> str:
@@ -54,6 +61,58 @@ def confirm(*, assume_yes: bool) -> bool:
         sys.stdout.write("\n")
         return False
     return answer.strip().lower() in ("y", "yes")
+
+
+def render_outcome_tail(outcome: DatasetOutcome) -> str:
+    """Per-dataset progress tail printed after `[i/N] name ...` during the loop."""
+    if not outcome.success:
+        return f"FAIL: {outcome.error}"
+
+    parts = [
+        f"OK ({outcome.files_registered} registered, {outcome.files_skipped} skipped)",
+    ]
+    if outcome.share_id:
+        parts.append(f"share {outcome.share_id}")
+    if outcome.record_identifier:
+        parts.append(f"record {outcome.record_identifier}")
+
+    return "; ".join(parts)
+
+
+def render_summary(summary: Summary) -> str:
+    """Closing report printed once `run_registration` returns."""
+    bar = "═" * 70
+    lines: list[str] = ["", bar, "Registration complete", bar]
+    lines.append(
+        f"Datasets: {summary.total} total, "
+        f"{summary.successful} successful, {summary.failed} failed",
+    )
+    lines.append(
+        f"Files:    {summary.files_registered} registered, {summary.files_skipped} skipped",
+    )
+    lines.append(f"Shares:   {summary.shares_count} created or reused")
+    lines.append(f"Records:  {summary.records_count} public-data-record identifiers")
+    lines.append(bar)
+    if summary.failed:
+        lines.append("")
+        lines.append("Failed datasets:")
+        for outcome in summary.outcomes:
+            if not outcome.success:
+                lines.append(f"  - {outcome.name}: {outcome.error}")
+
+    return "\n".join(lines) + "\n"
+
+
+def render_ambiguity(exc: AmbiguityError) -> str:
+    """Operator-facing message for `AmbiguityError` — pointer to `list-*` and `--*.id`."""
+    list_command = "list-spaces" if exc.kind == "space" else "list-storages"
+    id_flag = "--space.id" if exc.kind == "space" else "--storage.id"
+    candidates = ", ".join(exc.candidate_ids)
+    return (
+        f"multiple {exc.kind} resources named {exc.name!r} found "
+        f"(IDs: {candidates}).\n"
+        f"Run `registrar {list_command}` and retry with {id_flag}."
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
