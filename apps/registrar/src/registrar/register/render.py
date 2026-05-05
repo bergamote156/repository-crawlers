@@ -93,12 +93,11 @@ def render_summary(summary: Summary) -> str:
     lines.append(f"Shares:   {summary.shares_count} created or reused")
     lines.append(f"Records:  {summary.records_count} public-data-record identifiers")
     lines.append(bar)
-    if summary.failed:
+    if summary.failures:
         lines.append("")
         lines.append("Failed datasets:")
-        for outcome in summary.outcomes:
-            if not outcome.success:
-                lines.append(f"  - {outcome.name}: {outcome.error}")
+        for failure in summary.failures:
+            lines.append(f"  - {failure.name}: {failure.error}")
 
     return "\n".join(lines) + "\n"
 

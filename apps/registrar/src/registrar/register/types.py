@@ -1,16 +1,28 @@
-"""
-Cross-module data contracts for the `register` command.
-
-`TargetPlan` and `ResolvedTarget` describe the registration target before
-and after the planner+applier round-trip. `DatasetOutcome` and `Summary`
-describe per-dataset and aggregate results of the registration loop.
-"""
+"""Cross-module data contracts for the `register` command."""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
+
+from registrar.api.onepanel import OnepanelClient
+from registrar.api.oneprovider import OneproviderClient
+from registrar.api.onezone import OnezoneClient
+
+# ─────────────────────────────────────────────────────────────────────────────
+# API clients
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class OnedataClients:
+    """API client bundle for a single registrar run."""
+
+    onepanel: OnepanelClient
+    onezone: OnezoneClient
+    oneprovider: OneproviderClient
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Target — planner output, applier output
@@ -61,6 +73,7 @@ class ResolvedTarget:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+# TODO rm?
 @dataclass(frozen=True)
 class DatasetOutcome:
     """Result of registering a single dataset.
@@ -79,35 +92,25 @@ class DatasetOutcome:
 
 
 @dataclass(frozen=True)
+class FailedDataset:
+    """Name and error message for a dataset that failed registration."""
+
+    name: str
+    error: str
+
+
+@dataclass(frozen=True)
 class Summary:
     """Aggregate of a complete `run_registration` invocation."""
 
-    outcomes: tuple[DatasetOutcome, ...]
-
-    @property
-    def total(self) -> int:
-        return len(self.outcomes)
-
-    @property
-    def successful(self) -> int:
-        return sum(1 for o in self.outcomes if o.success)
+    total: int
+    successful: int
+    files_registered: int
+    files_skipped: int
+    shares_count: int
+    records_count: int
+    failures: tuple[FailedDataset, ...]
 
     @property
     def failed(self) -> int:
-        return sum(1 for o in self.outcomes if not o.success)
-
-    @property
-    def files_registered(self) -> int:
-        return sum(o.files_registered for o in self.outcomes)
-
-    @property
-    def files_skipped(self) -> int:
-        return sum(o.files_skipped for o in self.outcomes)
-
-    @property
-    def shares_count(self) -> int:
-        return sum(1 for o in self.outcomes if o.share_id)
-
-    @property
-    def records_count(self) -> int:
-        return sum(1 for o in self.outcomes if o.record_identifier)
+        return len(self.failures)

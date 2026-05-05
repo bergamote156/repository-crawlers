@@ -20,6 +20,7 @@ from typing import Annotated, Literal
 from confline import (
     ConfigBase,
     MutuallyExclusiveGroup,
+    model_validator,
     opt,
 )
 from confline.sources import CliPositional
@@ -175,6 +176,13 @@ class PublicDataRecords(ConfigBase):
             "`generate-new-if-missing` reuses when present, mints otherwise."
         ),
     )
+
+    @model_validator
+    def _handle_service_requires_id(self):
+        if self.register and not self.handle_service_id:
+            raise ValueError(
+                "register=true requires public_data_records.handle_service_id.",
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
