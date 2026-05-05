@@ -46,6 +46,11 @@ class StorageDetails(TypedDict):
     endpoint: NotRequired[str]
 
 
+def is_storage_compatible(storage: StorageDetails) -> bool:
+    """True for HTTP readonly imported storages (the only kind registrar can use)."""
+    return storage["type"] == "http" and storage["readonly"] and storage["importedStorage"]
+
+
 class OnepanelClient:
     """Client for the Onepanel REST API."""
 
