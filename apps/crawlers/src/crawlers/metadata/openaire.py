@@ -37,14 +37,6 @@ _SCHEMA_LOCATION = (
 
 _XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
-# Bind our preferred prefixes in ElementTree's global namespace map.
-ET.register_namespace("xsi", NS_XSI)
-ET.register_namespace("dc", NS_DC)
-ET.register_namespace("dcterms", NS_DCTERMS)
-ET.register_namespace("datacite", NS_DATACITE)
-ET.register_namespace("oaire", NS_OAIRE)
-ET.register_namespace("rdf", NS_RDF)
-
 
 def _q(ns: str, tag: str) -> str:
     """Build an ElementTree Clark-notation tag."""
@@ -178,6 +170,15 @@ def _build(record: OpenAIRERecord) -> str:
     _add_temporal_coverage(root, record)
     _add_spatial_coverage(root, record)
     _add_files(root, record)
+
+    # Configure namespace serialization locally rather than globally for ET,
+    # as it impacts all other places where ET is used (other metadata model implementations).
+    ET.register_namespace("xsi", NS_XSI)
+    ET.register_namespace("dc", NS_DC)
+    ET.register_namespace("dcterms", NS_DCTERMS)
+    ET.register_namespace("datacite", NS_DATACITE)
+    ET.register_namespace("oaire", NS_OAIRE)
+    ET.register_namespace("rdf", NS_RDF)
 
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode", xml_declaration=True, short_empty_elements=False)
