@@ -4,24 +4,20 @@ description: >
   Quick-reference definitions for concepts in the crawlers
   architecture. Each entry is 1-2 sentences with a "Learn more"
   link to the detail doc.
-topic: crawlers/arch
 audience: internal-developer-onboarding
-generated: 2026-04-01
-last_reviewed: 2026-04-10
 source_modules:
   - apps/crawlers/src/crawlers/core/config.py
-  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/dataset.py
   - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/plugin.py
   - apps/crawlers/src/crawlers/core/result.py
   - apps/crawlers/src/crawlers/core/runner.py
   - apps/crawlers/src/crawlers/core/workspace.py
-  - apps/crawlers/src/crawlers/model/metadata.py
-  - apps/crawlers/src/crawlers/model/dataset.py
   - apps/crawlers/src/crawlers/metadata/datacite.py
   - apps/crawlers/src/crawlers/metadata/openaire.py
+  - packages/onedata-dataset/src/onedata_dataset/
 source_commits:
-  repository-crawlers: cff14ee
-status: draft
+  public-data-crawlers: 3c68b70
 ---
 
 # Glossary
@@ -43,7 +39,8 @@ mindmap
       📁 RunContext
     🏷️ Data Model
       📦 OnedataDataset
-      🏷️ MetadataRecord
+      ✅ DatasetValidator
+      📋 Metadata Records
         📄 DataCiteRecord
         📄 OpenAIRERecord
 ```
@@ -58,9 +55,11 @@ Learn more: [Plugin System](plugin-system.md#command-registration).
 
 ## ConfigBase
 
-Base class for declarative configuration — subclasses are
-dataclasses whose fields carry CLI/ENV/YAML metadata via `opt()`.
-Learn more: [Configuration](configuration.md#configbase-and-opt).
+Base class for declarative configuration (from the `confline`
+package, re-exported via `crawlers.core`). Subclasses are
+dataclasses whose fields use `opt()` for metadata and
+`Annotated[...]` for source-specific naming.
+Learn more: [Writing Plugins — Configuration](../guides/writing-plugins.md#step-1-configuration).
 
 ## CrawlConfig
 
@@ -69,21 +68,32 @@ Framework-level config base for crawl commands — extends
 fields like `max_records` and `no_url_validation`. Plugin crawl
 configs inherit from this.
 Learn more:
-[Configuration](configuration.md#config-inheritance).
+[Writing Plugins — Configuration](../guides/writing-plugins.md#step-1-configuration).
 
 ## CrawlerPlugin
 
-The single abstract base for all plugins — combines command
-registration, argparse generation, multi-source config loading,
-and the complete crawl lifecycle (`setup` → `iterate_datasets` →
-`process`, parallel workers, JSONL sinks).
+The single abstract base for all plugins — extends
+`confline.CommandApp` to combine command registration, argparse
+generation, multi-source config loading, and the complete crawl
+lifecycle (`setup` → `iterate_datasets` → `process`, parallel
+workers, JSONL sinks).
 Learn more: [Plugin System](plugin-system.md#crawlerplugin).
 
 ## DataCiteRecord
 
 Structured record that generates XML compliant with DataCite
-Metadata Schema 4.5. Satisfies the `MetadataRecord` protocol.
+Metadata Schema 4.5 via `to_xml()`.
 Learn more: [Metadata](metadata.md#dataciterecord).
+
+## DatasetValidator
+
+Framework-owned validator (in `crawlers.core.dataset`) that
+enforces non-empty files, unique paths, and (optionally) URL
+reachability on every parsed `OnedataDataset`. Constructed by
+`CrawlerPlugin.run_crawl()` via `_open_validator(config, stack)`
+and passed to the runner before workers start.
+Learn more:
+[Plugin System](plugin-system.md#onedatadataset-assembly-and-validation).
 
 ## HttpClient
 
@@ -92,26 +102,22 @@ Concrete async HTTP client with retries, exponential backoff, and
 via `HttpClient.from_config(config)`.
 Learn more: [Plugin System](plugin-system.md#httpclient).
 
-## MetadataRecord
-
-Protocol with a single method (`to_xml() → str`). Satisfied by
-`OpenAIRERecord` and `DataCiteRecord`. Consumed by
-`OnedataDataset.build()` to materialize XML metadata.
-Learn more: [Metadata](metadata.md#metadatarecord-protocol).
-
 ## OnedataDataset
 
-Frozen dataclass representing a dataset ready for Onedata
-registration. Built via `OnedataDataset.build()`, which validates
-files and materializes XML metadata from a `MetadataRecord`.
+Frozen dataclass (from the `onedata-dataset` package, re-exported
+via `crawlers.core.dataset`) representing a dataset ready for
+Onedata registration — `name`, `target_dir`, `files`, `pid`,
+`metadata_xml`. Plugins build it directly in their parser; the
+framework's `DatasetValidator` enforces invariants before
+persistence.
 Learn more:
-[Plugin System](plugin-system.md#onedatadataset-assembly).
+[Plugin System](plugin-system.md#onedatadataset-assembly-and-validation).
 
 ## OpenAIRERecord
 
 Structured record that generates XML compliant with OpenAIRE
-Guidelines v4.0. Satisfies the `MetadataRecord` protocol.
-Learn more: [Metadata](metadata.md#openairrecord).
+Guidelines v4.0 via `to_xml()`.
+Learn more: [Metadata](metadata.md#openairerecord).
 
 ## Result
 

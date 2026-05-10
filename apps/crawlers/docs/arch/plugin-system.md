@@ -4,40 +4,44 @@ description: >
   How crawler plugins are structured, discovered, and executed.
   Covers the CrawlerPlugin base class, command registration, config
   dispatch, HttpClient, crawl lifecycle, and plugin registry.
-topic: crawlers/arch/plugin-system
 audience: internal-developer-onboarding
-generated: 2026-04-01
-last_reviewed: 2026-04-10
 source_modules:
-  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/cli.py
+  - apps/crawlers/src/crawlers/core/config.py
+  - apps/crawlers/src/crawlers/core/dataset.py
   - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/plugin.py
   - apps/crawlers/src/crawlers/core/runner.py
   - apps/crawlers/src/crawlers/core/workspace.py
-  - apps/crawlers/src/crawlers/core/crawl_config.py
-  - apps/crawlers/src/crawlers/model/dataset.py
-  - apps/crawlers/src/crawlers/cli.py
   - apps/crawlers/src/crawlers/plugins/__init__.py
 source_commits:
-  repository-crawlers: cff14ee
-status: draft
+  public-data-crawlers: 3c68b70
 ---
 
 # Plugin System
 
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:128-269`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:53-262`</sub>
 
 A plugin is a self-contained crawler for one external data source.
 [**CrawlerPlugin**](#crawlerplugin) is the single base class that
-all plugins extend — it handles command registration, argparse
-generation, multi-source config loading, the crawl lifecycle, and
-parallel execution. You provide the source-specific logic:
+all plugins extend — it extends `confline.CommandApp` to handle
+command registration, argparse generation, multi-source config
+loading, the crawl lifecycle, and parallel execution. You provide
+the source-specific logic:
 [`iterate_datasets()`](#iteration-and-processing) to list items
 from the upstream API, and
 [`process()`](#iteration-and-processing) to turn each item into an
-[OnedataDataset](#onedatadataset-assembly).
+[OnedataDataset](#onedatadataset-assembly-and-validation).
 
 ```mermaid
 classDiagram
+    class CommandApp {
+        +prog : str
+        +run(argv)
+        +build_sources(parsed, command)
+        +dispatch_command(command, config)
+    }
+
     class CrawlerPlugin~RawT, ConfigT~ {
         +name : str
         +description : str
@@ -50,9 +54,9 @@ classDiagram
         +run_context_name(config) str
     }
 
-    class CommandDef {
+    class Command {
         +name : str
-        +help : str
+        +description : str
         +method_name : str
         +config_class
     }
@@ -61,20 +65,25 @@ classDiagram
     class EODCPlugin
     class BgeePlugin
     class VipPlugin
+    class TopanatPlugin
 
+    CommandApp <|-- CrawlerPlugin
     CrawlerPlugin <|-- EcudoPlugin
     CrawlerPlugin <|-- EODCPlugin
     CrawlerPlugin <|-- BgeePlugin
     CrawlerPlugin <|-- VipPlugin
+    CrawlerPlugin <|-- TopanatPlugin
 
-    CrawlerPlugin "1" o-- "many" CommandDef : _commands
+    CrawlerPlugin "1" o-- "many" Command : _commands
 
+    style CommandApp fill:#4ECDC4,stroke:#0B7285,color:#000
     style CrawlerPlugin fill:#E6E6FA,stroke:#5B4B8A,color:#000
-    style CommandDef fill:#A8DADC,stroke:#1864AB,color:#000
+    style Command fill:#A8DADC,stroke:#1864AB,color:#000
     style EcudoPlugin fill:#FFE4B5,stroke:#E8890C,color:#000
     style EODCPlugin fill:#FFE4B5,stroke:#E8890C,color:#000
     style BgeePlugin fill:#FFE4B5,stroke:#E8890C,color:#000
     style VipPlugin fill:#FFE4B5,stroke:#E8890C,color:#000
+    style TopanatPlugin fill:#FFE4B5,stroke:#E8890C,color:#000
 ```
 
 The plugin contract is intentionally minimal — only
@@ -89,17 +98,19 @@ guide.
 
 ## CrawlerPlugin
 
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:128-269`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:53-262`</sub>
 
 `CrawlerPlugin[RawT, ConfigT]` is the abstract base for all
-plugins. The two type parameters define the plugin's data flow:
+plugins. It extends `confline.CommandApp` (which owns the config
+resolution and CLI dispatch machinery) and adds the crawl
+lifecycle. The two type parameters define the plugin's data flow:
 
 - **`RawT`** — the type yielded by `iterate_datasets()`. Ecudo
   yields `str` (dataset IDs requiring a detail fetch in
   `process()`), EODC yields `dict` (full STAC items), Bgee yields
   a custom `BgeeRawRecord`.
 - **`ConfigT`** — the plugin's config class, which must extend
-  [CrawlConfig](configuration.md#config-inheritance).
+  [CrawlConfig](../guides/writing-plugins.md#step-1-configuration).
 
 A concrete subclass sets three class attributes (`name`,
 `description`, `config_class`) and implements two abstract methods
@@ -108,23 +119,22 @@ auto-registered when `name` is a string — no decorator needed.
 
 ### Command Registration
 
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:36-90`</sub>
+<sub>📄 `packages/confline/src/confline/commands.py` · `apps/crawlers/src/crawlers/core/plugin.py:77-96`</sub>
 
 Commands are declared with the `@command` decorator on async
 methods:
 
 ```python
-@command
+@command(name="list-orgs")
 async def list_organizations(self, config: EcudoApiConfig, stack: AsyncExitStack) -> None:
-    """List available organizations from Ecudo."""
+    """List all available organizations from Ecudo."""
     ...
 ```
 
-The decorator infers the command name from the method
-(`list_organizations` → `list-organizations`), the config class
-from the first `ConfigBase`-typed parameter, and the help text
-from the docstring. Override any of these with keyword arguments:
-`@command(name="ls", help="...")`.
+The decorator infers the config class from the first
+`ConfigBase`-typed parameter and the help text from the docstring.
+The command name defaults to the method name with underscores
+replaced by dashes; override with `@command(name="ls", help="...")`.
 
 When a subclass is created, `__init_subclass__` scans all methods
 for `_command_def` attributes and collects them into the class-level
@@ -133,52 +143,47 @@ parent class is available in all subclasses unless overridden.
 
 ### CLI Generation and Dispatch
 
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:177-235`</sub>
+<sub>📄 `packages/confline/src/confline/commands.py` · `packages/confline/src/confline/ui/argparse_builder.py`</sub>
 
-From the collected commands, `register_args(parser)` builds the
-full argparse structure — a global `-c / --config` option, a
-subparser per command, and argument groups derived from each
-command's config class hierarchy. At runtime, `run(cli_args)`
-resolves the selected command, builds the config object from all
-sources (see
-[Configuration — Resolution Priority](configuration.md#resolution-priority)),
-and invokes the decorated method with an `AsyncExitStack` for
-resource cleanup.
+From the collected commands, `CommandApp._build_cli_parser()` (via
+`build_command_app_parser()`) builds the full argparse structure — a
+global `-c / --config` option, a subparser per command, and argument
+groups derived from each command's config class hierarchy. At
+runtime, `run(cli_args)` resolves the selected command, builds the
+config object from all sources (see
+[Writing Plugins — Resolution Priority](../guides/writing-plugins.md#resolution-priority)),
+and invokes the decorated method via `dispatch_command()`.
 
 For example, the generated `--help` for Ecudo shows how config
 inheritance maps to argument groups:
 
 ```
 $ crawlers ecudo crawl -h
-usage: crawlers ecudo crawl [-h] [--page-size ...] [-n MAX_RECORDS] ...
+usage: crawlers ecudo crawl [-h] [--page-size PAGE_SIZE] [--base-url BASE_URL] [-n MAX_RECORDS] [--no-url-validation | --no-no-url-validation] [--timeout TIMEOUT] [--max-retries MAX_RETRIES] [-o OUTPUT_DIR]
+                            [--concurrency CONCURRENCY] [--queue-size QUEUE_SIZE]
                             organization
 
+Crawl datasets
+
+options:
+  -h, --help            show this help message and exit
+
 EcudoCrawlConfig:
-  --page-size PAGE_SIZE Items per API page
+  Ecudo crawl configuration.
+
   organization          Organization ID (e.g. iopan)
+                        default: <required> · environment: CRAWLER_ORGANIZATION · yaml: organization
+  --page-size PAGE_SIZE
+                        Items per API page
+                        default: 200 · environment: CRAWLER_PAGE_SIZE · yaml: page_size
 
 EcudoApiConfig:
+  Configuration for Ecudo API connections.
+
   --base-url BASE_URL   Ecudo API base URL
+                        default: 'http://central.ecudo.pl' · environment: CRAWLER_BASE_URL · yaml: base_url
 
-HttpConfig:
-  --timeout TIMEOUT     Request timeout in seconds
-  --max-retries MAX_RETRIES
-                        Maximum retry attempts
-
-CrawlConfig:
-  --no-url-validation   Disable HEAD-probe URL validation during parse
-  -n MAX_RECORDS, --max-records MAX_RECORDS
-                        Maximum number of items to fetch
-
-OutputConfig:
-  -o OUTPUT_DIR, --output-dir OUTPUT_DIR
-                        Output directory for crawled data
-
-ProcessingConfig:
-  --concurrency CONCURRENCY
-                        Number of concurrent workers
-  --queue-size QUEUE_SIZE
-                        Size of the processing queue
+...
 ```
 
 Each config class in the MRO becomes a separate argument group —
@@ -187,7 +192,7 @@ plugin-specific fields at the top, shared framework fields below.
 
 ## HttpClient
 
-<sub>📄 `apps/crawlers/src/crawlers/core/http.py:66-314`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/http.py:67-322`</sub>
 
 Both `iterate_datasets()` and `process()` typically need to make
 HTTP calls — for API pagination, detail fetches, or URL validation.
@@ -231,7 +236,7 @@ The client offers typed convenience methods — all returning
 
 ### Error Types
 
-<sub>📄 `apps/crawlers/src/crawlers/core/http.py:29-63`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/http.py:30-64`</sub>
 
 Non-200 responses produce `ResponseFailure` (with status code,
 method, URL, and truncated body). Network/timeout errors after
@@ -247,7 +252,7 @@ pagination links that may point to a different host.
 
 ## Iteration and Processing
 
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:253-269`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:187-203`</sub>
 
 Once the CLI dispatches a crawl command and config is loaded, the
 framework calls the plugin's two core methods — the only abstract
@@ -271,9 +276,10 @@ async def process(self, raw: RawT, /) -> Result[OnedataDataset, Any] | None:
 - **`process(raw)`** — converts a single raw item into an
   `OnedataDataset`. Runs inside one of N concurrent workers. May
   do I/O (additional API calls via the
-  [HttpClient](#httpclient) stored on `self`, URL validation).
+  [HttpClient](#httpclient) stored on `self`).
   Return:
-  - `Ok(dataset)` — persisted to `processed.jsonl`
+  - `Ok(dataset)` — validated by the framework, then persisted to
+    `processed.jsonl`
   - `Err(failure)` — persisted to `rejected.jsonl` with failure
     details
   - `None` — silently skipped (not counted as rejection)
@@ -282,55 +288,54 @@ The split between iteration and processing is the core design
 choice: `iterate_datasets` handles pagination and listing,
 `process` handles the per-item work (fetching details, parsing,
 building metadata, assembling the
-[OnedataDataset](#onedatadataset-assembly)). Because `process`
+[OnedataDataset](#onedatadataset-assembly-and-validation)). Because `process`
 runs in parallel workers, it must be safe for concurrent
 execution — store shared resources (like `HttpClient`) on `self`
 during [`setup()`](#crawl-lifecycle), but avoid shared mutable
 state.
 
 
-## OnedataDataset Assembly
+## OnedataDataset Assembly and Validation
 
-<sub>📄 `apps/crawlers/src/crawlers/model/dataset.py:91-163`</sub>
+<sub>📄 `packages/onedata-dataset/src/onedata_dataset/dataset.py` · `apps/crawlers/src/crawlers/core/dataset.py`</sub>
 
-Inside `process()`, after parsing raw data and constructing a
-[metadata record](metadata.md), the plugin calls
-`OnedataDataset.build()` — the factory method that validates
-inputs and produces the final registration-ready dataset.
+`OnedataDataset` itself is a frozen dataclass living in the
+`onedata-dataset` package (re-exported via `crawlers.core.dataset`)
+— `name`, `files`, `target_dir`, `pid`, `metadata_xml`. It is the
+contract serialized to `processed.jsonl` and consumed by the
+registrar.
+
+Crawler-side concerns — empty-file checks, duplicate-path checks,
+URL reachability — live in `DatasetValidator`
+(`crawlers.core.dataset`). Plugins build the dataset directly
+(typically inside their `parser.py`) and return it as `Ok(dataset)`.
+The runner invokes the framework-managed validator before
+persistence:
 
 ```mermaid
 graph TB
-    PROC["⚙️ plugin.process(raw)"]
+    processFn["plugin.process(raw)"] --> parseDataset["parse to OnedataDataset"]
+    parseDataset --> okDataset["Ok(dataset)"]
+    okDataset --> runner["run_parallel_crawl"]
 
-    subgraph Build["OnedataDataset.build()"]
-        CHK1{"files\nnon-empty?"}
-        CHK2{"paths\nunique?"}
-        CHK3{"URLs\nreachable?"}
-        XML["metadata.to_xml()"]
-        OK["Ok(OnedataDataset)"]
+    subgraph validation["DatasetValidator.validate(dataset)"]
+        nonEmpty{"files non-empty?"}
+        uniquePaths{"paths unique?"}
+        reachableUrls{"URLs reachable?"}
+        validationOk["Ok(OnedataDataset)"]
     end
 
-    PROC --> Build
-    CHK1 -->|yes| CHK2
-    CHK1 -->|no| ERR1["Err·NoFilesFailure·"]
-    CHK2 -->|yes| CHK3
-    CHK2 -->|no| ERR2["Err·DuplicatePathsFailure·"]
-    CHK3 -->|yes| XML --> OK
-    CHK3 -->|no| ERR3["Err·InvalidUrlFailure·"]
-
-    classDef process fill:#4ECDC4,stroke:#0B7285,color:#000
-    classDef check fill:#FFD700,stroke:#F08C00,color:#000
-    classDef success fill:#95D5B2,stroke:#2D6A4F,color:#000
-    classDef error fill:#E63946,stroke:#9D0208,color:#fff
-
-    class PROC process
-    class CHK1,CHK2,CHK3 check
-    class XML,OK success
-    class ERR1,ERR2,ERR3 error
+    runner --> validation
+    nonEmpty -->|yes| uniquePaths
+    nonEmpty -->|no| noFiles["Err(NoFilesFailure)"]
+    uniquePaths -->|yes| reachableUrls
+    uniquePaths -->|no| duplicatePaths["Err(DuplicatePathsFailure)"]
+    reachableUrls -->|yes| validationOk
+    reachableUrls -->|no| invalidUrl["Err(InvalidUrlFailure)"]
 ```
 
-The build method performs three validations before producing the
-dataset:
+The validator performs three checks before passing the dataset
+through:
 
 1. **Non-empty files** — datasets with no downloadable files are
    rejected with `NoFilesFailure`.
@@ -338,43 +343,35 @@ dataset:
    rejected with `DuplicatePathsFailure`. Plugins handle path
    deduplication in their parsers (e.g.
    `resolve_path_collisions()`).
-3. **URL reachability** (optional) — when an `HttpClient` is
-   provided, all file URLs are probed in parallel via HEAD requests.
-   Any unreachable URL rejects the dataset with
-   `InvalidUrlFailure`. Controlled by the `--no-url-validation`
-   flag.
+3. **URL reachability** (optional) — when the validator is
+   constructed with an `HttpClient`, all file URLs are probed in
+   parallel via HEAD requests. Any unreachable URL rejects the
+   dataset with `InvalidUrlFailure`. Controlled by the
+   `--no-url-validation` flag.
 
-If all validations pass, `metadata.to_xml()` is called eagerly to
-materialize the XML string. The resulting `OnedataDataset` is a
-frozen dataclass carrying `name`, `location`, `pid`,
-`metadata_xml`, and `files` — fully self-contained and ready for
-serialization to `processed.jsonl`.
+The validator is owned by the framework: `CrawlerPlugin.run_crawl()`
+calls `_open_validator(config, stack)` before `setup()` and passes
+the result to `run_parallel_crawl()`. Plugins never construct,
+access, or close the validation `HttpClient` themselves.
 
 ### Typical process() Pattern
 
 Every plugin's `process()` method follows the same shape: parse raw
-data, construct a metadata record, call `OnedataDataset.build()`:
+data into an `OnedataDataset`, then return it as a successful result:
 
 ```python
 async def process(self, raw: dict, /) -> Result[OnedataDataset, Any] | None:
-    parsed = parse_item(raw)
-    if parsed is None:
+    dataset = parse_item(raw)
+    if dataset is None:
         return None
 
-    return await OnedataDataset.build(
-        pid=parsed.identifier,
-        name=parsed.title,
-        location=parsed.title.replace("/", "-"),
-        metadata=parsed.metadata,      # OpenAIRERecord or DataCiteRecord
-        files=[OnedataFile(path=f.path, url=f.url) for f in parsed.files],
-        http=self._validation_http,     # None to skip URL checks
-    )
+    return Ok(dataset)
 ```
 
 
 ## Crawl Lifecycle
 
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:277-322`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:213-262`</sub>
 
 The sections above describe what a plugin provides — now here's the
 full sequence of how the framework orchestrates a crawl from start
@@ -390,10 +387,11 @@ sequenceDiagram
     P->>CTX: ctx.open(config_snapshot)
     Note over P: 🖨️ _print_banner()
 
+    P->>P: _open_validator(config, stack)
     P->>P: setup(ctx, stack)
     P->>P: before_crawl(ctx)
 
-    P->>R: run_parallel_crawl(iterator, process_fn, sinks)
+    P->>R: run_parallel_crawl(iterator, process_fn, validator, sinks)
     R-->>P: CrawlStats
 
     alt ✅ normal
@@ -415,16 +413,18 @@ sequenceDiagram
    run directory.
 2. **`ctx.open()`** — creates the directory, writes `config.json`,
    opens JSONL sinks.
-3. **`setup(ctx, stack)`** — plugin hook for opening resources
+3. **`_open_validator(config, stack)`** — constructs the
+   `DatasetValidator`, optionally with an HTTP client for URL probing.
+4. **`setup(ctx, stack)`** — plugin hook for opening resources
    (HTTP clients, API facades). Register async context managers on
    `stack` so they close automatically on exit.
-4. **`before_crawl(ctx)`** — plugin hook for pre-crawl validation
+5. **`before_crawl(ctx)`** — plugin hook for pre-crawl validation
    (e.g. checking that a requested organization exists).
-5. **`run_parallel_crawl(...)`** — the parallel execution step
+6. **`run_parallel_crawl(...)`** — the parallel execution step
    detailed [below](#parallel-execution).
-6. **`after_crawl(ctx)`** — plugin hook for post-run actions
+7. **`after_crawl(ctx)`** — plugin hook for post-run actions
    (e.g. printing a conformity check).
-7. **`ctx.close(status)`** — closes sinks, writes final
+8. **`ctx.close(status)`** — closes sinks, writes final
    `state.json`.
 
 On `KeyboardInterrupt` or `CancelledError`, status is set to
@@ -445,9 +445,9 @@ outcome.
 
 ## Parallel Execution
 
-<sub>📄 `apps/crawlers/src/crawlers/core/runner.py:52-140`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/runner.py:75-200`</sub>
 
-Step 5 of the lifecycle above — `run_parallel_crawl()` — is where
+Step 6 of the lifecycle above — `run_parallel_crawl()` — is where
 the actual dataset processing happens. It drives the crawl with a
 producer–consumer pattern:
 
@@ -467,7 +467,9 @@ graph LR
     Q --> W1
     Q --> WN
 
-    W1 & WN -->|"Ok(dataset)"| PS["💾 processed.jsonl"]
+    W1 & WN -->|"Ok(dataset)"| VAL["✅ DatasetValidator"]
+    VAL -->|"Ok(dataset)"| PS["💾 processed.jsonl"]
+    VAL -->|"Err(validationFailure)"| RS["❌ rejected.jsonl"]
     W1 & WN -->|"Err(failure)"| RS["❌ rejected.jsonl"]
     W1 & WN -->|None| SK["⏭️ skipped"]
     W1 & WN -->|exception| FL["⚠️ failed"]
@@ -493,9 +495,9 @@ graph LR
    items into a bounded `asyncio.Queue`.
 2. **N worker** tasks (configurable via `concurrency`, default 128)
    dequeue items and call `process(item)`.
-3. Workers route results: `Ok(dataset)` → processed sink,
-   `Err(failure)` → rejection sink, `None` → skip counter,
-   exceptions → failure counter with warning.
+3. Workers route results: `Ok(dataset)` → validator → processed or
+   rejection sink, `Err(failure)` → rejection sink, `None` → skip
+   counter, exceptions → failure counter with warning.
 4. Every `state_save_interval` items (default 100), stats are
    persisted to `state.json`.
 5. The producer sends `None` sentinels (one per worker) to signal
@@ -508,7 +510,7 @@ preventing unbounded memory growth against a fast API.
 
 ### CrawlStats
 
-<sub>📄 `apps/crawlers/src/crawlers/core/runner.py:33-48`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/runner.py:37-51`</sub>
 
 The runner tracks five counters: `queued`, `processed`, `rejected`,
 `skipped`, and `failed`. These feed both the periodic state
@@ -517,7 +519,7 @@ persistence and the post-crawl summary display.
 
 ## Workspace and Run Management
 
-<sub>📄 `apps/crawlers/src/crawlers/core/workspace.py:22-91`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/core/workspace.py:22-89`</sub>
 
 All the output from parallel execution — processed datasets,
 rejected items, crawl statistics — lands in a **run directory**
@@ -543,36 +545,19 @@ with a fixed structure, managed by
    with status `"completed"`, `"interrupted"`, or `"failed"`.
 
 
-## Display
-
-<sub>📄 `apps/crawlers/src/crawlers/core/plugin.py:426-484`</sub>
-
-After the crawl completes, `CrawlerPlugin` uses Rich to present
-a summary automatically — no plugin code needed. The output has
-three phases:
-
-- **Banner** — plugin class name, run context name, run directory
-  path.
-- **Progress** — live Rich progress bar during parallel execution.
-- **Summary** — crawl statistics table, output file paths, and
-  next-step suggestions (including a registrar command if records
-  were processed, and a pointer to `rejected.jsonl` if items were
-  rejected).
-
-
 ## Plugin Registry
 
-<sub>📄 `apps/crawlers/src/crawlers/plugins/__init__.py:1-25` · `apps/crawlers/src/crawlers/cli.py:52-68`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/plugins/__init__.py` · `apps/crawlers/src/crawlers/cli.py`</sub>
 
 The [CLI generation](#cli-generation-and-dispatch) section above
 showed how a single plugin's commands become argparse subcommands —
 but how does the CLI discover plugins in the first place? Plugins
 are registered as a hardcoded list in
-`apps/crawlers/src/crawlers/plugins/__init__.py`. The CLI entry point iterates this
-list, creates an argparse subparser per plugin (using
-`plugin.name`), and calls `plugin.register_args()`. At runtime,
-the selected plugin's `run()` method is invoked via
-`asyncio.run()`.
+`apps/crawlers/src/crawlers/plugins/__init__.py`. The CLI entry
+point (`cli.py`) splits `argv` at the first non-flag argument (the
+plugin name), looks it up in the registry, and calls
+`plugin.run(plugin_argv)`. Each plugin is a `CommandApp` and owns
+its own argparse tree — the top-level CLI is intentionally thin.
 
 There is no dynamic plugin discovery — the registry is
 intentionally simple because adding a plugin to the list is

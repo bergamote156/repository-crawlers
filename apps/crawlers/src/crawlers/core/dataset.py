@@ -3,11 +3,8 @@ Crawler-side concerns for `OnedataDataset`: validation policy and the
 failure types it can produce.
 
 The dataset shape itself lives in the `onedata-dataset` package and is
-re-exported here so plugins can keep importing it from
-`crawlers.model.dataset` as before.
+re-exported here so plugins import from `crawlers.core.dataset`.
 """
-
-## TODO moved from model/ -> update docs?
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"

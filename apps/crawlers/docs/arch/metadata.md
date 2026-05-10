@@ -3,33 +3,25 @@ title: Metadata Generation
 description: >
   How metadata records produce standards-compliant XML (DataCite
   Kernel 4.5, OpenAIRE v4.0) from parsed dataset fields. Covers
-  the MetadataRecord protocol, both concrete record types, and
-  their controlled vocabularies.
-topic: crawlers/arch/metadata
+  both concrete record types and their controlled vocabularies.
 audience: internal-developer-onboarding
-generated: 2026-04-01
-last_reviewed: 2026-04-10
 source_modules:
-  - apps/crawlers/src/crawlers/model/metadata.py
-  - apps/crawlers/src/crawlers/model/dataset.py
   - apps/crawlers/src/crawlers/metadata/datacite.py
   - apps/crawlers/src/crawlers/metadata/openaire.py
   - apps/crawlers/src/crawlers/plugins/ecudo/parser.py
   - apps/crawlers/src/crawlers/plugins/eodc/parser.py
+  - packages/onedata-dataset/src/onedata_dataset/dataset.py
 source_commits:
-  repository-crawlers: cff14ee
-status: draft
+  public-data-crawlers: 3c68b70
 ---
 
 # Metadata Generation
-
-<sub>📄 `apps/crawlers/src/crawlers/model/metadata.py:1-15`</sub>
 
 Crawled datasets need standards-compliant XML metadata embedded in
 their output records — Onedata uses this for discovery and
 interoperability. The framework provides two structured record
 types — [**DataCiteRecord**](#dataciterecord) and
-[**OpenAIRERecord**](#openairrecord) — that plugins populate with
+[**OpenAIRERecord**](#openairerecord) — that plugins populate with
 parsed fields and that produce XML via `to_xml()`. The record
 carries the data *and* knows how to serialize itself — no separate
 builder abstraction needed.
@@ -63,32 +55,15 @@ graph LR
     class OD output
 ```
 
-Both record types satisfy the
-[**MetadataRecord**](#metadatarecord-protocol) protocol — a
-single-method contract (`to_xml() → str`) that
-[OnedataDataset.build()](plugin-system.md#onedatadataset-assembly)
-uses to materialize XML eagerly, so the returned dataset carries no
-references to parser state.
-
-
-## MetadataRecord Protocol
-
-<sub>📄 `apps/crawlers/src/crawlers/model/metadata.py:11-15`</sub>
-
-```python
-class MetadataRecord(Protocol):
-    def to_xml(self) -> str: ...
-```
-
-Any object with a `to_xml()` method satisfies this protocol. Both
-`DataCiteRecord` and `OpenAIRERecord` implement it. Plugins
-building custom metadata formats only need to provide an object
-with `to_xml()` — no base class to extend.
+Each parser calls `record.to_xml()` once and stores the resulting
+string in `OnedataDataset.metadata_xml`, so the dataset carries no
+references back to parser state and can be serialized straight to
+JSONL.
 
 
 ## DataCiteRecord
 
-<sub>📄 `apps/crawlers/src/crawlers/metadata/datacite.py:153-184`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/datacite.py:151-178`</sub>
 
 Generates XML compliant with
 [DataCite Metadata Schema 4.5](https://schema.datacite.org/meta/kernel-4.5/).
@@ -191,7 +166,7 @@ fields are not emitted.
 
 ### Sections
 
-<sub>📄 `apps/crawlers/src/crawlers/metadata/datacite.py:192-346`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/datacite.py:219-339`</sub>
 
 DataCite Kernel 4.5 defines mandatory (M) and recommended (R)
 properties. The record supports:
@@ -241,7 +216,7 @@ metadata = DataCiteRecord(
 
 ## OpenAIRERecord
 
-<sub>📄 `apps/crawlers/src/crawlers/metadata/openaire.py:121-153`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/openaire.py:120-148`</sub>
 
 Generates XML compliant with
 [OpenAIRE Guidelines v4.0](https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/).
@@ -313,7 +288,7 @@ URIs.
 
 ### Sections
 
-<sub>📄 `apps/crawlers/src/crawlers/metadata/openaire.py:160-319`</sub>
+<sub>📄 `apps/crawlers/src/crawlers/metadata/openaire.py:196-312`</sub>
 
 | Section | Status | Populated from |
 |---------|--------|----------------|

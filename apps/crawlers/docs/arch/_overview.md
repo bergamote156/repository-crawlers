@@ -5,25 +5,21 @@ description: >
   harvesting scientific dataset metadata from external APIs and
   producing Onedata-compatible registration records. Covers the
   two-layer design, data flow, and key design decisions.
-topic: crawlers/arch
 audience: internal-developer-onboarding
-generated: 2026-04-01
-last_reviewed: 2026-04-10
 source_modules:
-  - apps/crawlers/src/crawlers/core/plugin.py
-  - apps/crawlers/src/crawlers/core/http.py
-  - apps/crawlers/src/crawlers/core/runner.py
-  - apps/crawlers/src/crawlers/core/result.py
   - apps/crawlers/src/crawlers/core/config.py
-  - apps/crawlers/src/crawlers/core/workspace.py
+  - apps/crawlers/src/crawlers/core/dataset.py
+  - apps/crawlers/src/crawlers/core/http.py
   - apps/crawlers/src/crawlers/core/jsonl.py
-  - apps/crawlers/src/crawlers/model/dataset.py
-  - apps/crawlers/src/crawlers/model/metadata.py
+  - apps/crawlers/src/crawlers/core/plugin.py
+  - apps/crawlers/src/crawlers/core/result.py
+  - apps/crawlers/src/crawlers/core/runner.py
+  - apps/crawlers/src/crawlers/core/workspace.py
   - apps/crawlers/src/crawlers/metadata/datacite.py
   - apps/crawlers/src/crawlers/metadata/openaire.py
+  - packages/onedata-dataset/src/onedata_dataset/
 source_commits:
-  repository-crawlers: cff14ee
-status: draft
+  public-data-crawlers: 3c68b70
 ---
 
 # Crawlers Architecture Overview
@@ -43,8 +39,13 @@ graph TB
         P["Source-specific logic\nAPI client, parser, config, plugin class"]
     end
 
-    subgraph Core["🏗️ Core · crawlers/core/ + crawlers/model/"]
-        C["Framework primitives\nCrawlerPlugin, HttpClient, Result,\nconfig system, runner, workspace"]
+    subgraph Core["🏗️ Core · crawlers/core/"]
+        C["Framework primitives\nCrawlerPlugin, HttpClient, Result,\nrunner, workspace"]
+    end
+
+    subgraph Packages["📦 Packages"]
+        CF["⚙️ confline\nconfig framework"]
+        DS["📦 onedata-dataset\nOnedataDataset, OnedataFile"]
     end
 
     subgraph Meta["🏷️ Metadata · crawlers/metadata/"]
@@ -52,14 +53,17 @@ graph TB
     end
 
     Plugins -->|extends| Core
+    Core -->|uses| Packages
     Plugins -->|uses| Meta
 
     classDef plugin fill:#FFE4B5,stroke:#E8890C,color:#000
     classDef core fill:#E6E6FA,stroke:#5B4B8A,color:#000
     classDef meta fill:#A8DADC,stroke:#1864AB,color:#000
+    classDef pkg fill:#95D5B2,stroke:#2D6A4F,color:#000
 
     class P plugin
     class C core
+    class CF,DS pkg
     class M meta
 ```
 
@@ -67,10 +71,10 @@ graph TB
 
 The design separates concerns by rate of change:
 
-- **Core** (`apps/crawlers/src/crawlers/core/`) defines the stable vocabulary — the
-  [plugin base class](plugin-system.md#crawlerplugin), HTTP client,
-  Result type, [configuration system](configuration.md), and
-  workspace runtime. These contracts rarely change.
+- **Core** (`apps/crawlers/src/crawlers/core/`) defines the stable
+  vocabulary — the [plugin base class](plugin-system.md#crawlerplugin),
+  HTTP client, Result type, and workspace runtime. 
+  These contracts rarely change.
 
 - **Metadata** (`apps/crawlers/src/crawlers/metadata/`) provides
   [DataCiteRecord and OpenAIRERecord](metadata.md) — structured
@@ -149,16 +153,11 @@ and `process()` directly on the plugin class, with no intermediate
 abstractions like pipeline stages or spec objects. Two methods,
 full control over per-item logic.
 
-**Declarative configuration** — config fields declare all their
-sources (CLI, YAML, ENV) in one place via `opt()`, and the
-framework resolves values at runtime with a fixed priority chain.
-
 ## What's Next
 
 | Goal | Start with |
 |------|------------|
 | Understand plugin structure and crawl lifecycle | [Plugin System](plugin-system.md) |
 | Understand how XML metadata is produced | [Metadata](metadata.md) |
-| Understand how config fields are declared and resolved | [Configuration](configuration.md) |
 | Build a new crawler plugin | [Writing Plugins](../guides/writing-plugins.md) |
 | Look up a term | [Glossary](glossary.md) |
