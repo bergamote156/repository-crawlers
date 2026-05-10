@@ -1,4 +1,14 @@
-"""Post-resolution mutex group enforcement."""
+"""Post-resolution mutex group enforcement.
+
+Runs after all validators so that `@model_validator` can reconcile
+an apparent conflict before the check fires. The key semantic:
+values from fallback sources (`DefaultSource.is_fallback = True`)
+don't count as "user-provided" — two mutex fields both falling
+through to their declared defaults is fine; two set explicitly via
+different sources (env + YAML, CLI + env, etc.) is a violation.
+This catches the cross-source case argparse's own mutually-exclusive
+groups miss, since argparse only sees CLI flags.
+"""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
@@ -71,6 +81,7 @@ class MutexEnforcer:
             for field in group.fields:
                 if field.nested_schema is None:
                     continue
+
                 self._walk(
                     getattr(instance, field.name),
                     field.nested_schema,

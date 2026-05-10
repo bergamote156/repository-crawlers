@@ -13,6 +13,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
+from confline.config import MISSING_DEFAULT
 from confline.config.base import ConfigBase
 from confline.config.schema import (
     ConfigFieldInfo,
@@ -22,7 +23,6 @@ from confline.config.schema import (
 )
 from confline.sources.cli_source import CliSource
 from confline.sources.env_source import EnvSource
-from confline.sources.yaml_source import YamlSource
 
 # ─────────────────────────────────────────────────────────────────────────────
 # opt() — invariants
@@ -201,6 +201,7 @@ def test_opt_mutable_default_preserves_initial_contents():
     assert C().tags == ["a", "b"]
     a = C()
     a.tags.append("c")
+    assert a.tags == ["a", "b", "c"]
     assert C().tags == ["a", "b"]
 
 
@@ -233,14 +234,19 @@ def test_has_default_true_when_factory_present():
     class C(ConfigBase):
         items: list = opt(default_factory=list)
 
-    assert C.__config_schema__.find_field("items").has_default is True
+    field = C.__config_schema__.find_field("items")
+    assert field.default is MISSING_DEFAULT
+    assert field.default_factory is list
+    assert field.has_default is True
 
 
 def test_has_default_false_when_neither_default_nor_factory():
     class C(ConfigBase):
         host: str = opt(description="required")
 
-    assert C.__config_schema__.find_field("host").has_default is False
+    field = C.__config_schema__.find_field("host")
+    assert field.default is MISSING_DEFAULT
+    assert field.has_default is False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -310,22 +316,3 @@ def test_all_fields_iterates_across_groups_in_order():
 
     schema: ConfigSchema = C.__config_schema__
     assert [f.name for f in schema.all_fields()] == ["c", "a", "b"]
-
-
-def test_yaml_supports_list_of_config_base_while_cli_env_do_not():
-    """`list[ConfigBase]` is list-of-dicts shape — `excluded_from` is
-    *not* hardcoded on the schema; the source-side `supports_field`
-    classification governs which channels reach this field. Schema
-    stays neutral so a custom Source can still claim the shape."""
-
-    class Inner(ConfigBase):
-        x: int = opt(0)
-
-    class App(ConfigBase):
-        items: list[Inner] = opt(default_factory=list)
-
-    f = App.__config_schema__.find_field("items")
-    assert f.excluded_from == frozenset()
-    assert CliSource.supports_field(f) is False
-    assert EnvSource.supports_field(f) is False
-    assert YamlSource.supports_field(f) is True

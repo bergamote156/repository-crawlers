@@ -14,7 +14,22 @@ from confline import (
     command,
     opt,
 )
-from confline.errors import CommandRegistrationError
+from pathlib import Path
+
+from confline.errors import (
+    CommandRegistrationError,
+    ConfigError,
+    ConfigFileNotFoundError,
+    EnvKeyCollisionError,
+    MissingRequiredError,
+    MutexViolationError,
+    ProvidedField,
+    SourceValueError,
+    UnknownCommandError,
+    YamlParseError,
+    YamlSchemaError,
+    YamlSizeLimitError,
+)
 from confline.spec import Command
 
 
@@ -313,116 +328,49 @@ def test_subclass_extends_parent_commands():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+_PROVIDED_A = ProvidedField(
+    path="a",
+    source_name="argparse",
+    source_label="command line",
+    value=1,
+    source_native_key="--a",
+    secret=False,
+)
+_PROVIDED_B = ProvidedField(
+    path="b",
+    source_name="env",
+    source_label="environment",
+    value=2,
+    source_native_key="B",
+    secret=False,
+)
+
+
 @pytest.mark.parametrize(
-    ("exc_factory", "expected_code"),
+    ("exc", "expected_code"),
     [
         # 66 EX_NOINPUT
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["ConfigFileNotFoundError"],
-            ).ConfigFileNotFoundError(__import__("pathlib").Path("/missing.yaml")),
-            66,
-        ),
+        (ConfigFileNotFoundError(Path("/missing.yaml")), 66),
         # 65 EX_DATAERR — YAML and value errors
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["YamlParseError"],
-            ).YamlParseError(__import__("pathlib").Path("/bad.yaml")),
-            65,
-        ),
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["YamlSchemaError"],
-            ).YamlSchemaError(__import__("pathlib").Path("/bad.yaml"), reason="x"),
-            65,
-        ),
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["YamlSizeLimitError"],
-            ).YamlSizeLimitError(
-                __import__("pathlib").Path("/big.yaml"),
-                size=1024,
-                limit=10,
-            ),
-            65,
-        ),
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["SourceValueError"],
-            ).SourceValueError("bad value"),
-            65,
-        ),
+        (YamlParseError(Path("/bad.yaml")), 65),
+        (YamlSchemaError(Path("/bad.yaml"), reason="x"), 65),
+        (YamlSizeLimitError(Path("/big.yaml"), size=1024, limit=10), 65),
+        (SourceValueError("bad value"), 65),
         # 64 EX_USAGE — operator-side
         (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["MutexViolationError", "ProvidedField"],
-            ).MutexViolationError(
+            MutexViolationError(
                 group_name="g",
                 field_paths=("a", "b"),
-                provided=(
-                    __import__(
-                        "confline.errors",
-                        fromlist=["ProvidedField"],
-                    ).ProvidedField(
-                        path="a",
-                        source_name="argparse",
-                        source_label="command line",
-                        value=1,
-                        source_native_key="--a",
-                        secret=False,
-                    ),
-                    __import__(
-                        "confline.errors",
-                        fromlist=["ProvidedField"],
-                    ).ProvidedField(
-                        path="b",
-                        source_name="env",
-                        source_label="environment",
-                        value=2,
-                        source_native_key="B",
-                        secret=False,
-                    ),
-                ),
+                provided=(_PROVIDED_A, _PROVIDED_B),
                 required=False,
             ),
             64,
         ),
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["UnknownCommandError"],
-            ).UnknownCommandError("nope", available=("ok",)),
-            64,
-        ),
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["MissingRequiredError"],
-            ).MissingRequiredError(()),
-            64,
-        ),
+        (UnknownCommandError("nope", available=("ok",)), 64),
+        (MissingRequiredError(()), 64),
         # 78 EX_CONFIG — framework-detected misconfig
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["EnvKeyCollisionError"],
-            ).EnvKeyCollisionError(key="K", field_a="a", field_b="b"),
-            78,
-        ),
-        # Fallback for raw ConfigError
-        (
-            lambda: __import__(
-                "confline.errors",
-                fromlist=["ConfigError"],
-            ).ConfigError("generic"),
-            78,
-        ),
+        (EnvKeyCollisionError(key="K", field_a="a", field_b="b"), 78),
+        (ConfigError("generic"), 78),
     ],
     ids=[
         "ConfigFileNotFoundError-66",
@@ -437,11 +385,10 @@ def test_subclass_extends_parent_commands():
         "ConfigError-78",
     ],
 )
-def test_exit_code_per_error_class(exc_factory, expected_code, capsys):
+def test_exit_code_per_error_class(exc, expected_code, capsys):
     """Each ConfigError subclass maps to a sysexits.h code; CommandApp
     propagates that code via sys.exit so k8s/systemd can distinguish
     user input (64-66) from framework misconfig (78)."""
-    exc = exc_factory()
     cmd = Command(name="reg", method_name="reg", config_class=_RegConfig)
     code = CommandApp()._render_config_error(exc, cmd=cmd, sources=[])
     assert code == expected_code
@@ -503,3 +450,33 @@ def test_handle_meta_flags_can_be_overridden(capsys):
     assert rc == 7
     captured = capsys.readouterr()
     assert "DRY RUN: reg" in captured.out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CommandApp — config-class inference with multi-arg handlers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_infer_config_class_finds_config_after_other_args():
+    """Handlers like `def serve(self, session: Ctx, config: Cfg)` work
+    without explicit `config_class=` — the inference walks all args
+    and picks the first ConfigBase."""
+
+    class _Cfg(ConfigBase):
+        target: str = opt("x")
+
+    class Ctx:  # noqa: D401 — stub for the test.
+        pass
+
+    class App(CommandApp):
+        @command()
+        def serve(self, session: Ctx, config: _Cfg):  # noqa: ARG002
+            return config.target
+
+        def dispatch_command(self, command, config):
+            # Provide a Ctx for the handler — default dispatch only
+            # passes config; override to thread the extra arg.
+            handler = getattr(self, command.method_name)
+            return handler(Ctx(), config)
+
+    assert App().run(["serve"]) == "x"

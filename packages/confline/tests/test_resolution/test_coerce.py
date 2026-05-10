@@ -153,7 +153,9 @@ def test_coerce_passes_value_through_for_non_type_target():
     assert coerce(sentinel, "not-a-type") is sentinel  # type: ignore[arg-type]
 
 
-# ─── Enum ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Enum coercion
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_enum_by_value():
@@ -173,7 +175,9 @@ def test_enum_invalid_raises():
         coerce("guest", Role)
 
 
-# ─── Literal ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Literal coercion
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_literal_string_member_valid():
@@ -193,7 +197,9 @@ def test_literal_with_none():
     assert coerce(None, Literal[None, "a"]) is None
 
 
-# ─── datetime / date / time / UUID ───
+# ─────────────────────────────────────────────────────────────────────────────
+# datetime / date / time / UUID coercion
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_date_from_iso_string():
@@ -218,7 +224,9 @@ def test_already_typed_datetime_passes_through():
     assert coerce(dt, datetime) is dt
 
 
-# ─── Containers ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Containers coercion
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_list_int_coerces_each_element():
@@ -290,7 +298,9 @@ def test_dict_without_type_args_passes_through():
     assert result == {"a": "1"}  # no args → no inner coercion
 
 
-# ─── Inference helpers ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Inference helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_infer_choices_for_enum():
@@ -317,7 +327,9 @@ def test_container_info_for_scalar_is_empty():
     assert args == ()
 
 
-# ─── Type description helpers ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Type description helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_describe_field_type_for_built_ins():

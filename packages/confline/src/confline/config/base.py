@@ -43,7 +43,18 @@ from confline.config.validators import collect_field_validators, collect_model_v
 
 
 def _build_schema(config_cls: type) -> ConfigSchema:
-    """Walk the MRO bottom-up, collect fields with earliest-MRO-wins."""
+    """Walk the MRO and collect fields — most-derived definition wins.
+
+    Iterates `config_cls.__mro__` (most-derived class first). For each
+    class that contributes dataclass fields, a `ConfigGroup` is created
+    — these become named argument groups in `--help`, so inherited
+    fields cluster under the class that declared them.
+
+    When a subclass re-declares a field from a parent, the `seen` set
+    ensures the most-derived version takes precedence and the parent's
+    duplicate is skipped. This mirrors normal Python attribute resolution
+    (most-derived wins) applied to the schema level.
+    """
     groups: list[ConfigGroup] = []
     seen: set[str] = set()
     type_hints = get_type_hints(config_cls, include_extras=True)
@@ -281,9 +292,16 @@ class ConfigBase:
         return provenance[key]
 
     def __init_subclass__(cls, *, kw_only: bool = True, **kwargs: Any) -> None:
+        """Auto-decorate as a kw-only dataclass and build schema.
+
+        Three-step dance that runs once per subclass at class-creation
+        time: (1) apply @dataclass if the subclass hasn't been decorated
+        yet, (2) restore the user-authored __doc__ that dataclass
+        overwrites with a generated signature, (3) build the frozen
+        ConfigSchema from the MRO.
+        """
         super().__init_subclass__(**kwargs)
 
-        # Avoid double-init when a subclass is already a fully-built schema.
         if "__config_schema__" in cls.__dict__:
             return
 
@@ -296,10 +314,8 @@ class ConfigBase:
             # `repr=False` so dataclass doesn't overwrite the redacting
             # `__repr__` defined on `ConfigBase`.
             dataclass(kw_only=kw_only, repr=False)(cls)
-        # `dataclass()` overwrites `__doc__` with an auto-generated
-        # signature dump that leaks every field's default value. Restore
-        # the user-authored docstring (or `None`) so help renderers and
-        # secret-field redaction stay honest.
+        # dataclass() overwrites __doc__ with a generated signature that
+        # leaks every default — including secret fields.
         cls.__doc__ = original_doc
         cls.__config_schema__ = _build_schema(cls)
 

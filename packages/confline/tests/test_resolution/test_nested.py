@@ -48,7 +48,9 @@ class App(ConfigBase):
     workers: int = opt(4)
 
 
-# ─── CLI ───
+# ─────────────────────────────────────────────────────────────────────────────
+# CLI
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_nested_cli_three_levels_deep():
@@ -60,7 +62,9 @@ def test_nested_cli_three_levels_deep():
     assert_field_resolved_from(cfg, "db.addr", "argparse")
 
 
-# ─── ENV ───
+# ─────────────────────────────────────────────────────────────────────────────
+# ENV
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_nested_env_uses_double_underscore_delimiter():
@@ -106,7 +110,9 @@ def test_nested_env_custom_delimiter():
     assert cfg.db.addr == "single-underscore"
 
 
-# ─── YAML ───
+# ─────────────────────────────────────────────────────────────────────────────
+# YAML
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_nested_yaml_dict_walk_via_field_path():
@@ -131,7 +137,9 @@ def test_nested_yaml_dict_walk_via_field_path():
     assert cfg.workers == 16
 
 
-# ─── Cross-source priority ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Cross-source priority
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_cli_overrides_env_overrides_yaml_for_nested_fields():
@@ -152,7 +160,9 @@ def test_cli_overrides_env_overrides_yaml_for_nested_fields():
     assert_field_resolved_from(cfg, "db.name", "yaml")
 
 
-# ─── Validator firing under composition ───
+# ─────────────────────────────────────────────────────────────────────────────
+# Validator firing under composition
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_nested_validator_fires_before_parent_validator():

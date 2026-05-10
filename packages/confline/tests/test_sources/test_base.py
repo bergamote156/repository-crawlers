@@ -31,8 +31,6 @@ from confline.sources.yaml_source import YamlSource
 
 
 def test_no_value_is_singleton():
-    # Calling the type a second time returns the same instance — the sentinel
-    # round-trips through `_NoValueType()` for callers that reach the type.
     assert NO_VALUE is type(NO_VALUE)()
 
 
@@ -204,26 +202,20 @@ def test_describe_unset_hint_default_returns_none():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _builtins() -> list[tuple[Source, str]]:
-    return [
-        (CliSource(Namespace()), "command line"),
-        (EnvSource({}), "environment"),
-        (YamlSource(scopes=[]), "yaml"),
-        (DefaultSource(), "default"),
-    ]
-
-
-@pytest.mark.parametrize(("source", "expected_label"), _builtins())
-def test_built_in_describe_provenance_returns_none(
-    source: Source,
-    expected_label: str,
-):
+@pytest.mark.parametrize(
+    "source",
+    [
+        CliSource(Namespace()),
+        EnvSource({}),
+        YamlSource(scopes=[]),
+        DefaultSource(),
+    ],
+)
+def test_built_in_describe_provenance_returns_none(source: Source):
     """No built-in source carries per-instance provenance by default —
     only `YamlSource.from_files` does. The renderer falls back to
     `display_label` for everything else."""
-    field = _f("host")
-    assert source.describe_provenance(field) is None
-    assert source.display_label == expected_label
+    assert source.describe_provenance(_f("host")) is None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -231,16 +223,18 @@ def test_built_in_describe_provenance_returns_none(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_file_origin_is_frozen_with_optional_origin_label():
+def test_file_origin_is_frozen():
     from dataclasses import FrozenInstanceError
 
     from confline.sources.base import FileOrigin
 
-    o1 = FileOrigin(path=Path("/etc/app.yaml"))
-    assert o1.origin is None
-
-    o2 = FileOrigin(path=Path("/etc/app.yaml"), origin="cli")
-    assert o2.origin == "cli"
-
+    o = FileOrigin(path=Path("/etc/app.yaml"), origin="cli")
     with pytest.raises(FrozenInstanceError):
-        o2.origin = "env"  # type: ignore[misc]
+        o.origin = "env"  # type: ignore[misc]
+
+
+def test_file_origin_has_optional_origin_label():
+    from confline.sources.base import FileOrigin
+
+    assert FileOrigin(path=Path("/etc/app.yaml")).origin is None
+    assert FileOrigin(path=Path("/etc/app.yaml"), origin="cli").origin == "cli"

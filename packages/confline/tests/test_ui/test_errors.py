@@ -108,52 +108,40 @@ def test_render_for_cli_omits_prefix_when_no_prog():
     assert render_for_cli(err).plain == "plain"
 
 
+_MUTEX_ERR = MutexViolationError(
+    group_name="_Mode",
+    field_paths=["port", "socket"],
+    provided=[
+        _provided("port", "argparse", value=9090, key="--port", source_label="command line"),
+        _provided("socket", "env", value="/tmp/x", key="MYAPP_SOCKET", source_label="environment"),
+    ],
+    required=False,
+)
+_MISSING_ERR = MissingRequiredError(
+    [MissingFieldRecord(path="host", type_desc="string", suggestions=())],
+    sources_tried=("env", "default"),
+)
+_UNKNOWN_ERR = UnknownCommandError("migate", available=("migrate", "serve"), suggestions=("migrate",))
+
+
+def _format_unknown_command_normalized(err, **kw):
+    # format_unknown_command takes `prog` not `command` — adapter to match the shared call shape.
+    return format_unknown_command(err, prog=kw.get("prog"))
+
+
 @pytest.mark.parametrize(
-    ("error_factory", "template"),
+    ("error", "template"),
     [
-        (
-            lambda: MutexViolationError(
-                group_name="_Mode",
-                field_paths=["port", "socket"],
-                provided=[
-                    _provided(
-                        "port", "argparse", value=9090, key="--port", source_label="command line"
-                    ),
-                    _provided(
-                        "socket",
-                        "env",
-                        value="/tmp/x",
-                        key="MYAPP_SOCKET",
-                        source_label="environment",
-                    ),
-                ],
-                required=False,
-            ),
-            format_mutex_error,
-        ),
-        (
-            lambda: MissingRequiredError(
-                [MissingFieldRecord(path="host", type_desc="string", suggestions=())],
-                sources_tried=("env", "default"),
-            ),
-            format_missing_required,
-        ),
-        (
-            lambda: UnknownCommandError(
-                "migate",
-                available=("migrate", "serve"),
-                suggestions=("migrate",),
-            ),
-            lambda err, **kw: format_unknown_command(err, prog=kw.get("prog")),
-        ),
+        (_MUTEX_ERR, format_mutex_error),
+        (_MISSING_ERR, format_missing_required),
+        (_UNKNOWN_ERR, _format_unknown_command_normalized),
     ],
     ids=["mutex", "missing", "unknown_command"],
 )
-def test_render_for_cli_dispatches_to_matching_template(error_factory, template):
+def test_render_for_cli_dispatches_to_matching_template(error, template):
     """`render_for_cli` on a typed `ConfigError` produces the same
     `Text` as the matching direct `format_*` call — guards against
     dispatch drifting away from the templates."""
-    error = error_factory()
     via_dispatch = render_for_cli(error, prog="myapp", command="serve")
     via_template = template(error, prog="myapp", command="serve")
     assert via_dispatch == via_template

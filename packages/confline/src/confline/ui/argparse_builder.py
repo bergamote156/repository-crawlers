@@ -61,8 +61,7 @@ def build_argparse_parser(
     """Build an `ArgumentParser` for a single `ConfigBase` schema.
 
     Standalone form — emits arguments for the schema directly under
-    the root parser. Used by `CliSource.from_argv` and by tests that
-    don't need the CommandApp dispatch layer.
+    the root parser.
 
     `label_sources` is consumed by `ConflineHelpFormatter` via
     `describe_field` to render the per-option block (env var, yaml
@@ -298,7 +297,7 @@ def _emit_group(
     # Argparse's `required=` only sees CLI flags — confline must also
     # accept "satisfied by YAML/ENV" so we leave argparse permissive
     # and run the full required/exclusive check post-resolution
-    # against per-field provenance (per F2.2).
+    # against per-field provenance.
     mutex = ag.add_mutually_exclusive_group(required=False)
     for field in group.fields:
         action = _emit_field(root_parser, mutex, field, prefix=prefix)

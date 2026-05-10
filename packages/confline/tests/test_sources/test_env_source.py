@@ -59,6 +59,13 @@ def test_alias_ignores_prefix():
     assert src.resolve(_f("api_key")) == "secret"
 
 
+def test_prefix_rejects_keys_with_wrong_prefix():
+    """A var with a different prefix must not bleed into the field —
+    even when its tail matches the field name."""
+    src = EnvSource({"OTHER_HOST": "leaked", "MYAPP_HOST": "from-env"}, prefix="MYAPP_")
+    assert src.resolve(_f("host")) == "from-env"
+
+
 def test_empty_string_treated_as_no_value():
     """Colloquial 'not set' in shell — `PORT=` should fall through, not
     coerce to empty string. Apps that need literal-empty semantics
@@ -163,10 +170,30 @@ def test_validate_schema_detects_underscore_collision():
         foo: Inner = opt(default_factory=Inner)
 
     with pytest.raises(EnvKeyCollisionError) as exc:
-        EnvSource({}, delimiter="_").validate_schema(C.__config_schema__)
+        EnvSource({}, prefix="MYAPP_", delimiter="_").validate_schema(C.__config_schema__)
     err = exc.value
-    assert err.source_native_key == "FOO_BAR"
+    assert err.source_native_key == "MYAPP_FOO_BAR"
     assert {err.field_a, err.field_b} == {"foo_bar", "foo.bar"}
+    msg = str(err)
+    assert "Resolve by:" in msg
+    assert "delimiter" in msg
+    assert "EnvAlias" in msg
+    assert "rename" in msg
+
+
+def test_validate_schema_no_collision_with_double_underscore_delimiter():
+    """`__` delimiter keeps `foo_bar` and nested `foo.bar` on separate
+    keys (`FOO_BAR` vs `FOO__BAR`), so both fields coexist without
+    collision."""
+
+    class Inner(ConfigBase):
+        bar: str = opt("x")
+
+    class C(ConfigBase):
+        foo: Inner = opt(default_factory=Inner)
+        foo_bar: str = opt("y")
+
+    EnvSource({}, prefix="MYAPP_").validate_schema(C.__config_schema__)
 
 
 def test_validate_schema_passes_for_disjoint_keys():

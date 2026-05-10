@@ -182,12 +182,12 @@ uv run registrar register data/runs/<run_dir>/processed.jsonl
 
 ### Writing a New Plugin
 
-See the [Writing Plugins](docs/crawlers/guides/writing-plugins.md) guide for
+See the [Writing Plugins](apps/crawlers/docs/guides/writing-plugins.md) guide for
 step-by-step instructions.
 
 ### Architecture
 
-See the [Architecture Overview](docs/crawlers/arch/_overview.md) for the
+See the [Architecture Overview](apps/crawlers/docs/arch/_overview.md) for the
 framework design, data flow, and key decisions.
 
 ### Linting and Tests

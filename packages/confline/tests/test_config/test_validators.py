@@ -1,5 +1,5 @@
 """
-Tests for validator decorators + collection helpers.
+Tests for field_validator, model_validator, and opt(validator=…) behaviours.
 """
 
 __author__ = "Bartosz Walkowicz"
@@ -9,140 +9,12 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import pytest
 
 from confline import ConfigBase, DefaultSource, EnvSource, load_config, opt
-from confline.config.validators import (
-    collect_field_validators,
-    collect_model_validators,
-    field_validator,
-    model_validator,
-)
+from confline.config.validators import field_validator, model_validator
 from confline.errors import SourceValueError
 
-
-def test_model_validator_decorator_marks_method():
-    class C:
-        @model_validator
-        def _check(self):
-            pass
-
-    assert C._check.__confline_model_validator__ is True
-
-
-def test_field_validator_decorator_carries_names():
-    class C:
-        @field_validator("a", "b")
-        def _check(self, v):
-            return v
-
-    assert C._check.__confline_field_validator__ == ("a", "b")
-
-
-def test_collect_model_validators_keeps_declaration_order():
-    class C(ConfigBase):
-        x: int = opt(1)
-
-        @model_validator
-        def _first(self):
-            pass
-
-        @model_validator
-        def _second(self):
-            pass
-
-    assert collect_model_validators(C) == ("_first", "_second")
-
-
-def test_collect_model_validators_walks_mro_base_first():
-    class Parent(ConfigBase):
-        @model_validator
-        def _parent_check(self):
-            pass
-
-    class Child(Parent):
-        @model_validator
-        def _child_check(self):
-            pass
-
-    assert collect_model_validators(Child) == ("_parent_check", "_child_check")
-
-
-def test_collect_field_validators_groups_per_field():
-    class C(ConfigBase):
-        a: int = opt(1)
-        b: int = opt(2)
-
-        @field_validator("a")
-        def _on_a(self, v):
-            return v
-
-        @field_validator("b")
-        def _on_b(self, v):
-            return v
-
-    fv = collect_field_validators(C)
-    assert fv == {"a": ("_on_a",), "b": ("_on_b",)}
-
-
-def test_collect_field_validators_walks_mro_base_first_within_field():
-    """A child class may add validators to a field already validated by
-    the parent. Within the field bucket, validators appear in
-    base-to-derived order so the parent's invariants run first."""
-
-    class Parent(ConfigBase):
-        x: int = opt(1)
-
-        @field_validator("x")
-        def _parent_check(self, v):
-            return v
-
-    class Child(Parent):
-        @field_validator("x")
-        def _child_check(self, v):
-            return v
-
-    fv = collect_field_validators(Child)
-    assert fv == {"x": ("_parent_check", "_child_check")}
-
-
-def test_collect_field_validators_supports_one_method_validating_multiple_fields():
-    """`@field_validator("a", "b")` is one method registered against
-    two fields. The collector lists it under each field independently
-    so the resolver can dispatch the same callable per-field."""
-
-    class C(ConfigBase):
-        a: int = opt(1)
-        b: int = opt(2)
-
-        @field_validator("a", "b")
-        def _shared(self, v):
-            return v
-
-    fv = collect_field_validators(C)
-    assert fv == {"a": ("_shared",), "b": ("_shared",)}
-
-
-def test_collect_model_validators_overridden_method_keeps_parent_position():
-    """Overriding by name in a subclass keeps the parent's position in
-    the order — `getattr` resolves to the most-derived implementation
-    at runtime, but the schedule (which slot it occupies) is set when
-    the parent first declared it."""
-
-    class Parent(ConfigBase):
-        x: int = opt(1)
-
-        @model_validator
-        def _check(self):
-            pass
-
-        @model_validator
-        def _later(self):
-            pass
-
-    class Child(Parent):
-        @model_validator
-        def _check(self):  # override in place
-            pass
-
-    assert collect_model_validators(Child) == ("_check", "_later")
+# ─────────────────────────────────────────────────────────────────────────────
+# opt validators
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_opt_validator_runs_during_resolution():
@@ -159,6 +31,22 @@ def test_opt_validator_runs_during_resolution():
 
     with pytest.raises(SourceValueError):
         load_config(C, sources=[EnvSource({"PORT": "-1"}), DefaultSource()])
+
+
+def test_opt_validator_can_transform_value():
+    def _strip(v):
+        return v.strip()
+
+    class C(ConfigBase):
+        name: str = opt("  bob  ", validator=_strip)
+
+    cfg = load_config(C, sources=[DefaultSource()])
+    assert cfg.name == "bob"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# field validators
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_field_validator_assert_statement_translates_to_source_value_error():
@@ -182,15 +70,34 @@ def test_field_validator_assert_statement_translates_to_source_value_error():
     assert exc.value.field_record.path == "port"
 
 
-def test_opt_validator_can_transform_value():
-    def _strip(v):
-        return v.strip()
+def test_field_validator_key_error_translated_to_source_value_error():
+    lookup = {"a": 1, "b": 2}
 
     class C(ConfigBase):
-        name: str = opt("  bob  ", validator=_strip)
+        name: str = opt("a")
+
+        @field_validator("name")
+        def _check(self, value):
+            return lookup[value]  # KeyError on unknown name
+
+    with pytest.raises(SourceValueError):
+        load_config(C, sources=[EnvSource({"NAME": "missing"}), DefaultSource()])
+
+
+def test_field_validator_returning_wrong_type_is_passed_through():
+    """Validators are post-coerce user code — a validator returning a
+    value of the "wrong" type is not re-coerced or re-validated. This
+    pins the contract so a future refactor cannot silently change it."""
+
+    class C(ConfigBase):
+        port: int = opt(8080)
+
+        @field_validator("port")
+        def _normalize(self, value):
+            return f"port-{value}"  # returns str, not int
 
     cfg = load_config(C, sources=[DefaultSource()])
-    assert cfg.name == "bob"
+    assert cfg.port == "port-8080"  # type: ignore[comparison-overlap]
 
 
 def test_field_validator_runs_after_instance_built_with_self():
@@ -209,6 +116,67 @@ def test_field_validator_runs_after_instance_built_with_self():
     assert cfg.host == "localhost"
     # `self` is populated when the validator fires.
     assert captured == [8080]
+
+
+def test_single_validator_applies_to_multiple_fields():
+    class C(ConfigBase):
+        a: str = opt("a")
+        b: str = opt("b")
+
+        @field_validator("a", "b")
+        def _uppercase(self, v):
+            return v.upper()
+
+    cfg = load_config(C, sources=[DefaultSource()])
+    assert cfg.a == "A"
+    assert cfg.b == "B"
+
+
+def test_field_validators_parent_runs_before_child():
+    fire_order: list[str] = []
+
+    class Parent(ConfigBase):
+        x: int = opt(1)
+
+        @field_validator("x")
+        def _parent_check(self, v):
+            fire_order.append("parent")
+            return v
+
+    class Child(Parent):
+        @field_validator("x")
+        def _child_check(self, v):
+            fire_order.append("child")
+            return v
+
+    load_config(Child, sources=[DefaultSource()])
+    assert fire_order == ["parent", "child"]
+
+
+def test_field_validator_subclass_override_replaces_parent():
+    fire_order: list[str] = []
+
+    class Parent(ConfigBase):
+        x: int = opt(1)
+
+        @field_validator("x")
+        def _check(self, v):
+            fire_order.append("parent")
+            return v
+
+    class Child(Parent):
+        @field_validator("x")
+        def _check(self, v):  # override
+            fire_order.append("child")
+            return v
+
+    load_config(Child, sources=[DefaultSource()])
+    assert fire_order == ["child"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# model validators
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_model_validator_can_mutate_self():
@@ -245,23 +213,46 @@ def test_model_validator_can_raise_to_abort():
         )
 
 
-def test_nested_validators_fire_before_parent():
+def test_model_validators_respect_declaration_order():
     fire_order: list[str] = []
 
-    class Inner(ConfigBase):
-        @model_validator
-        def _inner(self):
-            fire_order.append("inner")
-
-    class Outer(ConfigBase):
-        inner: Inner = opt(default_factory=Inner)
+    class C(ConfigBase):
+        x: int = opt(1)
 
         @model_validator
-        def _outer(self):
-            fire_order.append("outer")
+        def _first(self):
+            fire_order.append("first")
 
-    load_config(Outer, sources=[DefaultSource()])
-    assert fire_order == ["inner", "outer"]
+        @model_validator
+        def _second(self):
+            fire_order.append("second")
+
+    load_config(C, sources=[DefaultSource()])
+    assert fire_order == ["first", "second"]
+
+
+def test_subclass_validator_overrides_parent_via_attribute_lookup():
+    fire_order: list[str] = []
+
+    class Parent(ConfigBase):
+        x: int = opt(1)
+
+        @model_validator
+        def _check(self):
+            fire_order.append("parent")
+
+    class Child(Parent):
+        @model_validator
+        def _check(self):  # override
+            fire_order.append("child")
+
+    load_config(Child, sources=[DefaultSource()])
+    assert fire_order == ["child"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ordering
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def test_field_validator_runs_before_model_validator():
@@ -283,20 +274,20 @@ def test_field_validator_runs_before_model_validator():
     assert fire_order == ["field", "model"]
 
 
-def test_subclass_validator_overrides_parent_via_attribute_lookup():
+def test_nested_validators_fire_before_parent():
     fire_order: list[str] = []
 
-    class Parent(ConfigBase):
-        x: int = opt(1)
+    class Inner(ConfigBase):
+        @model_validator
+        def _inner(self):
+            fire_order.append("inner")
+
+    class Outer(ConfigBase):
+        inner: Inner = opt(default_factory=Inner)
 
         @model_validator
-        def _check(self):
-            fire_order.append("parent")
+        def _outer(self):
+            fire_order.append("outer")
 
-    class Child(Parent):
-        @model_validator
-        def _check(self):  # override
-            fire_order.append("child")
-
-    load_config(Child, sources=[DefaultSource()])
-    assert fire_order == ["child"]
+    load_config(Outer, sources=[DefaultSource()])
+    assert fire_order == ["inner", "outer"]

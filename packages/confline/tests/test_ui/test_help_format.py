@@ -59,17 +59,6 @@ def test_help_text_with_only_description():
     assert help_text(_field(C, "host")) == "Server host"
 
 
-def test_help_text_no_default_suffix_default_now_in_formatter():
-    """Earlier confline appended `(default: X)` here; the new
-    formatter renders defaults on a separate line, so help_text is
-    description-only."""
-
-    class C(ConfigBase):
-        port: int = opt(8080, description="Port", show_default=True)
-
-    assert help_text(_field(C, "port")) == "Port"
-
-
 def test_help_text_count_field_advertises_stacking():
     class C(ConfigBase):
         verbose: int = opt(0, description="Be loud.", count=True)
@@ -127,9 +116,6 @@ def test_formatter_renders_env_and_yaml_lines_when_label_sources_passed():
         DefaultSource(),
     ]
     out = _format_help(C, label_sources=label_sources)
-    # `environment:` is the EnvSource display_label, not the wire-id `env`.
-    assert "environment: MYAPP_PORT" in out
-    assert "yaml: port" in out
     # Inline metadata layout joins segments with the middle-dot separator.
     assert "default: 8080 · environment: MYAPP_PORT · yaml: port" in out
 
@@ -215,7 +201,7 @@ def test_formatter_falls_back_to_no_extras_without_label_sources():
 
     out = _format_help(C)  # no label_sources
     assert "default: 8080" in out
-    assert "env:" not in out
+    assert "environment:" not in out
     assert "yaml:" not in out
 
 

@@ -16,8 +16,6 @@ from dataclasses import MISSING
 
 from confline import SECRET_PLACEHOLDER
 from confline.config import MISSING_DEFAULT
-from confline.config.base import ConfigBase
-from confline.config.schema import opt
 
 
 def test_secret_placeholder_is_six_asterisks():
@@ -33,30 +31,3 @@ def test_missing_default_is_dataclasses_missing_sentinel():
     same object the schema build uses internally. Identity check, not
     equality."""
     assert MISSING_DEFAULT is MISSING
-
-
-def test_required_field_default_is_missing_default_sentinel():
-    """A field declared without a default carries `MISSING_DEFAULT` in
-    `default` — the public alias is identity-equal to the private
-    sentinel the schema build writes."""
-
-    class C(ConfigBase):
-        host: str
-
-    field = C.__config_schema__.find_field("host")
-    assert field.default is MISSING_DEFAULT
-    assert field.has_default is False
-
-
-def test_default_factory_field_records_missing_default_in_default_slot():
-    """When a `default_factory` is set, `default` stays `MISSING_DEFAULT`
-    so consumers can detect "no static default" via the same identity
-    check, regardless of factory presence."""
-
-    class C(ConfigBase):
-        items: list = opt(default_factory=list)
-
-    field = C.__config_schema__.find_field("items")
-    assert field.default is MISSING_DEFAULT
-    assert field.default_factory is list
-    assert field.has_default is True

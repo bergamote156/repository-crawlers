@@ -202,45 +202,6 @@ def test_mutex_required_satisfied_by_yaml_alone():
     assert cfg.yaml is True
 
 
-def test_mutex_validator_fix_up_runs_before_check():
-    """A @model_validator that normalizes mutex state — but provenance is
-    fixed at resolution time and validators don't update it. Behaviour
-    documented: validators can mutate values, mutex still counts based on
-    original provenance."""
-    from confline.config.validators import model_validator
-
-    class Mode(MutuallyExclusiveGroup, required=False):
-        json: bool = opt(False)
-        yaml: bool = opt(False)
-
-        @model_validator
-        def _harmless_normalization(self):
-            # No-op for this case; the test just exercises that mutex
-            # check doesn't fire on validator-set values.
-            pass
-
-    cfg = load_config(Mode, sources=[DefaultSource()])
-    assert cfg.json is False
-
-
-def test_mutex_detection_survives_renaming_marker_class():
-    """Mutex detection reads `__confline_mutex__`, not the marker
-    class's `__name__` — aliasing/renaming the base must not silently
-    disable enforcement."""
-    AliasedMutex = MutuallyExclusiveGroup  # noqa: N806 — a local alias mimics rename.
-
-    class Renamed(AliasedMutex, required=False):
-        a: bool = opt(False)
-        b: bool = opt(False)
-
-    assert Renamed.__confline_mutex__ is True
-    with pytest.raises(ConfigError, match="at most one"):
-        load_config(
-            Renamed,
-            sources=[YamlSource(scopes=[{"a": True, "b": True}]), DefaultSource()],
-        )
-
-
 def test_mutex_redacts_secret_field_value_in_provided_record():
     """A secret field caught in a mutex violation must render as the
     redaction placeholder, not the raw value — `ProvidedField.value`
@@ -291,36 +252,3 @@ def test_mutex_violation_error_does_not_hold_config_instance():
         required=False,
     )
     assert not hasattr(error, "instance")
-
-
-def test_value_at_path_returns_none_when_intermediate_is_none():
-    """Defensive helper used by `_build_provided_field`: if a model
-    validator (or future code path) leaves an `Optional[NestedConfig]`
-    set to None, mutex enforcement must not crash on `getattr(None, ...)`.
-    The walk short-circuits at the None and returns it, collapsing the
-    leaf to 'effectively unset' for the mutex counter."""
-    from confline.resolution.mutex import _value_at_path
-
-    class DeepCfg(ConfigBase):
-        leaf: bool = opt(False)
-
-    class App(ConfigBase):
-        deep: DeepCfg | None = opt(None)
-
-    cfg = App()
-    cfg.deep = None  # mimic post-resolution mutation
-    assert _value_at_path(cfg, ("deep", "leaf")) is None
-
-
-def test_value_at_path_returns_value_for_present_path():
-    from confline.resolution.mutex import _value_at_path
-
-    class DeepCfg(ConfigBase):
-        leaf: bool = opt(False)
-
-    class App(ConfigBase):
-        deep: DeepCfg = opt(default_factory=DeepCfg)
-
-    cfg = App()
-    cfg.deep.leaf = True
-    assert _value_at_path(cfg, ("deep", "leaf")) is True

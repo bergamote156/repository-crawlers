@@ -303,7 +303,11 @@ def test_scope_origins_repeats_file_across_scopes_from_one_file(tmp_path):
     """Scoped layouts (one file → many scopes, e.g. global / plugin /
     command sections) repeat the same origin across the parallel
     `scope_origins` so that any field resolved from any scope still
-    names the right file."""
+    names the right file.
+
+    Uses manual construction because `from_files` builds one scope per
+    file and has no API for exploding a single file into N scopes —
+    that's the caller's responsibility for plugin/command layouts."""
     cfg_path = tmp_path / "app.yaml"
     cfg_path.write_text("# scoped layout\n", encoding="utf-8")
 
