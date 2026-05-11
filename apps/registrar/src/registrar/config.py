@@ -67,15 +67,11 @@ class Tokens(ConfigBase):
 
 
 class Output(ConfigBase):
-    """Output and report destinations."""
+    """Output and report destinations for `register`."""
 
     dir: Path = opt(
         Path("./data"),
-        description="Directory for logs and generated reports.",
-    )
-    log_file: str = opt(
-        "registration.log",
-        description="Log file name, relative to `output.dir` unless absolute.",
+        description="Directory for run artifacts (logs, config dump, summary).",
     )
 
 
@@ -101,7 +97,6 @@ class CommonConfig(ConfigBase):
 
     onedata: OnedataConnection = opt(default_factory=OnedataConnection)
     tokens: Tokens = opt(default_factory=Tokens)
-    output: Output = opt(default_factory=Output)
     logging: Logging = opt(default_factory=Logging)
 
 
@@ -193,6 +188,7 @@ class PublicDataRecords(ConfigBase):
 class RegisterConfig(CommonConfig):
     """Configuration for `registrar register`."""
 
+    output: Output = opt(default_factory=Output)
     datasets_file: Annotated[Path, CliPositional] = opt(
         description="Path to the JSON or JSONL file with the datasets to register.",
     )
