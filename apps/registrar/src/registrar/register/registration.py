@@ -14,7 +14,6 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-import sys
 from collections.abc import Sequence
 
 import requests
@@ -23,8 +22,8 @@ from onedata_dataset import OnedataDataset
 from registrar.api.oneprovider import OneproviderClient
 from registrar.api.onezone import OnezoneClient
 from registrar.config import PublicDataRecords, RegisterConfig
-from registrar.register.render import render_outcome_tail
 from registrar.register.types import DatasetOutcome, FailedDataset, ResolvedTarget, Summary
+from registrar.ui.progress_sink import NullProgressSink, ProgressSink
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Errors
@@ -44,15 +43,17 @@ class RecordRequirementError(RuntimeError):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def run_registration(
+def run_registration(  # noqa: PLR0913
     target: ResolvedTarget,
     datasets: Sequence[OnedataDataset],
     config: RegisterConfig,
     *,
     oneprovider: OneproviderClient,
     onezone: OnezoneClient,
+    progress_sink: ProgressSink | None = None,
 ) -> Summary:
     """Walk `datasets`, register each, and return the aggregated `Summary`."""
+    sink = progress_sink or NullProgressSink()
     total = len(datasets)
     successful = 0
     files_registered = 0
@@ -62,12 +63,11 @@ def run_registration(
     failures: list[FailedDataset] = []
 
     for idx, dataset in enumerate(datasets, 1):
-        prefix = f"[{idx}/{total}] {dataset.name or '(unnamed)'}"
-        sys.stdout.write(f"{prefix} ... ")
-        sys.stdout.flush()
-        outcome = _process_one(target, dataset, config, oneprovider, onezone)
-        sys.stdout.write(render_outcome_tail(outcome) + "\n")
-        sys.stdout.flush()
+        file_count = len(dataset.files) if hasattr(dataset, "files") else 0
+        sink.start_dataset(idx, total, dataset.name or "(unnamed)", file_count)
+
+        outcome = _process_one(target, dataset, config, oneprovider, onezone, sink)
+        sink.finish_dataset(outcome)
 
         if outcome.success:
             successful += 1
@@ -96,20 +96,26 @@ def run_registration(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _process_one(
+def _process_one(  # noqa: PLR0913
     target: ResolvedTarget,
     dataset: OnedataDataset,
     config: RegisterConfig,
     oneprovider: OneproviderClient,
     onezone: OnezoneClient,
+    sink: ProgressSink,
 ) -> DatasetOutcome:
     dataset_dir = _join_paths(target.dataset_root, dataset.target_dir)
 
     try:
-        registered, skipped = _register_files(target, dataset, dataset_dir, oneprovider)
+        sink.advance_phase("files")
+        registered, skipped = _register_files(target, dataset, dataset_dir, oneprovider, sink)
+
+        sink.advance_phase("share")
         share_id = _ensure_share(target, dataset, dataset_dir, oneprovider)
+
         record_identifier: str | None = None
         if config.public_data_records.register:
+            sink.advance_phase("record")
             record_identifier = _ensure_public_record(
                 config=config.public_data_records,
                 dataset=dataset,
@@ -122,7 +128,6 @@ def _process_one(
     except requests.RequestException as exc:
         return DatasetOutcome(name=dataset.name, success=False, error=str(exc))
     except RuntimeError as exc:
-        # catches our own internal raises (e.g. dataset_dir lookup miss)
         return DatasetOutcome(name=dataset.name, success=False, error=str(exc))
 
     return DatasetOutcome(
@@ -145,6 +150,7 @@ def _register_files(
     dataset: OnedataDataset,
     dataset_dir: str,
     oneprovider: OneproviderClient,
+    sink: ProgressSink,
 ) -> tuple[int, int]:
     registered = 0
     skipped = 0
@@ -155,6 +161,7 @@ def _register_files(
         existing = oneprovider.lookup_file_id(space_name=target.space_name, path=dest_path)
         if existing:
             skipped += 1
+            sink.tick_file()
             continue
 
         oneprovider.register_file(
@@ -164,6 +171,7 @@ def _register_files(
             dest_path=dest_path,
         )
         registered += 1
+        sink.tick_file()
     return registered, skipped
 
 
@@ -229,11 +237,6 @@ def _resolve_share_url(
     onezone: OnezoneClient,
     oneprovider: OneproviderClient,
 ) -> str:
-    """Pick the share-URL identifier per `identifier_policy`.
-
-    No handle service is involved — `dataset.pid` here is treated as an
-    upstream-published share URL the registrar should record as-is.
-    """
     pid = dataset.pid
     if config.identifier_policy == "always-reuse-existing":
         if not pid:
@@ -253,12 +256,6 @@ def _resolve_handle(
     onezone: OnezoneClient,
     oneprovider: OneproviderClient,
 ) -> str:
-    """Ensure a public handle for the share and return its ID.
-
-    If the share already carries a handle, reuse it. Otherwise call
-    `register_handle` once — passing `pid_to_reuse` for reuse policies and
-    `None` when the policy demands a freshly minted handle.
-    """
     if not dataset.metadata_xml:
         raise RecordRequirementError(
             "public_identifier_type=handle-service requires the dataset to provide metadata_xml.",
@@ -294,7 +291,6 @@ def _share_public_url(
     onezone_domain: str,
     oneprovider: OneproviderClient,
 ) -> str:
-    """Public URL for a share — prefer the recorded one, derive on miss."""
     details = oneprovider.get_share_details(share_id) or {}
     public_url = details.get("publicUrl")
     if public_url:
@@ -304,9 +300,6 @@ def _share_public_url(
 
 
 def _join_paths(*parts: str) -> str:
-    """Strip leading/trailing slashes from each part and join with `/`.
-
-    Empty parts drop out, so `_join_paths("", "ds-1") == "ds-1"`.
-    """
+    """Strip leading/trailing slashes from each part and join with `/`."""
     cleaned = [p.strip("/") for p in parts if p]
     return "/".join(cleaned)
