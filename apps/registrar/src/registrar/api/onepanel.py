@@ -6,11 +6,11 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+import logging
 from typing import Final, NotRequired, TypedDict
 
 import requests
 
-from registrar import output
 from registrar.api.utils import (
     DEFAULT_TIMEOUT,
     disable_ssl_warnings,
@@ -19,6 +19,8 @@ from registrar.api.utils import (
     require_token,
 )
 from registrar.config import CommonConfig
+
+logger = logging.getLogger(__name__)
 
 disable_ssl_warnings()
 
@@ -141,7 +143,7 @@ class OnepanelClient:
         if not storage_id:
             storage_id = response.json().get(name, {}).get("id")
 
-        output.info(f"Created storage '{name}' with ID: {storage_id}")
+        logger.info("Created storage '%s' with ID: %s", name, storage_id)
         return storage_id
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -196,5 +198,5 @@ class OnepanelClient:
         handle_error(response, service=SERVICE_NAME)
 
         space_id = response.json().get("id")
-        output.info(f"Supported space {space_id} with storage {storage_id}")
+        logger.info("Supported space %s with storage %s", space_id, storage_id)
         return space_id

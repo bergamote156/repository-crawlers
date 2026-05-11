@@ -6,11 +6,11 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+import logging
 from typing import Final
 
 import requests
 
-from registrar import output
 from registrar.api.utils import (
     DEFAULT_TIMEOUT,
     disable_ssl_warnings,
@@ -19,6 +19,8 @@ from registrar.api.utils import (
     require_token,
 )
 from registrar.config import CommonConfig
+
+logger = logging.getLogger(__name__)
 
 disable_ssl_warnings()
 
@@ -79,7 +81,7 @@ class OnezoneClient:
         handle_error(response, service=SERVICE_NAME)
 
         space_id = id_from_location(response) or response.json().get("spaceId")
-        output.info(f"Created space '{name}' with ID: {space_id}")
+        logger.info("Created space '%s' with ID: %s", name, space_id)
         return space_id
 
     def create_support_token(self, space_id: str) -> str:
@@ -95,7 +97,7 @@ class OnezoneClient:
         handle_error(response, service=SERVICE_NAME)
 
         token = response.json().get("token")
-        output.debug(f"Created support token for space {space_id}")
+        logger.debug("Created support token for space %s", space_id)
         return token
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -148,5 +150,5 @@ class OnezoneClient:
         handle_error(response, service=SERVICE_NAME)
 
         handle_id = id_from_location(response) or response.json().get("handleId")
-        output.info(f"Registered handle for share {share_id}: {handle_id}")
+        logger.info("Registered handle for share %s: %s", share_id, handle_id)
         return handle_id

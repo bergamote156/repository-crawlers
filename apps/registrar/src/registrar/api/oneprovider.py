@@ -6,11 +6,11 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+import logging
 from typing import Final
 
 import requests
 
-from registrar import output
 from registrar.api.utils import (
     DEFAULT_TIMEOUT,
     disable_ssl_warnings,
@@ -18,6 +18,8 @@ from registrar.api.utils import (
     require_token,
 )
 from registrar.config import CommonConfig
+
+logger = logging.getLogger(__name__)
 
 disable_ssl_warnings()
 
@@ -132,7 +134,7 @@ class OneproviderClient:
         handle_error(response, service=SERVICE_NAME)
 
         file_id = response.json().get("fileId")
-        output.debug(f"Registered file: {dest_path} -> {file_id}")
+        logger.debug("Registered file: %s -> %s", dest_path, file_id)
         return file_id
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -152,7 +154,7 @@ class OneproviderClient:
         handle_error(response, service=SERVICE_NAME)
 
         share_id = response.json().get("shareId")
-        output.info(f"Created share '{name}' with ID: {share_id}")
+        logger.info("Created share '%s' with ID: %s", name, share_id)
         return share_id
 
     def get_share_details(self, share_id: str) -> dict | None:
