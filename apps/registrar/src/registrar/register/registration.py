@@ -221,44 +221,13 @@ def _ensure_public_record(
 ) -> str:
     """Return the public-data-record identifier for `dataset`.
 
-    Dispatches on `public_identifier_type`: share URLs are derived from the
-    share itself, handles always go through the Onezone handle-registration
-    endpoint (which both mints new handles and attaches existing PIDs).
+    Both `onedata-url` and `pid` paths go through `register_handle`.
+    `public_identifier_type` controls `requestPublicHandle`;
+    `identifier_policy` controls `publicHandleToReuse`.
     """
-    if config.public_identifier_type == "onedata-url":
-        return _resolve_share_url(config, dataset, share_id, onezone, oneprovider)
-    return _resolve_handle(config, dataset, share_id, onezone, oneprovider)
-
-
-def _resolve_share_url(
-    config: PublicDataRecords,
-    dataset: OnedataDataset,
-    share_id: str,
-    onezone: OnezoneClient,
-    oneprovider: OneproviderClient,
-) -> str:
-    pid = dataset.pid
-    if config.identifier_policy == "always-reuse-existing":
-        if not pid:
-            raise RecordRequirementError(
-                "identifier_policy=always-reuse-existing requires dataset.pid; got none.",
-            )
-        return pid
-    if config.identifier_policy == "generate-new-if-missing" and pid:
-        return pid
-    return _share_public_url(share_id, onezone.domain, oneprovider)
-
-
-def _resolve_handle(
-    config: PublicDataRecords,
-    dataset: OnedataDataset,
-    share_id: str,
-    onezone: OnezoneClient,
-    oneprovider: OneproviderClient,
-) -> str:
     if not dataset.metadata_xml:
         raise RecordRequirementError(
-            "public_identifier_type=handle-service requires the dataset to provide metadata_xml.",
+            "public data record registration requires the dataset to provide metadata_xml.",
         )
 
     details = oneprovider.get_share_details(share_id) or {}
@@ -266,37 +235,30 @@ def _resolve_handle(
     if existing:
         return existing
 
-    pid = dataset.pid
-    if config.identifier_policy == "always-reuse-existing":
-        if not pid:
-            raise RecordRequirementError(
-                "identifier_policy=always-reuse-existing requires dataset.pid; got none.",
-            )
-        pid_to_reuse: str | None = pid
-    elif config.identifier_policy == "generate-new-if-missing" and pid:
-        pid_to_reuse = pid
-    else:
-        pid_to_reuse = None
+    request_public_handle = config.public_identifier_type == "pid"
+    public_handle_to_reuse = _resolve_pid_to_reuse(config.identifier_policy, dataset.pid)
 
     return onezone.register_handle(
         handle_service_id=config.handle_service_id,
         share_id=share_id,
         metadata_xml=dataset.metadata_xml,
-        pid_to_reuse=pid_to_reuse,
+        request_public_handle=request_public_handle,
+        public_handle_to_reuse=public_handle_to_reuse,
     )
 
 
-def _share_public_url(
-    share_id: str,
-    onezone_domain: str,
-    oneprovider: OneproviderClient,
-) -> str:
-    details = oneprovider.get_share_details(share_id) or {}
-    public_url = details.get("publicUrl")
-    if public_url:
-        return public_url
+def _resolve_pid_to_reuse(policy: str, pid: str | None) -> str | None:
+    if policy == "always-reuse-existing":
+        if not pid:
+            raise RecordRequirementError(
+                "identifier_policy=always-reuse-existing requires dataset.pid; got none.",
+            )
+        return pid
 
-    return f"https://{onezone_domain}/share/{share_id}"
+    if policy == "generate-new-if-missing" and pid:
+        return pid
+
+    return None
 
 
 def _join_paths(*parts: str) -> str:

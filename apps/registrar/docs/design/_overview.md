@@ -167,75 +167,66 @@ the space name as the storage name — keeping them aligned by convention.
 ## Public Data Records
 
 After files and shares are in place, the registrar can optionally mint a
-public identifier for each dataset's share. The behavior branches on two
-config values: `public_identifier_type` (what kind of identifier) and
-`identifier_policy` (how to treat existing PIDs).
+public identifier for each dataset's share. Both identifier types go
+through `register_handle`; the behavior branches on two config values:
+`public_identifier_type` (controls `requestPublicHandle`) and
+`identifier_policy` (controls `publicHandleToReuse`).
 
-- **`onedata-url`** (default) — the identifier is the share's public URL.
-  No external service is contacted.
-- **`handle-service`** — the identifier is minted through a handle service
-  in Onezone (e.g. DOI or ePIC). Requires `metadata_xml` on the dataset
-  and a `handle_service_id` in config.
+- **`onedata-url`** (default) — registers the handle with
+  `requestPublicHandle=false`. No public handle is minted by the service.
+- **`pid`** — registers the handle with `requestPublicHandle=true`,
+  asking the handle service (e.g. DOI or ePIC) to mint a public handle.
+
+Both types require `metadata_xml` on the dataset and `handle_service_id`
+in config.
 
 ```mermaid
 flowchart TD
     START([public_data_records.register?])
     START -- NO --> SKIP([skip record phase])
-    START -- YES --> BRANCH{public_identifier_type}
+    START -- YES --> XML{dataset.metadata_xml\npresent?}
 
-    BRANCH -- onedata-url --> PA_POL{identifier_policy}
-    BRANCH -- handle-service --> PB_XML{dataset.metadata_xml\npresent?}
+    XML -- NO --> XML_ERR([RecordRequirementError])
+    XML -- YES --> HANDLE{handleId already\non share?}
 
-    PA_POL -- always-reuse-existing --> PA_AR_PID{dataset.pid\npresent?}
-    PA_AR_PID -- YES --> PA_AR_RET([return pid])
-    PA_AR_PID -- NO --> PA_AR_ERR([RecordRequirementError])
+    HANDLE -- YES --> HANDLE_RET([return handleId\nidempotent])
+    HANDLE -- NO --> TYPE{public_identifier_type}
 
-    PA_POL -- generate-new-if-missing --> PA_GN_PID{dataset.pid\npresent?}
-    PA_GN_PID -- YES --> PA_GN_RET([return pid])
-    PA_GN_PID -- NO --> RESOLVE
+    TYPE -- onedata-url --> TYPE_URL[requestPublicHandle = false]
+    TYPE -- pid --> TYPE_PID[requestPublicHandle = true]
 
-    PA_POL -- always-generate-new --> RESOLVE
+    TYPE_URL --> POL{identifier_policy}
+    TYPE_PID --> POL
 
-    RESOLVE[get_share_details share_id]
-    RESOLVE --> RESOLVE_URL{publicUrl\npresent?}
-    RESOLVE_URL -- YES --> RET_URL([return publicUrl])
-    RESOLVE_URL -- NO --> RET_FALLBACK(["return https://{oz_domain}/share/{share_id}"])
+    POL -- always-reuse-existing --> AR_PID{dataset.pid\npresent?}
+    AR_PID -- YES --> AR_SET[publicHandleToReuse = pid]
+    AR_PID -- NO --> AR_ERR([RecordRequirementError])
 
-    PB_XML -- NO --> PB_ERR([RecordRequirementError])
-    PB_XML -- YES --> PB_SHARE[get_share_details share_id]
-    PB_SHARE --> PB_HANDLE{handleId\nexists?}
-    PB_HANDLE -- YES --> PB_HANDLE_RET([return handleId\nidempotent])
-    PB_HANDLE -- NO --> PB_POL{identifier_policy}
+    POL -- generate-new-if-missing --> GN_PID{dataset.pid\npresent?}
+    GN_PID -- YES --> GN_SET[publicHandleToReuse = pid]
+    GN_PID -- NO --> GN_NONE[publicHandleToReuse omitted]
 
-    PB_POL -- always-reuse-existing --> PB_AR_PID{dataset.pid\npresent?}
-    PB_AR_PID -- YES --> PB_AR_SET[pid_to_reuse = pid]
-    PB_AR_PID -- NO --> PB_AR_ERR([RecordRequirementError])
+    POL -- always-generate-new --> AG_NONE[publicHandleToReuse omitted]
 
-    PB_POL -- generate-new-if-missing --> PB_GN_PID{dataset.pid\npresent?}
-    PB_GN_PID -- YES --> PB_GN_SET[pid_to_reuse = pid]
-    PB_GN_PID -- NO --> PB_GN_NONE[pid_to_reuse = None]
+    AR_SET --> REG
+    GN_SET --> REG
+    GN_NONE --> REG
+    AG_NONE --> REG
 
-    PB_POL -- always-generate-new --> PB_AG_NONE[pid_to_reuse = None]
-
-    PB_AR_SET --> PB_REG
-    PB_GN_SET --> PB_REG
-    PB_GN_NONE --> PB_REG
-    PB_AG_NONE --> PB_REG
-
-    PB_REG[register_handle\nhandle_service_id, share_id,\nmetadata_xml, pid_to_reuse]
-    PB_REG --> PB_RET([return handle identifier])
+    REG[register_handle\nhandle_service_id, share_id,\nmetadata_xml, requestPublicHandle,\npublicHandleToReuse]
+    REG --> RET([return handle identifier])
 ```
 
 ### Identifier Policy
 
-The `identifier_policy` affects both paths identically in how they treat
-the dataset's `pid` field:
+The `identifier_policy` controls `publicHandleToReuse` identically for
+both `onedata-url` and `pid` types:
 
 | Policy | `pid` present | `pid` absent |
 |--------|---------------|--------------|
-| `always-reuse-existing` | Use the PID | Fail with `RecordRequirementError` |
-| `generate-new-if-missing` | Use the PID | Generate new (URL or handle) |
-| `always-generate-new` | Ignore the PID | Generate new (URL or handle) |
+| `always-reuse-existing` | `publicHandleToReuse = pid` | Fail with `RecordRequirementError` |
+| `generate-new-if-missing` | `publicHandleToReuse = pid` | Omit `publicHandleToReuse` |
+| `always-generate-new` | Ignore the PID | Omit `publicHandleToReuse` |
 
 The default is `generate-new-if-missing` — the safest option for batch
 runs where some datasets carry PIDs from previous systems and others

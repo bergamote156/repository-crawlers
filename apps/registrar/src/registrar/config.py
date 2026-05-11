@@ -150,12 +150,12 @@ class PublicDataRecords(ConfigBase):
         "",
         description="Handle service ID. Required when `register` is true.",
     )
-    public_identifier_type: Literal["onedata-url", "handle-service"] = opt(
+    public_identifier_type: Literal["onedata-url", "pid"] = opt(
         "onedata-url",
         description=(
             "Identifier kind to mint when a new identifier is needed. "
-            "`onedata-url` reuses the share URL; `handle-service` requests "
-            "an identifier from the configured service."
+            "`onedata-url` registers the handle without requesting a public "
+            "handle; `pid` requests one from the configured handle service."
         ),
     )
     identifier_policy: Literal[

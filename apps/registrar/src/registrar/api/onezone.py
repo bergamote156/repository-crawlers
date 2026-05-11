@@ -104,40 +104,27 @@ class OnezoneClient:
     # Handle operations
     # ─────────────────────────────────────────────────────────────────────────
 
-    def register_handle(
+    def register_handle(  # noqa: PLR0913 — REST shape, kwargs-only by design
         self,
         *,
         handle_service_id: str,
         share_id: str,
         metadata_xml: str,
         metadata_prefix: str = "oai_datacite",
-        pid_to_reuse: str | None = None,
+        request_public_handle: bool = False,
+        public_handle_to_reuse: str | None = None,
     ) -> str:
-        """Attach a public handle to a share and return the new handle ID.
-
-        With `pid_to_reuse=None` Onezone asks the handle service to mint a
-        fresh public handle. When a PID is supplied, Onezone records it
-        against the share without minting a new one — the way to attach an
-        externally-issued handle to an existing share.
-
-        Both modes use a single non-public toggle on the same endpoint
-        (`requestPublicHandle` / `publicHandleToReuse`).
-        """
-        # Supported metadata prefixes on the server: oai_dc, oai_datacite,
-        # oai_openaire, edm. metadata_prefix is plumbed through but defaulted
-        # because dataset records do not yet carry their schema.
+        """Attach a public handle to a share and return the new handle ID."""
         payload: dict[str, object] = {
             "handleServiceId": handle_service_id,
             "resourceType": "Share",
             "resourceId": share_id,
             "metadata": metadata_xml,
             "metadataPrefix": metadata_prefix,
+            "requestPublicHandle": request_public_handle,
         }
-        if pid_to_reuse is None:
-            payload["requestPublicHandle"] = True
-        else:
-            payload["requestPublicHandle"] = False
-            payload["publicHandleToReuse"] = pid_to_reuse
+        if public_handle_to_reuse is not None:
+            payload["publicHandleToReuse"] = public_handle_to_reuse
 
         url = f"{self._base_url}/user/handles"
         response = requests.post(
