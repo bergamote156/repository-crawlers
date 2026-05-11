@@ -13,14 +13,12 @@ from typing import Literal
 import pytest
 
 from confline import (
-    CommandApp,
     ConfigBase,
     DefaultSource,
     EnvSource,
     MutuallyExclusiveGroup,
     SourceValueError,
     YamlSource,
-    command,
     load_config,
     opt,
 )

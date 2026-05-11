@@ -8,7 +8,6 @@ import sys
 
 import requests
 from rich import box
-from rich.align import Align
 from rich.table import Table
 
 from registrar.api.onepanel import OnepanelClient, StorageDetails, is_storage_compatible
@@ -32,9 +31,7 @@ def run(config: ListStoragesConfig) -> int:
         return _fail(f"failed to fetch storages: {exc}")
 
     if not rows:
-        console.print(
-            f"[muted]No storages found on {config.onedata.op_domain}.[/]"
-        )
+        console.print(f"[muted]No storages found on {config.onedata.op_domain}.[/]")
         return 0
 
     table = Table(

@@ -121,7 +121,9 @@ _MISSING_ERR = MissingRequiredError(
     [MissingFieldRecord(path="host", type_desc="string", suggestions=())],
     sources_tried=("env", "default"),
 )
-_UNKNOWN_ERR = UnknownCommandError("migate", available=("migrate", "serve"), suggestions=("migrate",))
+_UNKNOWN_ERR = UnknownCommandError(
+    "migate", available=("migrate", "serve"), suggestions=("migrate",)
+)
 
 
 def _format_unknown_command_normalized(err, **kw):

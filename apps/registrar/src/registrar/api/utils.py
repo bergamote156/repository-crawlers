@@ -56,9 +56,7 @@ def handle_error(response: requests.Response, *, service: str) -> None:
             json.dumps(error_body, indent=2),
         )
     except json.JSONDecodeError:
-        logger.error(
-            "%s API Error (%d): %s", service, response.status_code, response.text
-        )
+        logger.error("%s API Error (%d): %s", service, response.status_code, response.text)
 
     response.raise_for_status()
 
