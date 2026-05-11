@@ -98,7 +98,8 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> OnedataDat
     return OnedataDataset(
         name=title,
         target_dir=title.replace("/", "-"),
-        pid=folder_id,
+        # This repository doesn't provide Persistent Identifiers for its datasets
+        pid=None,
         metadata_xml=metadata.to_xml(),
         files=tuple(OnedataFile(path=f.path, url=f.url) for f in files),
     )

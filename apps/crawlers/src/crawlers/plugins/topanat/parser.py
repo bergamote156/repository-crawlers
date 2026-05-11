@@ -56,7 +56,7 @@ _RIGHTS = Rights(
 
 def build_trait_record(info: TraitInfo) -> OnedataDataset:
     """Build an `OnedataDataset` for a fetched EFO/MONDO trait."""
-    pid = f"https://www.ebi.ac.uk/gwas/efotraits/{info.short_form}"
+    identifier = f"https://www.ebi.ac.uk/gwas/efotraits/{info.short_form}"
     title = f"Trait: {info.label}" if info.label else f"Trait: {info.short_form}"
 
     today = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -76,7 +76,7 @@ def build_trait_record(info: TraitInfo) -> OnedataDataset:
         )
 
     record = DataCiteRecord(
-        identifier=pid,
+        identifier=identifier,
         identifier_type=IdentifierType.URL,
         creators=[Creator(name=_CREATOR_NAME, name_type=NameType.ORGANIZATIONAL)],
         title=title,
@@ -97,7 +97,8 @@ def build_trait_record(info: TraitInfo) -> OnedataDataset:
     return OnedataDataset(
         name=title,
         target_dir=title.replace("/", "-"),
-        pid=pid,
+        # This repository doesn't provide Persistent Identifiers for its datasets
+        pid=None,
         metadata_xml=record.to_xml(),
         files=(OnedataFile(path="data.json", url=info.associations_url),),
     )

@@ -127,7 +127,8 @@ def _parse_item(raw: dict, item_id: str) -> Ok[OnedataDataset] | None:
         OnedataDataset(
             name=title,
             target_dir=title.replace("/", "-"),
-            pid=item_id,
+            # This repository doesn't provide Persistent Identifiers for its datasets
+            pid=None,
             metadata_xml=metadata.to_xml(),
             files=tuple(files),
         )

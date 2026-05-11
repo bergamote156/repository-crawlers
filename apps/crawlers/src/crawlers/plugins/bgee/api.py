@@ -178,7 +178,8 @@ class BgeeParser:
             OnedataDataset(
                 name=title,
                 target_dir=title.replace("/", "-"),
-                pid=identifier,
+                # This repository doesn't provide Persistent Identifiers for its datasets
+                pid=None,
                 metadata_xml=record.to_xml(),
                 files=tuple(files),
             )
