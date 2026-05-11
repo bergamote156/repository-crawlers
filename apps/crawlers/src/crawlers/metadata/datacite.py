@@ -29,15 +29,10 @@ _SCHEMA_LOCATION = (
     "http://datacite.org/schema/kernel-4 http://schema.datacite.org/meta/kernel-4.5/metadata.xsd"
 )
 
-# Bind 'datacite:' prefix consistently with datacite.py to avoid mutating
-# the global ET namespace map after import.
-ET.register_namespace("", NS_DATACITE)
-ET.register_namespace("xsi", NS_XSI)
-
 
 def _q(ns: str, tag: str) -> str:
     """Build an ElementTree Clark-notation tag."""
-    return f"{{{ns}}}{tag}" if ns is not NS_DATACITE else f"{tag}"
+    return f"{{{ns}}}{tag}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -206,6 +201,11 @@ def _build(record: DataCiteRecord) -> str:
     _add_related_identifiers(root, record)
     _add_rights_list(root, record)
     _add_version(root, record)
+
+    # Configure namespace serialization locally rather than globally for ET,
+    # as it impacts all other places where ET is used (other metadata model implementations).
+    ET.register_namespace("", NS_DATACITE)
+    ET.register_namespace("xsi", NS_XSI)
 
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="unicode", xml_declaration=True, short_empty_elements=False)
