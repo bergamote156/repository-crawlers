@@ -91,7 +91,6 @@ public_data_records:
 # ─── Output and logging ──────────────────────────────────────────────────────
 output:
   dir: ./data
-  log_file: registration.log
 
 logging:
   level: info       # debug | info | warning | error | silent
