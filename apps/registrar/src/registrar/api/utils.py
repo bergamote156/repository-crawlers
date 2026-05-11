@@ -5,12 +5,13 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 import json
+import logging
 from typing import Final
 
 import requests
 import urllib3
 
-from registrar import output
+logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT: Final[int] = 30
 
@@ -48,11 +49,16 @@ def handle_error(response: requests.Response, *, service: str) -> None:
 
     try:
         error_body = response.json()
-        output.error(
-            f"{service} API Error ({response.status_code}): {json.dumps(error_body, indent=2)}",
+        logger.error(
+            "%s API Error (%d): %s",
+            service,
+            response.status_code,
+            json.dumps(error_body, indent=2),
         )
     except json.JSONDecodeError:
-        output.error(f"{service} API Error ({response.status_code}): {response.text}")
+        logger.error(
+            "%s API Error (%d): %s", service, response.status_code, response.text
+        )
 
     response.raise_for_status()
 

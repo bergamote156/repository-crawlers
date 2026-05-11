@@ -7,16 +7,21 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 import sys
 
 import requests
+from rich import box
+from rich.align import Align
+from rich.table import Table
 
-from registrar import output
 from registrar.api.onepanel import OnepanelClient, StorageDetails, is_storage_compatible
 from registrar.api.utils import MissingTokenError
 from registrar.config import ListStoragesConfig, effective_log_level
+from registrar.logging_config import setup_logging
+from registrar.ui.console import get_console
 
 
 def run(config: ListStoragesConfig) -> int:
     """List storages on the configured Oneprovider."""
-    output.set_level(effective_log_level(config.logging))
+    console = get_console()
+    setup_logging(console=console, level=effective_log_level(config.logging))
 
     try:
         onepanel = OnepanelClient.from_config(config)
@@ -26,27 +31,53 @@ def run(config: ListStoragesConfig) -> int:
     except requests.RequestException as exc:
         return _fail(f"failed to fetch storages: {exc}")
 
-    _write_table(rows, sys.stdout)
+    if not rows:
+        console.print(
+            f"[muted]No storages found on {config.onedata.op_domain}.[/]"
+        )
+        return 0
+
+    table = Table(
+        title=f"Storages on {config.onedata.op_domain}  ({len(rows)} found)",
+        title_style="bold",
+        box=box.SIMPLE_HEAVY,
+        show_edge=False,
+    )
+    table.add_column("Name", no_wrap=False, overflow="fold")
+    table.add_column("Storage ID")
+    table.add_column("Type")
+    table.add_column("Compat")
+    table.add_column("Endpoint")
+
+    for storage_id, details in rows:
+        compat = _compat_cell(details)
+        table.add_row(
+            details["name"],
+            storage_id,
+            details["type"],
+            compat,
+            details.get("endpoint", "—"),
+        )
+
+    console.print()
+    console.print(table)
     return 0
+
+
+def _compat_cell(details: StorageDetails) -> str:
+    if details["type"] not in ("http",):
+        return "[muted]n/a[/]"
+
+    if is_storage_compatible(details):
+        return "[success]ok[/]"
+
+    return "[danger]no[/]"
 
 
 def _fetch(onepanel: OnepanelClient) -> tuple[tuple[str, StorageDetails], ...]:
     rows = [(sid, onepanel.get_storage_details(sid)) for sid in onepanel.list_storages()]
     rows.sort(key=lambda r: (r[1]["name"].lower(), r[0]))
     return tuple(rows)
-
-
-def _write_table(rows: tuple[tuple[str, StorageDetails], ...], out) -> None:
-    out.write(f"\nStorages ({len(rows)}):\n\n")
-    out.write(f"{'Name':<40} {'Storage ID':<40} {'Type':<10} {'Compat':<7} {'Endpoint'}\n")
-    out.write("-" * 110 + "\n")
-
-    for storage_id, details in rows:
-        compat = "yes" if is_storage_compatible(details) else "no"
-        out.write(
-            f"{details['name']:<40} {storage_id:<40} {details['type']:<10} "
-            f"{compat:<7} {details.get('endpoint', '')}\n",
-        )
 
 
 def _fail(message: str) -> int:
