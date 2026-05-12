@@ -49,7 +49,7 @@ class OneproviderClient:
         Requires `tokens.space_owner_token`; raises `MissingTokenError` otherwise.
         """
         return cls(
-            domain=config.onedata.op_domain,
+            domain=config.onedata.oneprovider_domain,
             token=require_token(
                 config.tokens.space_owner_token,
                 path="tokens.space_owner_token",

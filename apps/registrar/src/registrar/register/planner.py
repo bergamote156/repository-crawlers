@@ -19,12 +19,12 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 from onedata_dataset import OnedataDataset
 from registrar.api.onepanel import OnepanelClient, is_storage_compatible
 from registrar.config import RegisterConfig, SpaceSelection, StorageSelection
 from registrar.register.lookups import (
-    choose_endpoint,
     find_spaces_by_name,
     find_storages_by_name,
     infer_domain,
@@ -100,7 +100,6 @@ def build_target_plan(
         onepanel,
         config.storage,
         space,
-        explicit_endpoint=config.storage_endpoint,
         first_file_url=first_file_url,
     )
 
@@ -205,7 +204,6 @@ def _resolve_storage(
     selection: StorageSelection,
     space: _PlannedSpace,
     *,
-    explicit_endpoint: str,
     first_file_url: str,
 ) -> _PlannedStorage:
     if selection.id:
@@ -216,7 +214,6 @@ def _resolve_storage(
             onepanel,
             selection.name,
             space,
-            explicit_endpoint=explicit_endpoint,
             first_file_url=first_file_url,
         )
 
@@ -249,7 +246,6 @@ def _resolve_storage(
         onepanel,
         space.name,
         space,
-        explicit_endpoint=explicit_endpoint,
         first_file_url=first_file_url,
     )
 
@@ -287,7 +283,6 @@ def _resolve_storage_by_name(
     name: str,
     space: _PlannedSpace,
     *,
-    explicit_endpoint: str,
     first_file_url: str,
 ) -> _PlannedStorage:
     matches = find_storages_by_name(onepanel, name)
@@ -325,19 +320,18 @@ def _resolve_storage_by_name(
             "and attach a second support.",
         )
 
-    chosen = choose_endpoint(explicit_endpoint, first_file_url)
-    if chosen is None:
+    endpoint = _infer_storage_endpoint(first_file_url)
+    if endpoint is None:
         raise TargetResolutionError(
             f"cannot infer storage endpoint from {first_file_url!r} — "
             "pass storage endpoint explicitly.",
         )
 
-    endpoint, endpoint_inferred = chosen
     return _PlannedStorage(
         name=name,
         id=None,
         endpoint=endpoint,
-        endpoint_inferred=endpoint_inferred,
+        endpoint_inferred=True,
     )
 
 
@@ -351,3 +345,11 @@ def _enforce_single_support(space: _PlannedSpace, resolved_storage_id: str) -> N
         f"{space.current_storage_id!r}; a space can be supported by only one storage "
         f"on a provider, so the planner cannot switch to {resolved_storage_id!r}.",
     )
+
+
+def _infer_storage_endpoint(first_file_url: str) -> str | None:
+    parsed = urlparse(first_file_url)
+    if not parsed.scheme or not parsed.netloc:
+        return None
+
+    return f"{parsed.scheme}://{parsed.netloc}"

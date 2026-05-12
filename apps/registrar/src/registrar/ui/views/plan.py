@@ -39,9 +39,9 @@ def _connection_panel(config: RegisterConfig) -> Panel:
     grid.add_column()
     grid.add_column()
 
-    grid.add_row("onezone", config.onedata.oz_domain, "")
-    grid.add_row("oneprovider", config.onedata.op_domain, "")
-    grid.add_row("panel port", str(config.onedata.op_panel_port), "")
+    grid.add_row("onezone", config.onedata.onezone_domain, "")
+    grid.add_row("oneprovider", config.onedata.oneprovider_domain, "")
+    grid.add_row("panel port", str(config.onedata.oneprovider_panel_port), "")
 
     ssl_annotation = (
         "[danger]! TLS verification disabled[/]" if not config.onedata.verify_ssl else ""
@@ -89,7 +89,7 @@ def _target_panel(plan: TargetPlan, config: RegisterConfig) -> Panel:
     grid.add_row("sharing", "create shares", "")
 
     # public data records
-    if config.public_data_records.register:
+    if config.public_data_records.enabled:
         grid.add_row("public records", "enabled", "")
         grid.add_row(
             "handle service",

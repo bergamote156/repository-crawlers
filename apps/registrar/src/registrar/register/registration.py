@@ -114,7 +114,7 @@ def _process_one(  # noqa: PLR0913
         share_id = _ensure_share(target, dataset, dataset_dir, oneprovider)
 
         record_identifier: str | None = None
-        if config.public_data_records.register:
+        if config.public_data_records.enabled:
             sink.advance_phase("record")
             record_identifier = _ensure_public_record(
                 config=config.public_data_records,

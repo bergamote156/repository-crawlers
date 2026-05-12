@@ -33,15 +33,15 @@ from confline.sources import CliPositional
 class OnedataConnection(ConfigBase):
     """Connection settings for Onedata services."""
 
-    oz_domain: str = opt(
+    onezone_domain: str = opt(
         "demo.onedata.org",
         description="Onezone domain used for space and public-data-record operations.",
     )
-    op_domain: str = opt(
+    oneprovider_domain: str = opt(
         "provider.demo.onedata.org",
         description="Oneprovider domain used for data and Onepanel admin operations.",
     )
-    op_panel_port: int = opt(
+    oneprovider_panel_port: int = opt(
         443,
         description="Onepanel HTTPS API port on the selected Oneprovider.",
     )
@@ -139,7 +139,7 @@ class StorageSelection(MutuallyExclusiveGroup, required=False):
 class PublicDataRecords(ConfigBase):
     """Sharing and public-data-record policy applied to every dataset."""
 
-    register: bool = opt(
+    enabled: bool = opt(
         True,
         description=(
             "Create or reuse a public data record per dataset share. "
@@ -174,9 +174,9 @@ class PublicDataRecords(ConfigBase):
 
     @model_validator
     def _handle_service_requires_id(self):
-        if self.register and not self.handle_service_id:
+        if self.enabled and not self.handle_service_id:
             raise ValueError(
-                "register=true requires public_data_records.handle_service_id.",
+                "enabled=true requires public_data_records.handle_service_id.",
             )
 
 

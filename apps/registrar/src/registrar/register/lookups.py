@@ -92,22 +92,3 @@ def find_storages_by_name(
 def infer_domain(url: str) -> str:
     """Domain part of `url`, or `""` when the URL has no netloc."""
     return urlparse(url).netloc or ""
-
-
-def choose_endpoint(
-    explicit_endpoint: str,
-    first_file_url: str,
-) -> tuple[str, bool] | None:
-    """Pick the storage endpoint. Returns `(endpoint, inferred)` or `None`.
-
-    `None` means neither source could produce a usable endpoint — the
-    planner turns that into the operator-facing error.
-    """
-    if explicit_endpoint:
-        return explicit_endpoint, False
-
-    parsed = urlparse(first_file_url)
-    if not parsed.scheme or not parsed.netloc:
-        return None
-
-    return f"{parsed.scheme}://{parsed.netloc}", True

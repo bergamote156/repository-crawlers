@@ -50,7 +50,7 @@ class OnezoneClient:
         Requires `tokens.space_owner_token`; raises `MissingTokenError` otherwise.
         """
         return cls(
-            domain=config.onedata.oz_domain,
+            domain=config.onedata.onezone_domain,
             token=require_token(
                 config.tokens.space_owner_token,
                 path="tokens.space_owner_token",

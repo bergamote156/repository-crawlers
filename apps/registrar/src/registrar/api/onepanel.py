@@ -78,9 +78,9 @@ class OnepanelClient:
         Requires `tokens.admin_token`; raises `MissingTokenError` otherwise.
         """
         return cls(
-            domain=config.onedata.op_domain,
+            domain=config.onedata.oneprovider_domain,
             token=require_token(config.tokens.admin_token, path="tokens.admin_token"),
-            port=config.onedata.op_panel_port,
+            port=config.onedata.oneprovider_panel_port,
             verify_ssl=config.onedata.verify_ssl,
         )
 

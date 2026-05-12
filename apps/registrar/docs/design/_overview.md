@@ -137,7 +137,7 @@ flowchart TD
 
     FIND -- "0 matches" --> Q_CURRENT_NAME{space has\ncurrent storage?}
     Q_CURRENT_NAME -- yes --> ERR7([TargetResolutionError\ncannot add second support])
-    Q_CURRENT_NAME -- no --> ENDPOINT[choose_endpoint\nexplicit or inferred\nfrom file URL]
+    Q_CURRENT_NAME -- no --> ENDPOINT[Infer storage endpoint\nfrom file URL]
     ENDPOINT -- no endpoint --> ERR8([TargetResolutionError])
     ENDPOINT -- got endpoint --> CREATE([plan: create new storage\nid = None])
 

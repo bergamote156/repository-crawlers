@@ -1,7 +1,7 @@
 # Example configuration for `registrar` (apps/registrar).
 #
 # Resolution order, lowest → highest:
-#   1. defaults (the values below)
+#   1. built-in defaults (equal to the values in this example)
 #   2. environment variables (REGISTRAR_* with `__` for nested keys,
 #      e.g. REGISTRAR_TOKENS__ADMIN_TOKEN)
 #   3. this YAML, passed via `-c FILE` or `--config FILE`
@@ -16,9 +16,11 @@
 
 # ─── Connection ──────────────────────────────────────────────────────────────
 onedata:
-  oz_domain: demo.onedata.org
-  op_domain: provider.demo.onedata.org
-  op_panel_port: 443
+  onezone_domain: demo.onedata.org
+  # The Oneprovider service that will register the crawled files by
+  # referencing a remote, read-only HTTP storage
+  oneprovider_domain: provider.demo.onedata.org
+  oneprovider_panel_port: 443
   verify_ssl: true
 
 
@@ -26,8 +28,8 @@ onedata:
 # Prefer environment variables over YAML for tokens — the values land in
 # logs and shell history less easily that way.
 #
-#   REGISTRAR_TOKENS__ADMIN_TOKEN
-#   REGISTRAR_TOKENS__SPACE_OWNER_TOKEN
+#   export REGISTRAR_TOKENS__ADMIN_TOKEN="MDAxZWxvY2F00aW9uIGRlb..."
+#   export REGISTRAR_TOKENS__SPACE_OWNER_TOKEN="MDAxZWxvY2F00aW9uIGRlb..."
 tokens:
   admin_token: ""        # Onepanel admin (storage/support operations)
   space_owner_token: ""  # Onezone/Oneprovider user (spaces, files, shares, handles)
@@ -50,13 +52,7 @@ storage:
   name: ""
   # id: ""
 
-# Endpoint used when the registrar creates a new HTTP storage. Inferred
-# from the first file URL in the dataset input when empty.
-storage_endpoint: ""
-
-# Relative path inside the space where dataset directories will be
-# created. Empty means each dataset's `target_dir` is a top-level
-# directory under the space root.
+# Relative path inside the space where dataset directories will be created.
 dataset_root: ""
 
 # Accept a deterministic plan without prompting. Refuses to auto-resolve
@@ -66,24 +62,27 @@ dataset_root: ""
 "yes": false
 
 
-# ─── Public-data records (used by `register` only) ───────────────────────────
+# ─── Public-data records ─────────────────────────────────────────────────────
 public_data_records:
-  # Create or reuse a public data record per dataset share. Set false to
-  # create only the share and skip records/handles.
-  register: true
+  # Create a public data record for every dataset that is registered.
+  # A public data record is an extension of Onedata share that carries
+  # metadata (e.g. DublinCore, DataCite) and is assigned a persistent
+  # identifier. If set to false, only basic Onedata shares will be created.
+  enabled: true
 
-  # Handle service ID. Required when `register` is true and
-  # `public_identifier_type` is "handle-service".
+  # Onedata handle service ID where the public data records will be registered.
+  # Required when enabled is true.
   handle_service_id: ""
 
-  # Identifier kind to mint when a new identifier is needed:
-  #   onedata-url     — reuse the share's public URL.
-  #   handle-service  — request an identifier from the configured handle service.
-  public_identifier_type: onedata-url
+  # Determines what kind of identifiers will be minted:
+  #   onedata-url — a persistent URL issued by Onedata; reuses the share's public URL.
+  #   pid         — a Persistent Identifier (e.g. DOI / Handle), requested from the configured handle service.
+  record_identifier_type: onedata-url
 
-  # How to treat the per-dataset `pid` from the input:
-  #   always-generate-new      — ignore input PIDs.
-  #   always-reuse-existing    — every dataset must provide one.
+  # The policy regarding identifier generation and reuse. Influences how
+  # the per-dataset `pid` attributes are treated (found in the input — crawled datasets):
+  #   always-generate-new      — ignore input PIDs, always overwrite with newly minted ones.
+  #   always-reuse-existing    — every dataset must include a non-empty PID to reuse.
   #   generate-new-if-missing  — reuse when present, mint otherwise.
   identifier_policy: generate-new-if-missing
 

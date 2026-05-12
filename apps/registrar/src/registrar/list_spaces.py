@@ -31,11 +31,11 @@ def run(config: ListSpacesConfig) -> int:
         return _fail(f"failed to fetch spaces: {exc}")
 
     if not rows:
-        console.print(f"[muted]No spaces found on {config.onedata.op_domain}.[/]")
+        console.print(f"[muted]No spaces found on {config.onedata.oneprovider_domain}.[/]")
         return 0
 
     table = Table(
-        title=f"Spaces on {config.onedata.op_domain}  ({len(rows)} found)",
+        title=f"Spaces on {config.onedata.oneprovider_domain}  ({len(rows)} found)",
         title_style="bold",
         box=box.SIMPLE_HEAVY,
         show_edge=False,
