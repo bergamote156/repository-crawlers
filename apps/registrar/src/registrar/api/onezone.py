@@ -56,6 +56,7 @@ class OnezoneClient:
                 path="tokens.space_owner_token",
             ),
             verify_ssl=config.onedata.verify_ssl,
+            timeout=config.onedata.timeout,
         )
 
     def _headers(self) -> dict:

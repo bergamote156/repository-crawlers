@@ -22,6 +22,8 @@ onedata:
   oneprovider_domain: provider.demo.onedata.org
   oneprovider_panel_port: 443
   verify_ssl: true
+  # HTTP request timeout in seconds for Onezone, Oneprovider, and Onepanel API calls.
+  timeout: 30
 
 
 # ─── Authentication ──────────────────────────────────────────────────────────

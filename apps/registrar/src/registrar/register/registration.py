@@ -235,7 +235,7 @@ def _ensure_public_record(
     if existing:
         return existing
 
-    request_public_handle = config.public_identifier_type == "pid"
+    request_public_handle = config.record_identifier_type == "pid"
     public_handle_to_reuse = _resolve_pid_to_reuse(config.identifier_policy, dataset.pid)
 
     return onezone.register_handle(

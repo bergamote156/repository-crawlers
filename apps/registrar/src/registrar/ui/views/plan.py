@@ -96,7 +96,7 @@ def _target_panel(plan: TargetPlan, config: RegisterConfig) -> Panel:
             config.public_data_records.handle_service_id or "(not set)",
             "",
         )
-        grid.add_row("identifier type", config.public_data_records.public_identifier_type, "")
+        grid.add_row("identifier type", config.public_data_records.record_identifier_type, "")
         grid.add_row("identifier policy", config.public_data_records.identifier_policy, "")
     else:
         grid.add_row("public records", "disabled (share only)", "")

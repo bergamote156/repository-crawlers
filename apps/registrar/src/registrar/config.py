@@ -39,7 +39,9 @@ class OnedataConnection(ConfigBase):
     )
     oneprovider_domain: str = opt(
         "provider.demo.onedata.org",
-        description="Oneprovider domain used for data and Onepanel admin operations.",
+        description=(
+            "Oneprovider that registers crawled files via a remote, read-only HTTP storage."
+        ),
     )
     oneprovider_panel_port: int = opt(
         443,
@@ -49,6 +51,12 @@ class OnedataConnection(ConfigBase):
         False,
         description="Verify TLS certificates when talking to Onedata services.",
     )
+    timeout: int = opt(
+        30,
+        description=(
+            "HTTP request timeout in seconds for Onezone, Oneprovider, and Onepanel API calls."
+        ),
+    )
 
 
 class Tokens(ConfigBase):
@@ -56,12 +64,12 @@ class Tokens(ConfigBase):
 
     admin_token: str = opt(
         "",
-        description="Onepanel admin token (storage management, space support).",
+        description="Onepanel admin token (storage/support operations).",
         secret=True,
     )
     space_owner_token: str = opt(
         "",
-        description="User token (space creation, file registration, shares, handles).",
+        description="Onezone/Oneprovider user token (spaces, files, shares, handles).",
         secret=True,
     )
 
@@ -106,11 +114,14 @@ class CommonConfig(ConfigBase):
 
 
 class SpaceSelection(MutuallyExclusiveGroup, required=False):
-    """Pick the target space — by name (use-or-create) or by ID (use-existing)."""
+    """Pick the destination space — by name (use-or-create) or by ID (use-existing)."""
 
     name: str = opt(
         "",
-        description="Use or create a space with this exact name.",
+        description=(
+            "Use or create a space with this exact name. When both `name` and "
+            "`id` are empty, infer the name from the first file URL in the input."
+        ),
     )
     id: str = opt(
         "",
@@ -119,11 +130,14 @@ class SpaceSelection(MutuallyExclusiveGroup, required=False):
 
 
 class StorageSelection(MutuallyExclusiveGroup, required=False):
-    """Pick the storage backing the space."""
+    """Pick the storage backing the space — by name or by ID."""
 
     name: str = opt(
         "",
-        description="Use or create an HTTP readonly storage with this exact name.",
+        description=(
+            "Use or create an HTTP readonly storage with this exact name. "
+            "When empty, reuse the sole compatible storage or create one."
+        ),
     )
     id: str = opt(
         "",
@@ -142,20 +156,21 @@ class PublicDataRecords(ConfigBase):
     enabled: bool = opt(
         True,
         description=(
-            "Create or reuse a public data record per dataset share. "
-            "Set false to create only the share and skip records/handles."
+            "Create a public data record per dataset share (metadata + PID). "
+            "Set false to create only basic Onedata shares."
         ),
     )
     handle_service_id: str = opt(
         "",
-        description="Handle service ID. Required when `register` is true.",
+        description=(
+            "Onedata handle service ID for public data records. Required when `enabled` is true."
+        ),
     )
-    public_identifier_type: Literal["onedata-url", "pid"] = opt(
+    record_identifier_type: Literal["onedata-url", "pid"] = opt(
         "onedata-url",
         description=(
-            "Identifier kind to mint when a new identifier is needed. "
-            "`onedata-url` registers the handle without requesting a public "
-            "handle; `pid` requests one from the configured handle service."
+            "Identifier kind to mint: `onedata-url` reuses the share URL; "
+            "`pid` requests a handle from the configured handle service."
         ),
     )
     identifier_policy: Literal[
@@ -165,8 +180,8 @@ class PublicDataRecords(ConfigBase):
     ] = opt(
         "generate-new-if-missing",
         description=(
-            "How to treat the per-dataset `pid` from the input. "
-            "`always-generate-new` ignores input PIDs; "
+            "How to treat per-dataset `pid` values from the input: "
+            "`always-generate-new` ignores them; "
             "`always-reuse-existing` requires every dataset to provide one; "
             "`generate-new-if-missing` reuses when present, mints otherwise."
         ),

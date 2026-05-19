@@ -73,7 +73,6 @@ class ResolvedTarget:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-# TODO rm?
 @dataclass(frozen=True)
 class DatasetOutcome:
     """Result of registering a single dataset.

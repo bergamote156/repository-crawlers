@@ -82,6 +82,7 @@ class OnepanelClient:
             token=require_token(config.tokens.admin_token, path="tokens.admin_token"),
             port=config.onedata.oneprovider_panel_port,
             verify_ssl=config.onedata.verify_ssl,
+            timeout=config.onedata.timeout,
         )
 
     def _headers(self) -> dict:
