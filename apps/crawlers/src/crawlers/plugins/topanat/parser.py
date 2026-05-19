@@ -31,6 +31,8 @@ from crawlers.plugins.topanat.api import (
     PublicationInfo,
     TraitInfo,
     build_publication_json_url,
+    build_publication_tsv_url,
+    build_trait_tsv_url,
 )
 from crawlers.plugins.utils.datetime import year_from_iso
 
@@ -100,7 +102,10 @@ def build_trait_record(info: TraitInfo) -> OnedataDataset:
         # This repository doesn't provide Persistent Identifiers for its datasets
         pid=None,
         metadata_xml=record.to_xml(),
-        files=(OnedataFile(path="data.json", url=info.associations_url),),
+        files=(
+            OnedataFile(path="data.json", url=info.associations_url),
+            OnedataFile(path="data.tsv", url=build_trait_tsv_url(info.short_form)),
+        ),
     )
 
 
@@ -148,5 +153,8 @@ def build_publication_record(info: PublicationInfo) -> OnedataDataset:
         target_dir=title.replace("/", "-"),
         pid=pid,
         metadata_xml=record.to_xml(),
-        files=(OnedataFile(path="data.json", url=build_publication_json_url(info.pmid)),),
+        files=(
+            OnedataFile(path="data.json", url=build_publication_json_url(info.pmid)),
+            OnedataFile(path="data.tsv", url=build_publication_tsv_url(info.pmid)),
+        ),
     )
