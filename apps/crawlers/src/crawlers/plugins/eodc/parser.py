@@ -13,6 +13,7 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from dataclasses import dataclass
+import json
 
 from crawlers.core import JsonObject
 from crawlers.metadata.datacite import (
@@ -33,31 +34,12 @@ from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.utils.mime import extension_for_mime
 from crawlers.ui import console
 
-# --- EODC Sentinel-1 GRD constants -------------------------------------------
-# These defaults describe Copernicus Sentinel-1 GRD products. Move them to
-# config if EODC ever serves additional collections.
-
-_EODC_CREATOR = Creator(name="European Space Agency", name_type=NameType.ORGANIZATIONAL)
-_EODC_PUBLISHER = "EODC"
-_EODC_RESOURCE_TYPE_VALUE = "Earth observation data"
-_EODC_SUBJECTS = [
-    "Sentinel-1",
-    "Synthetic Aperture Radar",
-    "SAR",
-    "GRD",
-    "Copernicus",
-]
-_EODC_DESCRIPTION = Description(
-    value=(
-        "Sentinel-1 Level-1 Ground Range Detected (GRD) product "
-        "acquired in Interferometric Wide (IW) mode. "
-        "Data provided as part of the Copernicus Earth Observation programme."
-    ),
-)
-_EODC_RIGHTS = Rights(text="Copernicus Open Access Licence")
 
 # Default extension for assets whose MIME type we don't recognize.
 _DEFAULT_ASSET_EXTENSION = "tiff"
+
+# Generic default subjects for EODC items.
+_EODC_SUBJECTS = ["Geospatial data"]
 
 
 @dataclass
@@ -78,7 +60,7 @@ class ParsedEODCItem:
     files: list[EODCFile]
 
 
-def parse_eodc_item(raw: JsonObject) -> ParsedEODCItem | None:
+def parse_eodc_item(raw: JsonObject, collection_meta: JsonObject | None = None) -> ParsedEODCItem | None:
     """
     Map a raw STAC item dict into a `ParsedEODCItem`.
 
@@ -92,13 +74,94 @@ def parse_eodc_item(raw: JsonObject) -> ParsedEODCItem | None:
         return None
 
     try:
-        return _parse_item(raw, item_id)
+        return _parse_item(raw, item_id, collection_meta)
     except Exception as e:
         console.warning(f"Failed to parse STAC item {item_id}: {e}")
         return None
 
 
-def _parse_item(raw: dict, item_id: str) -> ParsedEODCItem | None:
+def parse_eodc_collection(raw: dict) -> ParsedEODCItem | None:
+    collection_id = raw.get("id")
+    if not collection_id:
+        return None
+
+    files = _parse_assets(raw.get("assets", {}))
+    if not files:
+        return None
+
+    title = raw.get("title") or collection_id
+    description = raw.get("description")
+    if description:
+        description = _sanitize_text_for_xml(description)
+
+    dates: list[Date] = []
+    temporal = raw.get("extent", {}).get("temporal", {}).get("interval", [])
+    if temporal and temporal[0]:
+        start, end = temporal[0]
+        if start and end:
+            dates.append(Date(value=f"{start}/{end}", date_type=DateType.COLLECTED))
+        elif start:
+            dates.append(Date(value=start, date_type=DateType.COLLECTED))
+
+    publisher = _build_publisher(raw)
+    publication_year = None
+    if dates:
+        try:
+            publication_year = year_from_iso(dates[0].value.split("/")[0])
+        except Exception:
+            publication_year = None
+
+    polygons: list[GeoLocationPolygon] = []
+    bbox = raw.get("extent", {}).get("spatial", {}).get("bbox", [])
+    if bbox and bbox[0]:
+        minx, miny, maxx, maxy = bbox[0]
+        polygons = [
+            GeoLocationPolygon(points=[
+                (minx, miny),
+                (minx, maxy),
+                (maxx, maxy),
+                (maxx, miny),
+                (minx, miny),
+            ])
+        ]
+
+    related_identifiers = []
+    self_link = _find_self_link(raw.get("links", []))
+    if self_link:
+        related_identifiers.append(
+            RelatedIdentifier(
+                value=self_link,
+                identifier_type=RelatedIdentifierType.URL,
+                relation_type=RelationType.IS_SUPPLEMENT_TO,
+            )
+        )
+
+    metadata = DataCiteRecord(
+        identifier=collection_id,
+        identifier_type=IdentifierType.OTHER,
+        creators=[_build_creator(raw)],
+        title=title,
+        publisher=publisher,
+        publication_year=publication_year,
+        resource_type_general="Dataset",
+        resource_type_value=f"{title} dataset",
+        subjects=_build_subjects({}, raw),
+        dates=dates,
+        geo_locations=polygons,
+        descriptions=[Description(value=description or f"Collection {collection_id}")],
+        related_identifiers=related_identifiers,
+        rights_list=_build_rights(),
+    )
+
+    return ParsedEODCItem(
+        identifier=collection_id,
+        title=title,
+        metadata=metadata,
+        files=files,
+    )
+
+
+def _parse_item(raw: dict, item_id: str, collection_meta: JsonObject | None = None) -> ParsedEODCItem | None:
     assets = raw.get("assets", {})
     if not assets:
         console.debug(f"Skipping {item_id}: no assets")
@@ -110,38 +173,35 @@ def _parse_item(raw: dict, item_id: str) -> ParsedEODCItem | None:
         return None
 
     props = raw.get("properties", {})
-    title = _build_title(props)
+    title = _build_title(raw, props, collection_meta)
     self_link = _find_self_link(raw.get("links", []))
     dt = props.get("datetime")
     geometry = raw.get("geometry")
+    collection_id = raw.get("collection")
 
     metadata = DataCiteRecord(
         identifier=item_id,
         identifier_type=IdentifierType.OTHER,
-        creators=[_EODC_CREATOR],
+        creators=[_build_creator(collection_meta)],
         title=title,
-        publisher=_EODC_PUBLISHER,
+        publisher=_build_publisher(collection_meta),
         publication_year=year_from_iso(dt),
         resource_type_general="Dataset",
-        resource_type_value=_EODC_RESOURCE_TYPE_VALUE,
-        subjects=list(_EODC_SUBJECTS),
-        dates=([Date(value=dt, date_type=DateType.COLLECTED)] if dt else []),
-        geo_locations=_polygons_from_geojson(geometry),
-        descriptions=[_EODC_DESCRIPTION],
-        related_identifiers=(
-            [
-                RelatedIdentifier(
-                    value=self_link,
-                    identifier_type=RelatedIdentifierType.URL,
-                    relation_type=RelationType.IS_SUPPLEMENT_TO,
-                )
-            ]
-            if self_link
-            else []
+        resource_type_value=_build_resource_type_value(collection_id),
+        subjects=_build_subjects(props, collection_meta),
+        descriptions=[_build_description(props, collection_meta, collection_id),
+                      Description(
+                          value=_build_stac_metadata_blob(raw),
+                          description_type="TechnicalInfo",
+                          ),
+                    ],
+        rights_list=_build_rights(),
+        dates=_build_dates(props),
+        geo_locations=_build_geo_locations(geometry),
+        related_identifiers=_build_related_identifiers(
+            props, self_link
         ),
-        rights_list=[_EODC_RIGHTS],
     )
-
     return ParsedEODCItem(
         identifier=item_id,
         title=title,
@@ -150,30 +210,30 @@ def _parse_item(raw: dict, item_id: str) -> ParsedEODCItem | None:
     )
 
 
-def _build_title(props: dict) -> str:
+def _build_title(raw: dict, props: dict, collection_meta: JsonObject | None) -> str:
     """
-    Build dynamic title from Sentinel-1 properties.
+    Build a generic title for an EODC STAC item.
 
-    Format: "{PLATFORM} {MODE} GRD ({POLARIZATIONS}) sensing {DATETIME} rel. orbit {ORBIT}"
+    Prefer the STAC item's own `title`. Otherwise use collection title
+    or collection id, optionally appending datetime in parentheses.
     """
-    platform = props.get("platform", "Sentinel-1").upper()
-    mode = props.get("sar:instrument_mode", "IW")
-    polarizations = ",".join(props.get("sar:polarizations", []))
-    dt = props.get("datetime", "")
-    orbit = props.get("sat:relative_orbit")
+    
+    if raw.get("title"):
+        return str(raw["title"])
 
-    title_parts = [platform, f"{mode} GRD"]
+    collection_label = None
+    if collection_meta and collection_meta.get("title"):
+        collection_label = collection_meta["title"]
+    elif raw.get("collection"):
+        collection_label = raw["collection"]
+    else:
+        collection_label = raw.get("id", "EODC dataset")
 
-    if polarizations:
-        title_parts.append(f"({polarizations})")
-
+    dt = props.get("datetime")
     if dt:
-        title_parts.append(f"sensing {dt}")
+        return f"{collection_label} ({dt})"
 
-    if orbit is not None:
-        title_parts.append(f"rel. orbit {orbit}")
-
-    return " ".join(title_parts)
+    return str(collection_label)
 
 
 def _parse_assets(assets: dict) -> list[EODCFile]:
@@ -182,6 +242,21 @@ def _parse_assets(assets: dict) -> list[EODCFile]:
     for name, asset in assets.items():
         href = asset.get("href")
         if not href:
+            continue
+
+        roles = asset.get("roles", [])
+        if isinstance(roles, list):
+            if "thumbnail" in roles: # or "metadata" in roles:
+                continue
+
+        if "tilejson.json" in href or "titiler" in href:
+            continue
+
+        if ".zarr/" in href or href.endswith(".zarr"):
+            files.append(EODCFile(
+                path=name + ".zarr.json",
+                url=href.rstrip("/") + "/zarr.json"
+            ))
             continue
 
         ext = extension_for_mime(asset.get("type")) or _DEFAULT_ASSET_EXTENSION
@@ -208,3 +283,158 @@ def _polygons_from_geojson(geom: dict | None) -> list[GeoLocationPolygon]:
     # GeoJSON Polygon: list of linear rings, first is outer ring; each point
     # is [lon, lat]. We only emit the outer ring.
     return [GeoLocationPolygon(points=[tuple(point) for point in coords[0]])]
+
+
+def _build_geo_locations(geometry: dict | None):
+    """Convert GeoJSON geometry to DataCite geo locations."""
+    return _polygons_from_geojson(geometry)
+
+def _build_dates(props):
+
+    dates: list[Date] = []
+    seen: set[tuple[str, str]] = set()
+
+    def add_date(value: str | None, dtype: DateType):
+        if not value:
+            return
+        key = (value, dtype.value)
+        if key not in seen:
+            dates.append(Date(value=value, date_type=dtype))
+            seen.add(key)
+
+    dt = props.get("datetime")
+    start = props.get("start_datetime")
+    end = props.get("end_datetime")
+
+    if start and end:
+        interval = f"{start}/{end}"
+        add_date(interval, DateType.COLLECTED)
+
+        if start != end:
+            add_date(start, DateType.COLLECTED)
+            add_date(end, DateType.COLLECTED)
+
+    elif dt:
+        add_date(dt, DateType.COLLECTED)
+
+    elif start:
+        add_date(start, DateType.COLLECTED)
+
+    elif end:
+        add_date(end, DateType.COLLECTED)
+
+    add_date(props.get("created"), DateType.CREATED)
+
+    add_date(props.get("updated"), DateType.UPDATED)
+
+    add_date(props.get("processing:datetime"), DateType.ISSUED)
+
+    return dates
+
+
+def _build_related_identifiers(props, self_link):
+
+    related = []
+
+    if self_link:
+        related.append(
+            RelatedIdentifier(
+                value=self_link,
+                identifier_type=RelatedIdentifierType.URL,
+                relation_type=RelationType.IS_SUPPLEMENT_TO,
+            )
+        )
+
+    if props.get("sci:doi"):
+        related.append(
+            RelatedIdentifier(
+                value=props["sci:doi"],
+                identifier_type=RelatedIdentifierType.DOI,
+                relation_type=RelationType.IS_DESCRIBED_BY,
+            )
+        )
+
+    return related
+
+def _build_creator(collection_meta: dict | None) -> Creator:
+    if collection_meta:
+        providers = collection_meta.get("providers", [])
+        for p in providers:
+            if "producer" in p.get("roles", []) or "processor" in p.get("roles", []):
+                return Creator(
+                    name=p.get("name", "Unknown"),
+                    name_type=NameType.ORGANIZATIONAL,
+                )
+
+    # fallback
+    return Creator(
+        name="Unknown provider",
+        name_type=NameType.ORGANIZATIONAL,
+    )
+
+
+def _build_publisher(collection_meta: dict | None) -> str:
+    if collection_meta:
+        providers = collection_meta.get("providers", [])
+        for p in providers:
+            if "host" in p.get("roles", []):
+                return p.get("name")
+
+    return "EODC"
+
+
+def _build_resource_type_value(collection_id: str | None) -> str:
+    if collection_id:
+        return f"{collection_id} dataset"
+    return "Earth observation data"
+
+
+def _build_subjects(props: dict, collection_meta: JsonObject | None) -> list[str]:
+
+    subjects = set(_EODC_SUBJECTS)
+
+    if collection_meta and collection_meta.get("keywords"):
+        subjects.update(str(k) for k in collection_meta["keywords"])
+
+    if props.get("eo:common_name"):
+        subjects.add(str(props["eo:common_name"]))
+
+    if props.get("product:type"):
+        subjects.add(str(props["product:type"]))
+
+    if props.get("platform"):
+        subjects.add(str(props["platform"]))
+
+    subjects.add("Earth Observation")
+
+    return sorted(subjects)
+
+
+def _build_stac_metadata_blob(raw: dict) -> str:
+    """Build a JSON blob of full STAC properties metadata."""
+    props = raw.get("properties", {})
+    return json.dumps(props, separators=(",", ":")) if props else "{}"
+
+def _sanitize_text_for_xml(text: str) -> str:
+    if not text:
+        return text
+    return (
+        text.replace("&", "&amp;")
+           .replace("<", "&lt;")
+           .replace(">", "&gt;")
+           .replace('"', "&quot;")
+           .replace("'", "&apos;")
+    )
+
+def _build_description(props: dict, collection_meta: JsonObject | None, collection_id: str | None) -> Description:
+    if collection_meta and collection_meta.get("description"):
+        return Description(value=_sanitize_text_for_xml(collection_meta["description"]))
+
+    if collection_id:
+        return Description(value=f"Dataset from STAC collection: {collection_id}")
+
+    return Description(value="Earth observation dataset")
+
+
+def _build_rights() -> list[Rights]:
+    return [Rights(text="Usage subject to EODC data policy")]
