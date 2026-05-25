@@ -13,7 +13,6 @@ source_modules:
   - apps/crawlers/src/crawlers/core/http.py
   - apps/crawlers/src/crawlers/core/plugin.py
   - apps/crawlers/src/crawlers/plugins/__init__.py
-  - apps/crawlers/src/crawlers/plugins/_template/plugin.py
   - apps/crawlers/src/crawlers/plugins/ecudo/plugin.py
 source_commits:
   public-data-crawlers: 3c68b70
@@ -25,8 +24,9 @@ By the end of this guide you'll have a working crawler runnable as
 `crawlers myapi crawl <collection>`.
 
 > [!TIP]
-> A complete, copy-pasteable skeleton lives in
-> `apps/crawlers/src/crawlers/plugins/_template/plugin.py`.
+> Study the production plugin closest to your use case 
+> (see [Reference plugins](#reference-plugins) at the bottom).
+> Ecudo is a good default starting point.
 
 ## What you need to implement
 
@@ -222,7 +222,7 @@ scopes aren't checked.
 ## Step 2: Plugin class
 
 > [!TIP]
-> **Source:** `apps/crawlers/src/crawlers/plugins/_template/plugin.py`
+> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py`
 
 ```python
 from collections.abc import AsyncIterator
