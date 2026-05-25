@@ -99,6 +99,10 @@ class EODCClient:
         result = await self._http.get_json_object("/collections")
         return result.map(_stac_root_collections)
 
+    async def get_collection(self, collection_id: str) -> Result[JsonObject, HttpFailure]:
+        """Fetch a single STAC collection by ID."""
+        return await self._http.get_json_object(f"/collections/{collection_id}")
+
 
 def _stac_root_collections(root: JsonObject) -> list[JsonObject]:
     raw = root.get("collections", [])

@@ -26,6 +26,7 @@ from crawlers.core import (
     HttpClient,
     HttpConfig,
     JsonObject,
+    Ok,
     Result,
     RunContext,
     command,
@@ -34,7 +35,7 @@ from crawlers.core import (
 )
 from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.eodc.api import EODCClient, EODCSearchParams
-from crawlers.plugins.eodc.parser import parse_eodc_item
+from crawlers.plugins.eodc.parser import parse_eodc_collection, parse_eodc_item
 from crawlers.ui import console
 
 _DESCRIPTION_PREVIEW_LEN = 80
@@ -83,7 +84,7 @@ class EODCCrawlConfig(EODCApiConfig, CrawlConfig, kw_only=True):
         return [c.strip() for c in self.collections.split(",") if c.strip()]
 
 
-class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
+class EODCPlugin(CrawlerPlugin[JsonObject | tuple[str, JsonObject], EODCCrawlConfig]):
     """Crawler for the EODC Earth Observation Data Centre STAC API."""
 
     name = "eodc"
@@ -96,6 +97,7 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
     config_class = EODCCrawlConfig
 
     _api_client: EODCClient
+    _collection_cache: dict[str, JsonObject]
 
     # --- Banner / context plumbing ---
 
@@ -109,25 +111,91 @@ class EODCPlugin(CrawlerPlugin[dict, EODCCrawlConfig]):
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = EODCClient(http)
+        self._collection_cache = {}
+        await self._prefetch_collections(ctx.config)
+
+    async def _prefetch_collections(self, config: EODCCrawlConfig) -> None:
+        """Fetch configured collection metadata up front and cache it."""
+        for collection_id in config.get_collections_list():
+            result = await self._api_client.get_collection(collection_id)
+            if isinstance(result, Err):
+                console.warning(
+                    f"Failed to fetch metadata for collection {collection_id}: {result.value}"
+                )
+                continue
+            self._collection_cache[collection_id] = result.value
+
+    async def _get_collection_meta(self, collection_id: str | None) -> JsonObject | None:
+        """Return cached collection metadata, fetching it if needed."""
+        if not collection_id:
+            return None
+
+        if collection_id in self._collection_cache:
+            return self._collection_cache[collection_id]
+
+        result = await self._api_client.get_collection(collection_id)
+        if isinstance(result, Err):
+            console.warning(
+                f"Failed to fetch metadata for collection {collection_id}: {result.value}"
+            )
+            return None
+
+        self._collection_cache[collection_id] = result.value
+        return result.value
 
     # --- Iteration & parse ---
 
-    async def iterate_datasets(self, ctx: RunContext[EODCCrawlConfig]) -> AsyncIterator[JsonObject]:
-        """Yield STAC item dicts from the configured collections."""
-        async for item in self._api_client.iterate_items(
-            EODCSearchParams(
-                collections=ctx.config.get_collections_list(),
-                intersects=ctx.config.intersects,
-                datetime_range=ctx.config.datetime_range,
-                page_size=ctx.config.page_size,
-                max_items=ctx.config.max_records,
-            )
-        ):
-            yield item
+    async def iterate_datasets(
+        self,
+        ctx: RunContext[EODCCrawlConfig],
+    ) -> AsyncIterator[JsonObject | tuple[str, JsonObject]]:
+        """Yield STAC item dicts or collection tuples if a collection has no items."""
+        collections = ctx.config.get_collections_list()
 
-    async def process(self, item: JsonObject, /) -> Result[OnedataDataset, Any] | None:
-        """Map a STAC item into an `OnedataDataset`."""
-        return parse_eodc_item(item)
+        for collection_id in collections:
+            console.debug(f"Fetching items for collection: {collection_id}")
+
+            items_found = False
+
+            async for item in self._api_client.iterate_items(
+                EODCSearchParams(
+                    collections=[collection_id],
+                    intersects=ctx.config.intersects,
+                    datetime_range=ctx.config.datetime_range,
+                    page_size=ctx.config.page_size,
+                    max_items=ctx.config.max_records,
+                )
+            ):
+                items_found = True
+                yield item
+
+            # fallback: no items → use collection-level assets
+            if not items_found:
+                collection_meta = await self._get_collection_meta(collection_id)
+                if collection_meta:
+                    console.debug(f"Falling back to collection-level assets for {collection_id}")
+                    yield "collection", collection_meta
+
+    async def process(
+        self,
+        item: JsonObject | tuple[str, JsonObject],
+        /,
+    ) -> Result[OnedataDataset, Any] | None:
+        """Map STAC item or collection into an `OnedataDataset`."""
+
+        # collection-level dataset (fallback when collection has no items)
+        if isinstance(item, tuple):
+            dataset = parse_eodc_collection(item[1])
+            return Ok(dataset) if dataset is not None else None
+
+        # normal STAC item
+        collection_id = item.get("collection")
+        collection_meta = await self._get_collection_meta(
+            collection_id if isinstance(collection_id, str) else None
+        )
+
+        dataset = parse_eodc_item(item, collection_meta)
+        return Ok(dataset) if dataset is not None else None
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Auxiliary commands
