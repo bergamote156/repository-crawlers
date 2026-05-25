@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from urllib.parse import urlparse
 
 from onedata_dataset import OnedataDataset
-from registrar.api.onepanel import OnepanelClient, is_storage_compatible
-from registrar.config import RegisterConfig, SpaceSelection, StorageSelection
+from registrar.api.onepanel import OnepanelClient, StorageDetails, is_storage_compatible
+from registrar.config import RegisterConfig, SpaceSelection, StorageOptions, StorageSelection
 from registrar.register.lookups import (
     find_spaces_by_name,
     find_storages_by_name,
@@ -74,6 +74,9 @@ class _PlannedStorage:
     """`None` when the storage will be created in this run."""
     endpoint: str
     endpoint_inferred: bool
+    emulate_range_read: bool
+    max_emulated_range_read_file_size: int | None
+    """`None` means: defer to the storage's own value / Onepanel default at create time."""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -101,6 +104,7 @@ def build_target_plan(
         config.storage,
         space,
         first_file_url=first_file_url,
+        options=config.storage_options,
     )
 
     return TargetPlan(
@@ -111,6 +115,8 @@ def build_target_plan(
         storage_id=storage.id,
         storage_endpoint=storage.endpoint,
         storage_endpoint_inferred=storage.endpoint_inferred,
+        storage_emulate_range_read=storage.emulate_range_read,
+        storage_max_emulated_range_read_file_size=storage.max_emulated_range_read_file_size,
         dataset_root=config.dataset_root,
         datasets_count=len(datasets),
         # Single-support invariant (a space can be supported by only one
@@ -205,9 +211,10 @@ def _resolve_storage(
     space: _PlannedSpace,
     *,
     first_file_url: str,
+    options: StorageOptions,
 ) -> _PlannedStorage:
     if selection.id:
-        return _resolve_storage_by_id(onepanel, selection.id, space)
+        return _resolve_storage_by_id(onepanel, selection.id, space, options=options)
 
     if selection.name:
         return _resolve_storage_by_name(
@@ -215,6 +222,7 @@ def _resolve_storage(
             selection.name,
             space,
             first_file_url=first_file_url,
+            options=options,
         )
 
     # Auto path. The space already has a current support if `space.id` was
@@ -235,18 +243,16 @@ def _resolve_storage(
                 "one storage on a provider, so the planner cannot add a compatible one.",
             )
 
-        return _PlannedStorage(
-            name=current["name"],
-            id=space.current_storage_id,
-            endpoint=current.get("endpoint", ""),
-            endpoint_inferred=False,
-        )
+        _validate_storage_options(current, options, storage_id=space.current_storage_id)
+
+        return _planned_from_existing(current, space.current_storage_id)
 
     return _resolve_storage_by_name(
         onepanel,
         space.name,
         space,
         first_file_url=first_file_url,
+        options=options,
     )
 
 
@@ -254,6 +260,8 @@ def _resolve_storage_by_id(
     onepanel: OnepanelClient,
     storage_id: str,
     space: _PlannedSpace,
+    *,
+    options: StorageOptions,
 ) -> _PlannedStorage:
     details = lookup_storage_by_id(onepanel, storage_id)
     if details is None:
@@ -269,13 +277,9 @@ def _resolve_storage_by_id(
         )
 
     _enforce_single_support(space, storage_id)
+    _validate_storage_options(details, options, storage_id=storage_id)
 
-    return _PlannedStorage(
-        name=details["name"],
-        id=storage_id,
-        endpoint=details.get("endpoint", ""),
-        endpoint_inferred=False,
-    )
+    return _planned_from_existing(details, storage_id)
 
 
 def _resolve_storage_by_name(
@@ -284,6 +288,7 @@ def _resolve_storage_by_name(
     space: _PlannedSpace,
     *,
     first_file_url: str,
+    options: StorageOptions,
 ) -> _PlannedStorage:
     matches = find_storages_by_name(onepanel, name)
     if len(matches) > 1:
@@ -302,13 +307,9 @@ def _resolve_storage_by_name(
             )
 
         _enforce_single_support(space, storage_id)
+        _validate_storage_options(details, options, storage_id=storage_id)
 
-        return _PlannedStorage(
-            name=name,
-            id=storage_id,
-            endpoint=details.get("endpoint", ""),
-            endpoint_inferred=False,
-        )
+        return _planned_from_existing(details, storage_id)
 
     # Plan to create a new storage with this name. A space that's already
     # supported can't switch to a freshly-created one — the single-support
@@ -332,7 +333,53 @@ def _resolve_storage_by_name(
         id=None,
         endpoint=endpoint,
         endpoint_inferred=True,
+        emulate_range_read=options.emulate_range_read,
+        max_emulated_range_read_file_size=options.max_emulated_range_read_file_size,
     )
+
+
+def _planned_from_existing(details: StorageDetails, storage_id: str) -> _PlannedStorage:
+    """Build a `_PlannedStorage` mirroring the values returned by Onepanel."""
+    return _PlannedStorage(
+        name=details["name"],
+        id=storage_id,
+        endpoint=details.get("endpoint", ""),
+        endpoint_inferred=False,
+        emulate_range_read=details.get("emulateRangeRead", False),
+        max_emulated_range_read_file_size=details.get("maxEmulatedRangeReadFileSize"),
+    )
+
+
+def _validate_storage_options(
+    details: StorageDetails,
+    options: StorageOptions,
+    *,
+    storage_id: str,
+) -> None:
+    """Cross-check a pre-existing storage against the requested options.
+
+    The `emulate_range_read` flag must match exactly. When emulation is on
+    and the user supplied a minimum (`max_emulated_range_read_file_size`
+    is not `None`), the storage's value must meet or exceed it.
+    """
+    storage_emulate = details.get("emulateRangeRead", False)
+    if storage_emulate != options.emulate_range_read:
+        raise TargetResolutionError(
+            f"storage {storage_id!r} has emulateRangeRead={storage_emulate}, "
+            f"but storage_options.emulate_range_read={options.emulate_range_read} "
+            "in the config; reconfigure the storage or update the config.",
+        )
+
+    required_max = options.max_emulated_range_read_file_size
+    if options.emulate_range_read and required_max is not None:
+        storage_max = details.get("maxEmulatedRangeReadFileSize", 0)
+        if storage_max < required_max:
+            raise TargetResolutionError(
+                f"storage {storage_id!r} has maxEmulatedRangeReadFileSize={storage_max}, "
+                f"but storage_options.max_emulated_range_read_file_size="
+                f"{required_max} requires at least that much; "
+                "reconfigure the storage or lower the config value.",
+            )
 
 
 def _enforce_single_support(space: _PlannedSpace, resolved_storage_id: str) -> None:

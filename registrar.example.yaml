@@ -23,6 +23,8 @@ onedata:
   oneprovider_panel_port: 443
   verify_ssl: true
   # HTTP request timeout in seconds for Onezone, Oneprovider, and Onepanel API calls.
+  # Consider increasing if you are using the emulateRangeRead option with 
+  # HTTP resources that are large or take a long time to be retrieved.
   timeout: 30
 
 
@@ -37,31 +39,46 @@ tokens:
   space_owner_token: ""  # Onezone/Oneprovider user (spaces, files, shares, handles)
 
 
-# ─── Target selection (used by `register` only) ──────────────────────────────
+# ─── Target selection (used by 'register' subcommand only) ───────────────────
 # Pick the destination space — by name (use-or-create) OR by ID
 # (use-existing). At most one of `name`/`id` may be set; leaving both
 # empty makes the registrar infer the space name from the first file
 # URL in the dataset input.
 space:
-  name: ""
-  # id: ""
+  # name: "preexisting-space"
+  # id: "e9d570d9..."
 
 # Pick the storage backing the space. Same name-or-id rule. When neither
 # is set the registrar reuses the single compatible HTTP readonly
 # storage already supporting the space, or creates one named after the
 # space.
 storage:
-  name: ""
-  # id: ""
+  # name: "preexisting-storage"
+  # id: "fd559571..."
+
+# HTTP-storage parameters applied when this run creates a storage, and
+# validated against the chosen pre-existing storage when one is reused.
+# Mismatches abort the plan with an actionable error.
+storage_options:
+  # Support size in bytes used when this run adds storage support for the
+  # resolved space. Default: 1 TiB.
+  default_size: 1099511627776
+
+  # Emulate HTTP Range requests for servers that lack native Range
+  # support. Significant performance hit — every read downloads the
+  # whole file. When validating an existing storage, this must match
+  # exactly or planning aborts.
+  emulate_range_read: false
+
+  # Maximum file size in bytes accessible from servers without Range
+  # support. Active only when `emulate_range_read` is true.
+  # Leave unset (null) to defer to the storage's own value, or — at
+  # create time — to the Onepanel default. When set, the chosen
+  # pre-existing storage must allow at least this much.
+  # max_emulated_range_read_file_size: 1073741824
 
 # Relative path inside the space where dataset directories will be created.
-dataset_root: ""
-
-# Accept a deterministic plan without prompting. Refuses to auto-resolve
-# ambiguity even when set. The key is quoted because YAML 1.1 parses
-# `yes` as a boolean keyword — unquoted `yes: true` becomes `{True: True}`
-# and the field is silently ignored.
-"yes": false
+dataset_root: "./"
 
 
 # ─── Public-data records ─────────────────────────────────────────────────────

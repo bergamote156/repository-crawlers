@@ -82,6 +82,20 @@ def _target_panel(plan: TargetPlan, config: RegisterConfig) -> Panel:
     )
     grid.add_row("storage endpoint", plan.storage_endpoint or "(none)", endpoint_ann)
 
+    # range-read emulation (only show the max if emulation is on)
+    grid.add_row(
+        "emulate range read",
+        str(plan.storage_emulate_range_read).lower(),
+        "",
+    )
+    if plan.storage_emulate_range_read:
+        max_size = plan.storage_max_emulated_range_read_file_size
+        grid.add_row(
+            "max emulated file size",
+            str(max_size) if max_size is not None else "(provider default)",
+            "",
+        )
+
     # dataset root
     grid.add_row("dataset root", plan.dataset_root or "(top level)", "")
 

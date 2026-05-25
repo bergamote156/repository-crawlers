@@ -146,6 +146,53 @@ class StorageSelection(MutuallyExclusiveGroup, required=False):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Storage parameters (create-time defaults + per-run validation policy)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class StorageOptions(ConfigBase):
+    """HTTP storage parameters used at create time and validated against an existing storage.
+
+    `default_size` is consumed by `support_space`; the `emulate_range_read`
+    pair maps to the Onepanel `add_storage` payload and is also checked
+    against the chosen pre-existing storage during planning.
+    """
+
+    default_size: int = opt(
+        1099511627776,  # 1 TiB
+        description=(
+            "Default support size in bytes used when this run adds storage "
+            "support for the resolved space."
+        ),
+    )
+    emulate_range_read: bool = opt(
+        False,
+        description=(
+            "Emulate HTTP Range requests for servers that lack native Range "
+            "support. Significant performance hit — every read downloads the "
+            "whole file."
+        ),
+    )
+    max_emulated_range_read_file_size: int | None = opt(
+        None,
+        description=(
+            "Maximum file size in bytes accessible from servers without Range "
+            "support. Active only when `emulate_range_read` is true. Leave "
+            "unset to defer to the storage's own value (or the Onepanel "
+            "default at create time)."
+        ),
+    )
+
+    @model_validator
+    def _max_size_requires_emulate(self):
+        if self.max_emulated_range_read_file_size is not None and not self.emulate_range_read:
+            raise ValueError(
+                "storage_options.max_emulated_range_read_file_size requires "
+                "storage_options.emulate_range_read=true.",
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Public-data-records / sharing
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -209,32 +256,12 @@ class RegisterConfig(CommonConfig):
     )
     space: SpaceSelection = opt(default_factory=SpaceSelection)
     storage: StorageSelection = opt(default_factory=StorageSelection)
-    storage_endpoint: str = opt(
-        "",
-        description=(
-            "Endpoint URL used when the registrar creates a new HTTP storage. "
-            "If omitted, inferred from the first file URL in the input."
-        ),
-    )
-    storage_default_size: int = opt(
-        1099511627776,  # 1 TiB
-        description=(
-            "Default support size in bytes used when this run adds storage support "
-            "for the resolved space."
-        ),
-    )
+    storage_options: StorageOptions = opt(default_factory=StorageOptions)
     dataset_root: str = opt(
         "",
         description=(
             "Relative path inside the space where dataset directories will be created. "
             "Empty means each dataset's `target_dir` is the top-level directory."
-        ),
-    )
-    yes: bool = opt(
-        False,
-        description=(
-            "Accept a deterministic plan without prompting. "
-            "Refuses to auto-resolve any ambiguity even when set."
         ),
     )
     public_data_records: PublicDataRecords = opt(default_factory=PublicDataRecords)

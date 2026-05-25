@@ -64,13 +64,13 @@ def run(config: RegisterConfig) -> int:
     console.print(render_plan_panels(plan, config, console=console))
     console.print("\nAll datasets from this run will be registered into one space.")
 
-    if not _confirm(config.yes):
+    if not Confirm.ask("Continue?", default=False):
         console.print("[muted]Registration cancelled.[/]")
         return 0
 
     try:
         target = _apply_target_plan(
-            plan, clients=clients, storage_default_size=config.storage_default_size
+            plan, clients=clients, storage_default_size=config.storage_options.default_size
         )
     except requests.RequestException as exc:
         console.print(f"[danger]error:[/] failed to apply target plan: {exc}")
@@ -92,12 +92,6 @@ def run(config: RegisterConfig) -> int:
     return 0 if summary.failed == 0 else 1
 
 
-def _confirm(assume_yes: bool) -> bool:
-    if assume_yes:
-        return True
-    return Confirm.ask("Continue?", default=False)
-
-
 def _apply_target_plan(
     plan: TargetPlan,
     *,
@@ -108,7 +102,10 @@ def _apply_target_plan(
     storage_id = plan.storage_id
     if storage_id is None:
         storage_id = clients.onepanel.add_storage(
-            name=plan.storage_name, endpoint=plan.storage_endpoint
+            name=plan.storage_name,
+            endpoint=plan.storage_endpoint,
+            emulate_range_read=plan.storage_emulate_range_read,
+            max_emulated_range_read_file_size=plan.storage_max_emulated_range_read_file_size,
         )
 
     space_id = plan.space_id

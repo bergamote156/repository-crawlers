@@ -38,7 +38,8 @@ class SpaceDetails(TypedDict):
 class StorageDetails(TypedDict):
     """Onepanel `GET /provider/storages/{id}` payload (subset used by registrar).
 
-    `endpoint` is the only optional field — only HTTP storages carry it.
+    The HTTP-specific fields (`endpoint`, `emulateRangeRead`,
+    `maxEmulatedRangeReadFileSize`) are only present on HTTP storages.
     """
 
     name: str
@@ -46,6 +47,8 @@ class StorageDetails(TypedDict):
     readonly: bool
     importedStorage: bool
     endpoint: NotRequired[str]
+    emulateRangeRead: NotRequired[bool]
+    maxEmulatedRangeReadFileSize: NotRequired[int]
 
 
 def is_storage_compatible(storage: StorageDetails) -> bool:
@@ -119,18 +122,33 @@ class OnepanelClient:
         handle_error(response, service=SERVICE_NAME)
         return response.json()
 
-    def add_storage(self, name: str, endpoint: str) -> str:
-        """Create a new HTTP readonly imported storage and return its ID."""
+    def add_storage(
+        self,
+        name: str,
+        endpoint: str,
+        *,
+        emulate_range_read: bool = False,
+        max_emulated_range_read_file_size: int | None = None,
+    ) -> str:
+        """Create a new HTTP readonly imported storage and return its ID.
+
+        `emulateRangeRead` is always sent explicitly. `maxEmulatedRangeReadFileSize`
+        is sent only when `max_emulated_range_read_file_size` is provided (non-None);
+        omitting it lets Onepanel apply its own default.
+        """
         url = f"{self._base_url}/provider/storages"
         # The Onepanel API keys storage definitions by name in the request body.
-        payload = {
-            name: {
-                "type": "http",
-                "readonly": True,
-                "importedStorage": True,
-                "endpoint": endpoint,
-            },
+        storage_spec: dict[str, object] = {
+            "type": "http",
+            "readonly": True,
+            "importedStorage": True,
+            "endpoint": endpoint,
+            "emulateRangeRead": emulate_range_read,
         }
+        if max_emulated_range_read_file_size is not None:
+            storage_spec["maxEmulatedRangeReadFileSize"] = max_emulated_range_read_file_size
+
+        payload = {name: storage_spec}
         response = requests.post(
             url=url,
             headers=self._headers_json(),

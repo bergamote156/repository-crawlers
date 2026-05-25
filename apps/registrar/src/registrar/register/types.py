@@ -36,6 +36,13 @@ class TargetPlan:
     `space_id` / `storage_id` are `None` when the resource will be
     created in this run; `needs_support` is `True` when the resolved
     storage does not yet support the resolved space.
+
+    The HTTP storage option fields reflect the values that will be in
+    effect after the run: for an existing storage the values read from
+    Onepanel, for a freshly-planned one the values from the config.
+    `storage_max_emulated_range_read_file_size` is `None` when no limit
+    is being requested — at create time the key is omitted so Onepanel
+    applies its own default.
     """
 
     space_name: str
@@ -47,6 +54,8 @@ class TargetPlan:
     storage_id: str | None
     storage_endpoint: str
     storage_endpoint_inferred: bool
+    storage_emulate_range_read: bool
+    storage_max_emulated_range_read_file_size: int | None
 
     dataset_root: str
     datasets_count: int
