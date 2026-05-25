@@ -202,6 +202,11 @@ make lint     # ruff format/lint check + mypy
 make test     # run pytest
 ```
 
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup
+instructions, workflow, and code style guidelines.
+
 ## License
 
 MIT — See [LICENSE.txt](LICENSE.txt)
