@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Tools for discovery and registration of public scientific datasets in Onedata"
 requires-python = ">=3.12"
 dependencies = [
+    "confline",
     "repository-crawlers[all-plugins]",
     "repository-registrar",
 ]
@@ -12,13 +13,17 @@ dependencies = [
 package = false
 
 [tool.uv.sources]
+confline = { workspace = true }
 repository-crawlers = { workspace = true }
 repository-registrar = { workspace = true }
+onedata-dataset = { workspace = true }
 
 [tool.uv.workspace]
 members = [
     "apps/crawlers",
     "apps/registrar",
+    "packages/confline",
+    "packages/onedata-dataset",
 ]
 
 [dependency-groups]
@@ -46,6 +51,9 @@ src = [
     "apps/crawlers/src",
     "apps/crawlers/tests",
     "apps/registrar/src",
+    "packages/confline/src",
+    "packages/confline/tests",
+    "packages/onedata-dataset/src",
 ]
 
 [tool.ruff.lint]
@@ -63,6 +71,14 @@ ignore = [
     "FIX002",  # TODO comments are allowed in this codebase
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**/*.py" = [
+    "PLC0415",  # imports inside test functions are fine for locality
+    "PLR0124",  # `is X is X` patterns are intentional in singleton tests
+    "PLR2004",  # magic numbers are the point of assertions
+    "PLW1641",  # test-local classes don't need __hash__
+]
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -70,3 +86,11 @@ docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.12"
+explicit_package_bases = true
+check_untyped_defs = true
+mypy_path = [
+    "apps/crawlers/src",
+    "apps/registrar/src",
+    "packages/confline/src",
+    "packages/onedata-dataset/src",
+]

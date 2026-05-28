@@ -11,7 +11,7 @@ This project provides:
 
 ```mermaid
 graph LR
-    A["Data Source\n(eCUDO, EODC, Bgee, VIP)"] --> B["Crawler"]
+    A["Data Source\n(eCUDO, EODC, Bgee, VIP, ...)"] --> B["Crawler"]
     B --> C["processed.jsonl\n(with metadata)"]
     C --> D["Registrar"]
     D --> E["Onedata"]
@@ -41,6 +41,7 @@ JSONL files ready for registration.
 | `eodc` | [EODC STAC](https://stac.eodc.eu) | Earth Observation Data Centre |
 | `bgee` | [Bgee](https://bgee.org) | Gene expression database (schema.org JSON-LD) |
 | `vip` | [VIP Girder](https://vip.creatis.insa-lyon.fr) | Virtual Imaging Platform datasets |
+| `topanat` | [GWAS Catalog](https://www.ebi.ac.uk/gwas/) | Curated GWAS Catalog traits and publications (TopAnat workflow) |
 
 ### Usage
 
@@ -127,38 +128,41 @@ The registrar takes processed JSONL files and registers datasets in Onedata.
 
 ### Setup
 
-Configure access to Onedata services:
+Copy the example config file and fill in your Onedata credentials:
 
 ```bash
-export REGISTRAR_ADMIN_TOKEN="your-onepanel-admin-token"
-export REGISTRAR_SPACE_OWNER_TOKEN="your-onezone-user-token"
-export REGISTRAR_ONEZONE_DOMAIN="demo.onedata.org"
-export REGISTRAR_ONEPROVIDER_DOMAIN="provider.demo.onedata.org"
-
-# Optional: for DOI handle registration
-export REGISTRAR_HANDLE_SERVICE_ID="your-handle-service-id"
+cp registrar.example.yaml registrar.yaml
 ```
 
-Or use a config file (`registrar_config.yaml`).
+See [`registrar.example.yaml`](registrar.example.yaml) for all available
+options with descriptions. At minimum you need to set the two tokens and
+the Onedata domains. Run `uv run registrar register --help` to see every
+option with its corresponding env var and YAML key.
 
 ### Usage
 
 ```bash
 # Register datasets from a crawl run
-uv run registrar register data/runs/<run_dir>/processed.jsonl
+uv run registrar -c registrar.yaml register data/runs/<run_dir>/processed.jsonl
 
-# Register with limit (for testing)
-uv run registrar register data/runs/<run_dir>/processed.jsonl --limit 10
-
-# Dry run (validate without registering)
-uv run registrar register data/runs/<run_dir>/processed.jsonl --dry-run
+# Auto-confirm the plan (skip the interactive prompt)
+uv run registrar -c registrar.yaml register data/runs/<run_dir>/processed.jsonl --yes
 
 # List available spaces / storages
-uv run registrar list-spaces
-uv run registrar list-storages
+uv run registrar -c registrar.yaml list-spaces
+uv run registrar -c registrar.yaml list-storages
+```
 
-# Show configuration
-uv run registrar show-config
+### Output
+
+Each registration run creates a timestamped directory under
+`<output_dir>/runs/`:
+
+```
+data/runs/2026-05-11T14-30-00_register/
+├── config.yaml       # effective configuration snapshot
+├── registration.log  # full debug-level log
+└── summary.json      # machine-readable outcome (counts, failures)
 ```
 
 ## Complete Workflow
@@ -171,24 +175,23 @@ uv run crawlers ecudo crawl iopan -o ./data
 ls data/runs/                                       # find the latest run directory
 head data/runs/<run_dir>/processed.jsonl
 
-# 3. Register in Onedata (dry run first)
-uv run registrar register data/runs/<run_dir>/processed.jsonl --dry-run
-
-# 4. Register for real
-uv run registrar register data/runs/<run_dir>/processed.jsonl
+# 3. Register in Onedata (review the plan, then confirm)
+uv run registrar -c registrar.yaml register data/runs/<run_dir>/processed.jsonl
 ```
 
 ## Development
 
 ### Writing a New Plugin
 
-See the [Writing Plugins](docs/crawlers/guides/writing-plugins.md) guide for
+See the [Writing Plugins](apps/crawlers/docs/guides/writing-plugins.md) guide for
 step-by-step instructions.
 
 ### Architecture
 
-See the [Architecture Overview](docs/crawlers/arch/_overview.md) for the
-framework design, data flow, and key decisions.
+- [Crawlers Architecture](apps/crawlers/docs/arch/_overview.md) — framework
+  design, data flow, and key decisions
+- [Registrar Design](apps/registrar/docs/design/_overview.md) — registration
+  pipeline, space/storage resolution, and identifier policies
 
 ### Linting and Tests
 
@@ -198,6 +201,11 @@ make format   # auto-format with ruff
 make lint     # ruff format/lint check + mypy
 make test     # run pytest
 ```
+
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup
+instructions, workflow, and code style guidelines.
 
 ## License
 

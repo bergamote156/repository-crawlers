@@ -2,7 +2,7 @@
 EODC STAC item parser.
 
 Maps a STAC item dict (as returned by the EODC `POST /search` endpoint)
-to a `DataCiteRecord` plus the list of downloadable assets. This module
+to an `OnedataDataset` carrying a DataCite metadata payload. This module
 has no knowledge of the crawler lifecycle or HTTP — it is pure mapping,
 so it can be unit-tested in isolation and the plugin file stays focused
 on lifecycle wiring.
@@ -12,10 +12,11 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-from dataclasses import dataclass
 import json
+import re
 
 from crawlers.core import JsonObject
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -34,35 +35,21 @@ from crawlers.plugins.utils.datetime import year_from_iso
 from crawlers.plugins.utils.mime import extension_for_mime
 from crawlers.ui import console
 
-
 # Default extension for assets whose MIME type we don't recognize.
 _DEFAULT_ASSET_EXTENSION = "tiff"
 
 # Generic default subjects for EODC items.
 _EODC_SUBJECTS = ["Geospatial data"]
 
-
-@dataclass
-class EODCFile:
-    """A single downloadable asset from a STAC item."""
-
-    path: str
-    url: str
+_UNSAFE_PATH_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
-@dataclass
-class ParsedEODCItem:
-    """Result of parsing a single EODC STAC item."""
-
-    identifier: str
-    title: str
-    metadata: DataCiteRecord
-    files: list[EODCFile]
-
-
-def parse_eodc_item(raw: JsonObject, collection_meta: JsonObject | None = None) -> ParsedEODCItem | None:
+def parse_eodc_item(
+    raw: JsonObject,
+    collection_meta: JsonObject | None = None,
+) -> OnedataDataset | None:
     """
-    Map a raw STAC item dict into a `ParsedEODCItem`.
+    Map a raw STAC item dict into an `OnedataDataset`.
 
     Returns `None` when the item should be silently skipped (missing id,
     no assets, no valid asset URLs). Unexpected errors are logged as
@@ -80,7 +67,7 @@ def parse_eodc_item(raw: JsonObject, collection_meta: JsonObject | None = None) 
         return None
 
 
-def parse_eodc_collection(raw: dict) -> ParsedEODCItem | None:
+def parse_eodc_collection(raw: dict) -> OnedataDataset | None:
     collection_id = raw.get("id")
     if not collection_id:
         return None
@@ -104,25 +91,23 @@ def parse_eodc_collection(raw: dict) -> ParsedEODCItem | None:
             dates.append(Date(value=start, date_type=DateType.COLLECTED))
 
     publisher = _build_publisher(raw)
-    publication_year = None
-    if dates:
-        try:
-            publication_year = year_from_iso(dates[0].value.split("/")[0])
-        except Exception:
-            publication_year = None
+    first_date = dates[0].value.split("/")[0] if dates else None
+    publication_year = year_from_iso(first_date)
 
     polygons: list[GeoLocationPolygon] = []
     bbox = raw.get("extent", {}).get("spatial", {}).get("bbox", [])
     if bbox and bbox[0]:
         minx, miny, maxx, maxy = bbox[0]
         polygons = [
-            GeoLocationPolygon(points=[
-                (minx, miny),
-                (minx, maxy),
-                (maxx, maxy),
-                (maxx, miny),
-                (minx, miny),
-            ])
+            GeoLocationPolygon(
+                points=[
+                    (minx, miny),
+                    (minx, maxy),
+                    (maxx, maxy),
+                    (maxx, miny),
+                    (minx, miny),
+                ]
+            )
         ]
 
     related_identifiers = []
@@ -153,15 +138,20 @@ def parse_eodc_collection(raw: dict) -> ParsedEODCItem | None:
         rights_list=_build_rights(),
     )
 
-    return ParsedEODCItem(
-        identifier=collection_id,
-        title=title,
-        metadata=metadata,
-        files=files,
+    return OnedataDataset(
+        name=title,
+        target_dir=_build_target_dir(collection_id, title),
+        pid=None,
+        metadata_xml=metadata.to_xml(),
+        files=tuple(files),
     )
 
 
-def _parse_item(raw: dict, item_id: str, collection_meta: JsonObject | None = None) -> ParsedEODCItem | None:
+def _parse_item(
+    raw: dict,
+    item_id: str,
+    collection_meta: JsonObject | None = None,
+) -> OnedataDataset | None:
     assets = raw.get("assets", {})
     if not assets:
         console.debug(f"Skipping {item_id}: no assets")
@@ -189,24 +179,24 @@ def _parse_item(raw: dict, item_id: str, collection_meta: JsonObject | None = No
         resource_type_general="Dataset",
         resource_type_value=_build_resource_type_value(collection_id),
         subjects=_build_subjects(props, collection_meta),
-        descriptions=[_build_description(props, collection_meta, collection_id),
-                      Description(
-                          value=_build_stac_metadata_blob(raw),
-                          description_type="TechnicalInfo",
-                          ),
-                    ],
+        descriptions=[
+            _build_description(props, collection_meta, collection_id),
+            Description(
+                value=_build_stac_metadata_blob(raw),
+                description_type="TechnicalInfo",
+            ),
+        ],
         rights_list=_build_rights(),
         dates=_build_dates(props),
         geo_locations=_build_geo_locations(geometry),
-        related_identifiers=_build_related_identifiers(
-            props, self_link
-        ),
+        related_identifiers=_build_related_identifiers(props, self_link),
     )
-    return ParsedEODCItem(
-        identifier=item_id,
-        title=title,
-        metadata=metadata,
-        files=files,
+    return OnedataDataset(
+        name=title,
+        target_dir=_build_target_dir(item_id, title),
+        pid=None,
+        metadata_xml=metadata.to_xml(),
+        files=tuple(files),
     )
 
 
@@ -214,10 +204,10 @@ def _build_title(raw: dict, props: dict, collection_meta: JsonObject | None) -> 
     """
     Build a generic title for an EODC STAC item.
 
-    Prefer the STAC item's own `title`. Otherwise use collection title
+    Prefer the STAC item's own `title`. Otherwise, use collection title
     or collection id, optionally appending datetime in parentheses.
     """
-    
+
     if raw.get("title"):
         return str(raw["title"])
 
@@ -236,31 +226,27 @@ def _build_title(raw: dict, props: dict, collection_meta: JsonObject | None) -> 
     return str(collection_label)
 
 
-def _parse_assets(assets: dict) -> list[EODCFile]:
-    """Parse a STAC 'assets' dict into a list of `EODCFile`."""
-    files: list[EODCFile] = []
+def _parse_assets(assets: dict) -> list[OnedataFile]:
+    """Parse a STAC 'assets' dict into a list of `OnedataFile`."""
+    files: list[OnedataFile] = []
     for name, asset in assets.items():
         href = asset.get("href")
         if not href:
             continue
 
         roles = asset.get("roles", [])
-        if isinstance(roles, list):
-            if "thumbnail" in roles: # or "metadata" in roles:
-                continue
+        if isinstance(roles, list) and "thumbnail" in roles:
+            continue
 
         if "tilejson.json" in href or "titiler" in href:
             continue
 
         if ".zarr/" in href or href.endswith(".zarr"):
-            files.append(EODCFile(
-                path=name + ".zarr.json",
-                url=href.rstrip("/") + "/zarr.json"
-            ))
+            files.append(OnedataFile(path=name + ".zarr.json", url=href.rstrip("/") + "/zarr.json"))
             continue
 
         ext = extension_for_mime(asset.get("type")) or _DEFAULT_ASSET_EXTENSION
-        files.append(EODCFile(path=f"{name}.{ext}", url=href))
+        files.append(OnedataFile(path=f"{name}.{ext}", url=href))
 
     return files
 
@@ -288,6 +274,7 @@ def _polygons_from_geojson(geom: dict | None) -> list[GeoLocationPolygon]:
 def _build_geo_locations(geometry: dict | None):
     """Convert GeoJSON geometry to DataCite geo locations."""
     return _polygons_from_geojson(geometry)
+
 
 def _build_dates(props):
 
@@ -350,11 +337,12 @@ def _build_related_identifiers(props, self_link):
             RelatedIdentifier(
                 value=props["sci:doi"],
                 identifier_type=RelatedIdentifierType.DOI,
-                relation_type=RelationType.IS_DESCRIBED_BY,
+                relation_type=RelationType.IS_REFERENCED_BY,
             )
         )
 
     return related
+
 
 def _build_creator(collection_meta: dict | None) -> Creator:
     if collection_meta:
@@ -415,18 +403,24 @@ def _build_stac_metadata_blob(raw: dict) -> str:
     props = raw.get("properties", {})
     return json.dumps(props, separators=(",", ":")) if props else "{}"
 
+
 def _sanitize_text_for_xml(text: str) -> str:
     if not text:
         return text
     return (
         text.replace("&", "&amp;")
-           .replace("<", "&lt;")
-           .replace(">", "&gt;")
-           .replace('"', "&quot;")
-           .replace("'", "&apos;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
     )
 
-def _build_description(props: dict, collection_meta: JsonObject | None, collection_id: str | None) -> Description:
+
+def _build_description(
+    props: dict,
+    collection_meta: JsonObject | None,
+    collection_id: str | None,
+) -> Description:
     if collection_meta and collection_meta.get("description"):
         return Description(value=_sanitize_text_for_xml(collection_meta["description"]))
 
@@ -438,3 +432,10 @@ def _build_description(props: dict, collection_meta: JsonObject | None, collecti
 
 def _build_rights() -> list[Rights]:
     return [Rights(text="Usage subject to EODC data policy")]
+
+
+def _build_target_dir(item_id: str, title: str) -> str:
+    """Build a filesystem-safe directory name, preferring the item identifier."""
+    candidate = item_id or title or "eodc-dataset"
+    sanitized = _UNSAFE_PATH_RE.sub("-", candidate).strip("-_. ")
+    return sanitized or "eodc-dataset"

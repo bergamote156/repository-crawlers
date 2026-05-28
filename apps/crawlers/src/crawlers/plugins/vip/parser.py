@@ -1,8 +1,8 @@
 """
 VIP parser.
 
-Maps a Girder folder (plus its recursively collected files) into a
-`DataCiteRecord` and the list of downloadable files. This module has
+Maps a Girder folder (plus its recursively collected files) into an
+`OnedataDataset` carrying a DataCite metadata payload. This module has
 no knowledge of the crawler lifecycle or HTTP — it is pure mapping, so
 it can be unit-tested in isolation and the plugin file stays focused
 on lifecycle wiring.
@@ -13,9 +13,9 @@ __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from collections.abc import Sequence
-from dataclasses import dataclass
 
 from crawlers.core import JsonObject
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -50,19 +50,9 @@ _SUBJECT_META_KEYS = (
 )
 
 
-@dataclass
-class ParsedVipRecord:
-    """Result of parsing a single VIP Girder folder."""
-
-    identifier: str
-    title: str
-    metadata: DataCiteRecord
-    files: list[VipFile]
-
-
-def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> ParsedVipRecord | None:
+def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> OnedataDataset | None:
     """
-    Map a Girder folder dict (with pre-collected files) into a `ParsedVipRecord`.
+    Map a Girder folder dict (with pre-collected files) into an `OnedataDataset`.
 
     Returns `None` when the record should be silently skipped (missing
     `_id` or empty file list).
@@ -85,7 +75,7 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> ParsedVipR
     # Use the most recent timestamp available
     datetime_val = folder.get("updated") or folder.get("created") or None
 
-    record = DataCiteRecord(
+    metadata = DataCiteRecord(
         identifier=folder_id,
         identifier_type=IdentifierType.OTHER,
         creators=[
@@ -105,11 +95,13 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> ParsedVipR
         rights_list=[_VIP_RIGHTS],
     )
 
-    return ParsedVipRecord(
-        identifier=folder_id,
-        title=title,
-        metadata=record,
-        files=list(files),
+    return OnedataDataset(
+        name=title,
+        target_dir=title.replace("/", "-"),
+        # This repository doesn't provide Persistent Identifiers for its datasets
+        pid=None,
+        metadata_xml=metadata.to_xml(),
+        files=tuple(OnedataFile(path=f.path, url=f.url) for f in files),
     )
 
 

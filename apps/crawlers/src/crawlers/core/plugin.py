@@ -1,233 +1,171 @@
-"""Crawler plugin base class."""
+"""
+Crawler plugin base class.
+
+Combines `confline.CommandApp` (config + CLI dispatch) with the crawl
+lifecycle (setup → iterate_datasets → process → after_crawl, parallel
+workers, JSONL sinks).  Plugins subclass `CrawlerPlugin`, set `name` /
+`description` / `config_class`, and implement `iterate_datasets` and
+`process`. The `crawl` command is auto-registered; extra commands use
+`@command`.
+"""
 
 __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-import argparse
 import asyncio
-import inspect
 import os
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Sequence
 from contextlib import AsyncExitStack
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
-from typing import Any, get_type_hints
+from typing import Any, ClassVar
 
 import yaml
 from rich.panel import Panel
 from rich.table import Table
 
-from crawlers.core.config import ConfigBase
-from crawlers.core.crawl_config import CrawlConfig
+from confline import (
+    CliSource,
+    CommandApp,
+    DefaultSource,
+    EnvSource,
+    Source,
+    YamlSource,
+)
+from confline.sources.base import FileOrigin
+from confline.spec import Command
+from crawlers.core.config import CrawlConfig
+from crawlers.core.dataset import DatasetValidator, OnedataDataset
+from crawlers.core.http import HttpClient
 from crawlers.core.result import Result
 from crawlers.core.runner import CrawlStats, run_parallel_crawl
 from crawlers.core.workspace import RunContext, make_run_dir
-from crawlers.model.dataset import OnedataDataset
 from crawlers.ui import console
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Command definition & decorator
+# CrawlerPlugin
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
-class CommandDef:
-    """Definition of a CLI command."""
-
-    name: str
-    help: str
-    method_name: str
-    config_class: type[ConfigBase]
-
-
-def command(
-    fn: Callable | None = None,
-    /,
-    *,
-    name: str | None = None,
-    config: type[ConfigBase] | None = None,
-    help: str | None = None,
-) -> Callable:
-    """
-    Register a method as a CLI command.
-
-    Can be used bare (`@command`) or with keyword arguments
-    (`@command(name="list-orgs")`).  Anything not supplied is inferred:
-    name from the method name, config from the first `ConfigBase`-typed
-    parameter, help from the docstring.
-
-    Example:
-
-        @command
-        async def list_orgs(self, config: EcudoApiConfig, stack: AsyncExitStack) -> None:
-            \"\"\"List available organizations.\"\"\"
-            ...
-    """
-
-    def decorator(func: Callable) -> Callable:
-        cmd_name = name if name is not None else _infer_name(func)
-        cmd_config = config if config is not None else _infer_config_class(func)
-        cmd_help = help if help is not None else _infer_help(func)
-
-        func._command_def = CommandDef(  # type: ignore[attr-defined]
-            name=cmd_name, help=cmd_help, method_name=func.__name__, config_class=cmd_config
-        )
-        return func
-
-    if fn is not None:
-        return decorator(fn)
-    return decorator
-
-
-def _infer_name(method: Callable) -> str:
-    """Derive command name from method name (underscores → hyphens)."""
-    return method.__name__.replace("_", "-")
-
-
-def _infer_config_class(method: Callable) -> type[ConfigBase]:
-    """Extract the config type from the first annotated parameter after *self*."""
-    hints = get_type_hints(method)
-    params = list(inspect.signature(method).parameters.values())
-
-    for param in params[1:]:  # skip self
-        hint = hints.get(param.name)
-        if hint is None:
-            continue
-        if isinstance(hint, type) and issubclass(hint, ConfigBase):
-            return hint
-
-    raise TypeError(
-        f"Cannot infer config class for {method.__qualname__}: "
-        f"no parameter annotated with a ConfigBase subclass"
-    )
-
-
-def _infer_help(method: Callable) -> str:
-    """Use first line of docstring as help text."""
-    doc = inspect.getdoc(method)
-    if doc:
-        return doc.split("\n", 1)[0].rstrip(".")
-    return ""
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Plugin base class
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
+class CrawlerPlugin[RawT, ConfigT: CrawlConfig](CommandApp, ABC):
     """
     Base class for crawler plugins.
 
-    Combines the command system (`@command`, argparse, multi-source config
-    loading CLI > YAML > ENV > defaults) with the crawl lifecycle (`setup`
-    → `iterate_datasets` → `process`, parallel workers, JSONL sink).
+    Each plugin is a `confline.CommandApp` whose `prog` is
+    `crawlers <name>`.  The `crawl` command is auto-registered on
+    concrete subclasses (those that set `name`); auxiliary commands
+    use `@command`.
 
-    The `crawl` command is auto-registered on concrete subclasses that set
-    `name`; extra commands use `@command`.
-
-    Not reentrant: lifecycle hooks store mutable state on `self` (HTTP
-    clients, API facades, etc.). Plugin instances in `REGISTERED_PLUGINS`
-    are singletons — two concurrent crawls on the same instance would
-    overwrite that state.
+    Not reentrant: lifecycle hooks store mutable state on `self`
+    (HTTP clients, API facades).  Plugin instances in
+    `REGISTERED_PLUGINS` are singletons — two concurrent crawls on
+    the same instance would overwrite that state.
     """
 
-    name: str
-    description: str
-    config_class: type[ConfigT] = CrawlConfig  # type: ignore[assignment]
+    # confline override knobs
+    env_prefix: ClassVar[str] = "CRAWLER_"
+    config_option: ClassVar[tuple[str, ...]] = ("-c", "--config")
 
-    # Populated by __init_subclass__
-    _commands: dict[str, CommandDef]
+    # CrawlerPlugin contract
+    name: ClassVar[str]
+    description: ClassVar[str]
+    config_class: ClassVar[type[CrawlConfig]] = CrawlConfig
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
-        cls._commands = {}
+        super().__init_subclass__(**kwargs)  # CommandApp scans @command methods
 
-        # Collect @command decorated methods
-        for attr_name in dir(cls):
-            if attr_name.startswith("_"):
-                continue
-            method = getattr(cls, attr_name, None)
-            if callable(method) and hasattr(method, "_command_def"):
-                cmd_def: CommandDef = method._command_def
-                cls._commands[cmd_def.name] = cmd_def
+        # Abstract intermediate classes (e.g. shared base) skip auto-wiring.
+        if not isinstance(cls.__dict__.get("name"), str):
+            return
 
-        # Auto-register the `crawl` command on concrete subclasses
-        if isinstance(cls.__dict__.get("name"), str) and "crawl" not in cls._commands:
-            config_cls = cls.__dict__.get("config_class", cls.config_class)
-            cls._commands["crawl"] = CommandDef(
+        # Default `prog` → "crawlers <name>" so help/error rendering reads correctly.
+        if "prog" not in cls.__dict__:
+            cls.prog = f"crawlers {cls.name}"
+
+        # Auto-register the `crawl` command unless the subclass declared its own.
+        if "crawl" not in cls._commands:
+            config_cls = cls.__dict__.get("config_class") or cls.config_class
+            cls._commands["crawl"] = Command(
                 name="crawl",
-                help="Crawl datasets",
                 method_name="run_crawl",
                 config_class=config_cls,
+                description="Crawl datasets",
             )
 
-    # --- CLI integration ---
+    # ─────────────────────────────────────────────────────────────────────────
+    # CommandApp overrides
+    # ─────────────────────────────────────────────────────────────────────────
 
-    def register_args(self, parser: argparse.ArgumentParser) -> None:
-        """Build argparse subparsers from registered commands."""
-        parser.add_argument(
-            "-c",
-            "--config",
-            type=Path,
-            help="Path to YAML configuration file",
+    def dispatch_command(self, command: Command, config: Any) -> Any:
+        """Run the handler with an `AsyncExitStack`, in `asyncio.run`."""
+
+        async def _run() -> Any:
+            async with AsyncExitStack() as stack:
+                handler = getattr(self, command.method_name)
+                return await handler(config, stack)
+
+        return asyncio.run(_run())
+
+    def build_sources(self, parsed: Any, command: Command) -> list[Source]:
+        """argparse → env → scoped YAML → defaults.
+
+        Scoped YAML reads each `-c` file's `global` /
+        `plugins.<name>` / `plugins.<name>.commands.<cmd>` sections
+        and exposes them as separate scopes so command-level keys
+        win over plugin-level over global, matching the layout
+        operators have used before the confline migration.
+        """
+        sources: list[Source] = [
+            CliSource(parsed),
+            EnvSource(os.environ, prefix=self.env_prefix),
+        ]
+
+        config_files = self.discover_config_files(parsed)
+        if config_files:
+            sources.append(self._build_scoped_yaml_source(config_files, command.name))
+
+        sources.append(DefaultSource())
+        return sources
+
+    def _build_scoped_yaml_source(
+        self,
+        config_files: Sequence[FileOrigin],
+        command_name: str,
+    ) -> YamlSource:
+        """Build a `YamlSource` with three scopes per file: command, plugin, global.
+
+        Within a file, command-scope wins over plugin over global —
+        matching today's `_resolve_value` order.  Across files later
+        `-c` wins fully (file beats level): a later file's global
+        still wins over an earlier file's command-scope.
+
+        `scope_origins` is parallel to `scopes`: each file contributes
+        three scopes that all point back at the same `FileOrigin`, so
+        `--show-config` and provenance hints name the actual file.
+        """
+        flat_scopes: list[dict[str, Any]] = []
+        flat_origins: list[FileOrigin] = []
+        ordered = list(reversed(list(config_files)))  # latest file first
+        for entry in ordered:
+            data = yaml.safe_load(entry.path.read_text(encoding="utf-8")) or {}
+            global_scope = _ensure_dict(data.get("global"))
+            plugin_scope = _ensure_dict(data.get("plugins", {}).get(self.name))
+            command_scope = _ensure_dict(plugin_scope.get("commands", {}).get(command_name))
+            flat_scopes.extend([command_scope, plugin_scope, global_scope])
+            flat_origins.extend([entry, entry, entry])
+
+        return YamlSource(
+            scopes=flat_scopes,
+            files=tuple(ordered),
+            scope_origins=flat_origins,
         )
 
-        if not self._commands:
-            raise ValueError("No commands defined")
-
-        subparsers = parser.add_subparsers(
-            dest="command",
-            required=True,
-            help="Command to execute",
-            metavar="COMMAND",
-        )
-
-        for cmd_name, cmd_def in self._commands.items():
-            sub = subparsers.add_parser(cmd_name, help=cmd_def.help)
-            self._add_config_args(sub, cmd_def.config_class)
-
-    def _add_config_args(
-        self, parser: argparse.ArgumentParser, config_cls: type[ConfigBase]
-    ) -> None:
-        """Add CLI arguments from config schema with argument groups."""
-        schema = config_cls.__config_schema__
-
-        for group in schema.groups:
-            arg_group = parser.add_argument_group(
-                title=group.name,
-                description=group.description,
-            )
-            for field_info in group.fields:
-                if field_info.nested_schema or field_info.cli is None:
-                    continue
-                cli = field_info.cli
-                if cli.is_positional:
-                    arg_group.add_argument(cli.names[0], **cli.kwargs)
-                else:
-                    arg_group.add_argument(*cli.names, **cli.kwargs)
-
-    # --- Dispatcher ---
-
-    async def run(self, cli_args: argparse.Namespace) -> None:
-        """Dispatch to the appropriate command method."""
-        command_name = getattr(cli_args, "command", None)
-        if not command_name:
-            raise ValueError("No command specified")
-        if command_name not in self._commands:
-            raise ValueError(f"Unknown command: {command_name}")
-
-        cmd_def = self._commands[command_name]
-        config = self._load_config(cli_args, cmd_def.config_class, command_name)
-
-        method = getattr(self, cmd_def.method_name)
-        async with AsyncExitStack() as stack:
-            await method(config, stack)
-
-    # --- Crawl lifecycle ---
+    # ─────────────────────────────────────────────────────────────────────────
+    # Crawl lifecycle hooks
+    # ─────────────────────────────────────────────────────────────────────────
 
     async def setup(self, ctx: RunContext[ConfigT], stack: AsyncExitStack) -> None:
         """
@@ -258,7 +196,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         Convert a raw item into an `OnedataDataset`.
 
         Returns:
-            - `Ok(dataset)`: persisted to `processed.jsonl`
+            - `Ok(dataset)`: validated by the framework, then persisted to `processed.jsonl`
             - `Err(failure)`: persisted to `rejected.jsonl`
             - `None`: silently skipped
         """
@@ -268,7 +206,9 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         """Short identifier appended to the run directory name."""
         return "default"
 
-    # --- Crawl execution ---
+    # ─────────────────────────────────────────────────────────────────────────
+    # Crawl execution — auto-registered as the `crawl` command
+    # ─────────────────────────────────────────────────────────────────────────
 
     async def run_crawl(self, config: ConfigT, stack: AsyncExitStack) -> None:
         """Execute the `crawl` command."""
@@ -276,7 +216,7 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         await ctx.open(
             config_snapshot={
                 "plugin": self.name,
-                "config": asdict(config),  # type: ignore[call-overload]
+                "config": asdict(config),
             }
         )
 
@@ -290,12 +230,15 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         self._print_banner(ctx)
 
         try:
+            validator = await self._open_validator(config, stack)
+
             await self.setup(ctx, stack)
             await self.before_crawl(ctx)
 
             stats = await run_parallel_crawl(
                 source_iterator=self.iterate_datasets(ctx),
-                parse_fn=self.process,
+                process_fn=self.process,
+                validator=validator,
                 processed_sink=ctx.processed_sink,
                 rejection_sink=ctx.rejection_sink,
                 concurrency=config.concurrency,
@@ -317,95 +260,9 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
             state["status"] = "failed"
             raise
 
-    # --- Config loading ---
-
-    def _load_config(
-        self,
-        cli_args: argparse.Namespace,
-        config_cls: type[ConfigBase],
-        command_name: str,
-    ) -> ConfigBase:
-        """Build and validate configuration from ENV + YAML + CLI."""
-        yaml_data: dict[str, Any] = {}
-        if (config_path := getattr(cli_args, "config", None)) and config_path.exists():
-            yaml_data = yaml.safe_load(config_path.read_text()) or {}
-
-        global_yaml = yaml_data.get("global", {})
-        plugin_yaml = yaml_data.get("plugins", {}).get(self.name, {})
-        command_yaml = plugin_yaml.get("commands", {}).get(command_name, {})
-
-        return self._instantiate_config(
-            config_cls, global_yaml, plugin_yaml, command_yaml, cli_args
-        )
-
-    def _instantiate_config(
-        self,
-        config_cls: type[ConfigBase],
-        global_yaml: dict[str, Any],
-        plugin_yaml: dict[str, Any],
-        command_yaml: dict[str, Any],
-        cli_args: argparse.Namespace | None,
-    ) -> ConfigBase:
-        """Recursively instantiate dataclass config from sources."""
-        schema = config_cls.__config_schema__
-        init_kwargs: dict[str, Any] = {}
-
-        for field_info in schema.all_fields():
-            field_name = field_info.name
-
-            if field_info.nested_schema:
-                yaml_key = field_info.yaml_key
-                if yaml_key:
-                    g = _yaml_section(global_yaml, yaml_key)
-                    p = _yaml_section(plugin_yaml, yaml_key)
-                    c = _yaml_section(command_yaml, yaml_key)
-                else:
-                    g = p = c = {}
-
-                init_kwargs[field_name] = self._instantiate_config(
-                    field_info.nested_schema.config_class,
-                    g,
-                    p,
-                    c,
-                    None,
-                )
-                continue
-
-            value = self._resolve_value(
-                field_info, global_yaml, plugin_yaml, command_yaml, cli_args
-            )
-            if value is not None:
-                init_kwargs[field_name] = _coerce(value, field_info.field_type)
-
-        return config_cls(**init_kwargs)
-
-    @staticmethod
-    def _resolve_value(
-        field_info: Any,
-        global_yaml: dict[str, Any],
-        plugin_yaml: dict[str, Any],
-        command_yaml: dict[str, Any],
-        cli_args: argparse.Namespace | None,
-    ) -> Any:
-        """Resolve config value: CLI > command YAML > plugin YAML > global YAML > ENV."""
-        if cli_args and field_info.cli:
-            val = getattr(cli_args, field_info.cli.attr_name, None)
-            if val is not None:
-                return val
-
-        yaml_key = field_info.yaml_key
-        for source in (command_yaml, plugin_yaml, global_yaml):
-            if yaml_key and yaml_key in source:
-                return source[yaml_key]
-
-        if field_info.env_var:
-            val = os.environ.get(field_info.env_var)
-            if val is not None:
-                return val
-
-        return None
-
-    # --- Internals ---
+    # ─────────────────────────────────────────────────────────────────────────
+    # Internals
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _create_run_context(self, config: ConfigT) -> RunContext[ConfigT]:
         run_dir = make_run_dir(
@@ -415,7 +272,18 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
         )
         return RunContext(run_dir=run_dir, config=config)
 
-    # --- Display ---
+    @staticmethod
+    async def _open_validator(config: CrawlConfig, stack: AsyncExitStack) -> DatasetValidator:
+        """Construct the run's `DatasetValidator`, opening a HEAD-probe client when enabled."""
+        if config.no_url_validation:
+            return DatasetValidator()
+
+        http = await stack.enter_async_context(HttpClient.from_config(config))
+        return DatasetValidator(http=http)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Display
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _print_banner(self, ctx: RunContext[ConfigT]) -> None:
         title = type(self).__name__
@@ -469,28 +337,18 @@ class CrawlerPlugin[RawT, ConfigT: CrawlConfig](ABC):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Helpers (module-private)
+# Module-private helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _yaml_section(config_yaml: Any, key: str) -> dict:
-    """Safely get a section from YAML dict."""
-    if isinstance(config_yaml, dict):
-        return config_yaml.get(key, {})
-    return {}
+def _ensure_dict(value: Any) -> dict[str, Any]:
+    """Return `value` if it's a dict, else an empty dict.
 
-
-def _coerce(value: Any, target_type: type) -> Any:
-    """Coerce a raw config value to the target type."""
-    if value is None:
-        return None
-    if target_type is bool:
-        if isinstance(value, str):
-            return value.lower() in ("true", "1", "yes", "on")
-        return bool(value)
-    if target_type in (int, float, str):
-        return target_type(value)
-    return value
+    Defensive against malformed YAML where a key appears but its
+    value is `None` or a non-mapping — keeps `_walk` in YamlSource
+    from tripping over a `NoneType` cursor.
+    """
+    return value if isinstance(value, dict) else {}
 
 
 def _build_next_steps(status: str, stats: CrawlStats, ctx: RunContext[Any]) -> list[str]:

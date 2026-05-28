@@ -13,7 +13,8 @@ from rdflib import Dataset, Namespace
 from rdflib.namespace import RDF
 from rdflib.term import Node
 
-from crawlers.core import Err, HttpClient
+from crawlers.core import Err, HttpClient, Ok
+from crawlers.core.dataset import OnedataDataset, OnedataFile
 from crawlers.metadata.datacite import (
     Creator,
     DataCiteRecord,
@@ -29,8 +30,6 @@ from crawlers.metadata.datacite import (
     Rights,
 )
 from crawlers.plugins.bgee.models import (
-    BgeeDataset,
-    BgeeFile,
     BgeeIteratorOpts,
     BgeeRawRecord,
 )
@@ -115,9 +114,9 @@ class BgeeClient:
 
 
 class BgeeParser:
-    """Converts a `BgeeRawRecord` (rdflib graph + node) into a `BgeeDataset`."""
+    """Converts a `BgeeRawRecord` (rdflib graph + node) into an `OnedataDataset`."""
 
-    def parse(self, raw: BgeeRawRecord) -> BgeeDataset | None:  # noqa: A002
+    def parse(self, raw: BgeeRawRecord) -> Ok[OnedataDataset] | None:  # noqa: A002
         """Parse `schema:Dataset` record from rdflib graph."""
         g = raw.graph
         node = raw.node
@@ -175,17 +174,20 @@ class BgeeParser:
             version=version,
         )
 
-        return BgeeDataset(
-            identifier=identifier,
-            title=title,
-            files=files,
-            metadata_record=record,
-            _raw=raw,
+        return Ok(
+            OnedataDataset(
+                name=title,
+                target_dir=title.replace("/", "-"),
+                # This repository doesn't provide Persistent Identifiers for its datasets
+                pid=None,
+                metadata_xml=record.to_xml(),
+                files=tuple(files),
+            )
         )
 
-    def _extract_files(self, g: Dataset, node: Node) -> list[BgeeFile]:
+    def _extract_files(self, g: Dataset, node: Node) -> list[OnedataFile]:
         """Extract downloadable files from a `schema:Dataset` node."""
-        files: list[BgeeFile] = []
+        files: list[OnedataFile] = []
         seen_urls: set[str] = set()
         for ns in _SDO:
             for dist in g.objects(node, ns["distribution"]):
@@ -199,7 +201,7 @@ class BgeeParser:
                     continue
                 seen_urls.add(url)
                 name = _val(g, dist, "name") or url.rsplit("/", maxsplit=1)[-1].split("?")[0]
-                files.append(BgeeFile(path=name, url=url))
+                files.append(OnedataFile(path=name, url=url))
         return files
 
 

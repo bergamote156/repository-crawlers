@@ -13,11 +13,12 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Annotated, Any
 
 from rich.table import Table
 
 from crawlers.core import (
+    CliPositional,
     CrawlConfig,
     CrawlerPlugin,
     Err,
@@ -28,7 +29,7 @@ from crawlers.core import (
     command,
     opt,
 )
-from crawlers.model.dataset import OnedataDataset, OnedataFile
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.ecudo.api import EcudoApiClient
 from crawlers.plugins.ecudo.parser import parse_ecudo_record
 from crawlers.ui import console
@@ -43,11 +44,7 @@ class EcudoApiConfig(HttpConfig):
 class EcudoCrawlConfig(EcudoApiConfig, CrawlConfig, kw_only=True):
     """Ecudo crawl configuration."""
 
-    organization: str = opt(
-        ...,
-        # Explicit CLI is needed for positional args to be detected correctly
-        # (otherwise '--' will be prepended)
-        cli="organization",
+    organization: Annotated[str, CliPositional] = opt(
         description="Organization ID (e.g. iopan)",
     )
 
@@ -67,7 +64,6 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
     config_class = EcudoCrawlConfig
 
     _api_client: EcudoApiClient
-    _validation_http: HttpClient | None
 
     # --- Banner / context plumbing ---
 
@@ -80,7 +76,6 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = EcudoApiClient(http)
-        self._validation_http = None if ctx.config.no_url_validation else http
 
     async def before_crawl(self, ctx: RunContext[EcudoCrawlConfig]) -> None:
         """Verify the requested organization exists before producing items."""
@@ -113,23 +108,11 @@ class EcudoPlugin(CrawlerPlugin[str, EcudoCrawlConfig]):
             yield dataset_id
 
     async def process(self, dataset_id: str, /) -> Result[OnedataDataset, Any] | None:
-        """Resolve a dataset ID to JSON-LD and build an `OnedataDataset`."""
-        fetch_result = await self._api_client.get_dataset_metadata(dataset_id)
-        if isinstance(fetch_result, Err):
-            return fetch_result
-
-        parsed = parse_ecudo_record(fetch_result.value)
-        if parsed is None:
-            return None
-
-        return await OnedataDataset.build(
-            pid=parsed.identifier,
-            name=parsed.title,
-            location=parsed.title.replace("/", "-"),
-            metadata=parsed.metadata,
-            files=[OnedataFile(path=f.path, url=f.url) for f in parsed.files],
-            http=self._validation_http,
-        )
+        """Resolve a dataset ID to JSON-LD and map it to an `OnedataDataset`."""
+        result = await self._api_client.get_dataset_metadata(dataset_id)
+        if isinstance(result, Err):
+            return result
+        return parse_ecudo_record(result.value)
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Auxiliary commands

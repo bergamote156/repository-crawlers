@@ -27,14 +27,12 @@ from crawlers.core import (
     HttpClient,
     HttpFailure,
     Ok,
-    ResponseFailure,
     Result,
     RunContext,
-    TimeoutFailure,
     command,
 )
-from crawlers.model.dataset import OnedataDataset, OnedataFile
-from crawlers.plugins.topanat.api import PublicationInfo, TopanatClient, TraitInfo
+from crawlers.core.dataset import OnedataDataset
+from crawlers.plugins.topanat.api import TopanatClient
 from crawlers.plugins.topanat.models import (
     TopanatCrawlConfig,
     TopanatEntry,
@@ -84,15 +82,13 @@ class TopanatPlugin(CrawlerPlugin[TopanatEntry, TopanatCrawlConfig]):
     config_class = TopanatCrawlConfig
 
     _client: TopanatClient
-    _validation_http: HttpClient | None
 
     # --- Lifecycle ---
 
     async def setup(self, ctx: RunContext[TopanatCrawlConfig], stack: AsyncExitStack) -> None:
-        """Open a shared `HttpClient` and build the API façade."""
+        """Open the shared HttpClient and build the API façade."""
         http = await stack.enter_async_context(HttpClient.from_config(ctx.config))
         self._client = TopanatClient(http)
-        self._validation_http = None if ctx.config.no_url_validation else http
 
     # --- Iteration & parse ---
 
@@ -106,32 +102,19 @@ class TopanatPlugin(CrawlerPlugin[TopanatEntry, TopanatCrawlConfig]):
             yield entry
 
     async def process(self, entry: TopanatEntry, /) -> Result[OnedataDataset, Any] | None:
-        """Fetch upstream metadata, build DataCite record, assemble OnedataDataset."""
-        fetch_result: Ok[PublicationInfo] | Ok[TraitInfo] | Err[ResponseFailure | TimeoutFailure]
+        """Fetch upstream metadata and build an `OnedataDataset`."""
         if entry.kind == "trait":
-            fetch_result = await self._client.fetch_trait(entry.id)
-            if isinstance(fetch_result, Err):
-                return Err(TopanatFetchFailure(pid=entry.id, failure=fetch_result.value))
-            parsed = build_trait_record(fetch_result.value)
+            trait = await self._client.fetch_trait(entry.id)
+            if isinstance(trait, Err):
+                return Err(TopanatFetchFailure(pid=entry.id, failure=trait.value))
+            dataset = build_trait_record(trait.value)
         else:
-            fetch_result = await self._client.fetch_publication(entry.id)
-            if isinstance(fetch_result, Err):
-                return Err(TopanatFetchFailure(pid=entry.id, failure=fetch_result.value))
-            parsed = build_publication_record(fetch_result.value)
+            publication = await self._client.fetch_publication(entry.id)
+            if isinstance(publication, Err):
+                return Err(TopanatFetchFailure(pid=entry.id, failure=publication.value))
+            dataset = build_publication_record(publication.value)
 
-        files = [
-            OnedataFile(path="data.json", url=parsed.json_url),
-            # OnedataFile(path="data.tsv", url=parsed.tsv_url),  # TODO
-        ]
-
-        return await OnedataDataset.build(
-            pid=parsed.identifier,
-            name=parsed.title,
-            location=parsed.title.replace("/", "-"),
-            metadata=parsed.metadata,
-            files=files,
-            http=self._validation_http,
-        )
+        return Ok(dataset)
 
     # --- Auxiliary commands ---
 

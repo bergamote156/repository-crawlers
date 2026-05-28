@@ -1,32 +1,63 @@
 """
-Onepanel API Client
-
-Admin operations on Oneprovider: storage management, space support.
+Onepanel REST client — admin operations: storage management, space support.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-import json
+import logging
+from typing import Final, NotRequired, TypedDict
 
 import requests
-import urllib3
 
-from registrar import output
+from registrar.api.utils import (
+    DEFAULT_TIMEOUT,
+    disable_ssl_warnings,
+    handle_error,
+    id_from_location,
+    require_token,
+)
+from registrar.config import CommonConfig
 
-# Disable SSL warnings for development
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+logger = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 30  # seconds
+disable_ssl_warnings()
+
+SERVICE_NAME: Final[str] = "Onepanel"
+DEFAULT_STORAGE_SUPPORT_SIZE: Final[int] = 1099511627776  # 1 TiB
+
+
+class SpaceDetails(TypedDict):
+    """Onepanel `GET /provider/spaces/{id}` payload (subset used by registrar)."""
+
+    name: str
+    storageId: str
+
+
+class StorageDetails(TypedDict):
+    """Onepanel `GET /provider/storages/{id}` payload (subset used by registrar).
+
+    The HTTP-specific fields (`endpoint`, `emulateRangeRead`,
+    `maxEmulatedRangeReadFileSize`) are only present on HTTP storages.
+    """
+
+    name: str
+    type: str
+    readonly: bool
+    importedStorage: bool
+    endpoint: NotRequired[str]
+    emulateRangeRead: NotRequired[bool]
+    maxEmulatedRangeReadFileSize: NotRequired[int]
+
+
+def is_storage_compatible(storage: StorageDetails) -> bool:
+    """True for HTTP readonly imported storages (the only kind registrar can use)."""
+    return storage["type"] == "http" and storage["readonly"] and storage["importedStorage"]
 
 
 class OnepanelClient:
-    """
-    Client for Onepanel REST API.
-
-    Handles admin operations: storage management, space support.
-    """
+    """Client for the Onepanel REST API."""
 
     def __init__(
         self,
@@ -36,16 +67,6 @@ class OnepanelClient:
         verify_ssl: bool = False,
         timeout: int = DEFAULT_TIMEOUT,
     ):
-        """
-        Initialize Onepanel client.
-
-        Args:
-            domain: Oneprovider domain
-            token: Admin token
-            port: Onepanel port (default: 443)
-            verify_ssl: Whether to verify SSL certificates
-            timeout: Request timeout in seconds
-        """
         self.domain = domain
         self.token = token
         self.port = port
@@ -53,33 +74,32 @@ class OnepanelClient:
         self.timeout = timeout
         self._base_url = f"https://{domain}:{port}/api/v3/onepanel"
 
+    @classmethod
+    def from_config(cls, config: CommonConfig) -> "OnepanelClient":
+        """Build an `OnepanelClient` from the resolved config.
+
+        Requires `tokens.admin_token`; raises `MissingTokenError` otherwise.
+        """
+        return cls(
+            domain=config.onedata.oneprovider_domain,
+            token=require_token(config.tokens.admin_token, path="tokens.admin_token"),
+            port=config.onedata.oneprovider_panel_port,
+            verify_ssl=config.onedata.verify_ssl,
+            timeout=config.onedata.timeout,
+        )
+
     def _headers(self) -> dict:
-        """Get default headers."""
         return {"X-Auth-Token": self.token}
 
     def _headers_json(self) -> dict:
-        """Get headers for JSON requests."""
         return {"X-Auth-Token": self.token, "Content-Type": "application/json"}
 
-    def _handle_error(self, response: requests.Response) -> None:
-        """Log response body before raising error."""
-        if not response.ok:
-            try:
-                error_body = response.json()
-                output.error(
-                    f"Onepanel API Error ({response.status_code}): "
-                    f"{json.dumps(error_body, indent=2)}"
-                )
-            except json.JSONDecodeError:
-                output.error(f"Onepanel API Error ({response.status_code}): {response.text}")
-            response.raise_for_status()
-
-    # -------------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
     # Storage operations
-    # -------------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
 
     def list_storages(self) -> list[str]:
-        """List all storage IDs."""
+        """Return all storage IDs known to the provider."""
         url = f"{self._base_url}/provider/storages"
         response = requests.get(
             url=url,
@@ -87,11 +107,11 @@ class OnepanelClient:
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
-        self._handle_error(response)
+        handle_error(response, service=SERVICE_NAME)
         return response.json().get("ids", [])
 
-    def get_storage_details(self, storage_id: str) -> dict:
-        """Get details of a specific storage."""
+    def get_storage_details(self, storage_id: str) -> StorageDetails:
+        """Return the full configuration object for `storage_id`."""
         url = f"{self._base_url}/provider/storages/{storage_id}"
         response = requests.get(
             url=url,
@@ -99,30 +119,36 @@ class OnepanelClient:
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
-        self._handle_error(response)
+        handle_error(response, service=SERVICE_NAME)
         return response.json()
 
-    def add_storage(self, name: str, endpoint: str) -> str:
-        """
-        Create a new HTTP readonly storage.
+    def add_storage(
+        self,
+        name: str,
+        endpoint: str,
+        *,
+        emulate_range_read: bool = False,
+        max_emulated_range_read_file_size: int | None = None,
+    ) -> str:
+        """Create a new HTTP readonly imported storage and return its ID.
 
-        Args:
-            name: Storage name
-            endpoint: HTTP endpoint URL (e.g., "https://example.com")
-
-        Returns:
-            Storage ID
+        `emulateRangeRead` is always sent explicitly. `maxEmulatedRangeReadFileSize`
+        is sent only when `max_emulated_range_read_file_size` is provided (non-None);
+        omitting it lets Onepanel apply its own default.
         """
         url = f"{self._base_url}/provider/storages"
-        payload = {
-            name: {
-                "type": "http",
-                "readonly": True,
-                "importedStorage": True,
-                "endpoint": endpoint,
-            }
+        # The Onepanel API keys storage definitions by name in the request body.
+        storage_spec: dict[str, object] = {
+            "type": "http",
+            "readonly": True,
+            "importedStorage": True,
+            "endpoint": endpoint,
+            "emulateRangeRead": emulate_range_read,
         }
+        if max_emulated_range_read_file_size is not None:
+            storage_spec["maxEmulatedRangeReadFileSize"] = max_emulated_range_read_file_size
 
+        payload = {name: storage_spec}
         response = requests.post(
             url=url,
             headers=self._headers_json(),
@@ -130,25 +156,21 @@ class OnepanelClient:
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
-        self._handle_error(response)
+        handle_error(response, service=SERVICE_NAME)
 
-        # Extract storage ID from Location header
-        location = response.headers.get("Location", "")
-        storage_id = location.split("/")[-1] if location else None
-
+        storage_id = id_from_location(response)
         if not storage_id:
-            # Fallback: try to get from response body
             storage_id = response.json().get(name, {}).get("id")
 
-        output.info(f"Created storage '{name}' with ID: {storage_id}")
+        logger.info("Created storage '%s' with ID: %s", name, storage_id)
         return storage_id
 
-    # -------------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
     # Space operations
-    # -------------------------------------------------------------------------
+    # ─────────────────────────────────────────────────────────────────────────
 
     def list_spaces(self) -> list[str]:
-        """List all space IDs supported by the provider."""
+        """Return all space IDs supported by the provider."""
         url = f"{self._base_url}/provider/spaces"
         response = requests.get(
             url=url,
@@ -156,11 +178,11 @@ class OnepanelClient:
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
-        self._handle_error(response)
+        handle_error(response, service=SERVICE_NAME)
         return response.json().get("ids", [])
 
-    def get_space_details(self, space_id: str) -> dict:
-        """Get details of a specific space."""
+    def get_space_details(self, space_id: str) -> SpaceDetails:
+        """Return the full support details for `space_id`."""
         url = f"{self._base_url}/provider/spaces/{space_id}"
         response = requests.get(
             url=url,
@@ -168,26 +190,16 @@ class OnepanelClient:
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
-        self._handle_error(response)
+        handle_error(response, service=SERVICE_NAME)
         return response.json()
 
     def support_space(
         self,
         storage_id: str,
         support_token: str,
-        size: int = 1099511627776,
+        size: int = DEFAULT_STORAGE_SUPPORT_SIZE,
     ) -> str:
-        """
-        Support a space with storage.
-
-        Args:
-            storage_id: Storage ID
-            support_token: Space support token
-            size: Support size in bytes (default: 1TB)
-
-        Returns:
-            Space ID
-        """
+        """Support a space with `storage_id` in manual-import mode and return its ID."""
         url = f"{self._base_url}/provider/spaces"
         payload = {
             "token": support_token,
@@ -195,7 +207,6 @@ class OnepanelClient:
             "size": size,
             "storageImport": {"mode": "manual"},
         }
-
         response = requests.post(
             url=url,
             headers=self._headers_json(),
@@ -203,9 +214,8 @@ class OnepanelClient:
             verify=self.verify_ssl,
             timeout=self.timeout,
         )
-        self._handle_error(response)
+        handle_error(response, service=SERVICE_NAME)
 
         space_id = response.json().get("id")
-        output.info(f"Supported space {space_id} with storage {storage_id}")
-
+        logger.info("Supported space %s with storage %s", space_id, storage_id)
         return space_id

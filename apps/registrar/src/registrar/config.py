@@ -1,253 +1,293 @@
 """
-Registrar Configuration
+Confline configuration classes for the registrar CLI.
 
-Hierarchical configuration management: env vars < config file < CLI args.
+Three logical layers:
+
+- `CommonConfig` — connection/auth/output/logging shared by every command.
+- Per-command configs — `RegisterConfig`, `ListSpacesConfig`,
+  `ListStoragesConfig` — extend `CommonConfig` with command-specific fields.
+- Mutex groups — `SpaceSelection`, `StorageSelection` — encode the
+  name-or-ID alternatives so confline auto-renders "at most one of …" errors.
 """
 
 __author__ = "Bartosz Walkowicz"
-__copyright__ = "Copyright (C) 2025 Onedata (onedata.org)"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
-import os
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Literal
 
-import yaml
+from confline import (
+    ConfigBase,
+    MutuallyExclusiveGroup,
+    model_validator,
+    opt,
+)
+from confline.sources import CliPositional
 
-_MASKED_TOKEN_MAX_LENGTH = 12
-
-
-@dataclass
-class OnedataConfig:
-    """Onedata connection settings."""
-
-    onezone_domain: str = "demo.onedata.org"
-    oneprovider_domain: str = "provider.demo.onedata.org"
-    panel_port: int = 443
-    verify_ssl: bool = False
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared sub-configs
+# ─────────────────────────────────────────────────────────────────────────────
 
 
-@dataclass
-class TokensConfig:
-    """Authentication tokens."""
+class OnedataConnection(ConfigBase):
+    """Connection settings for Onedata services."""
 
-    admin_token: str = ""  # Onepanel admin token
-    space_owner_token: str = ""  # Onezone/Oneprovider user token
-    handle_service_id: str = ""  # Optional, for DOI registration
-
-
-@dataclass
-class StorageConfig:
-    """Storage defaults."""
-
-    default_size: int = 1099511627776  # 1TB in bytes
-
-
-@dataclass
-class OutputConfig:
-    """Output configuration."""
-
-    dir: str = "./data"
-    log_file: str = "registration.log"
-
-
-@dataclass
-class LoggingConfig:
-    """Logging configuration."""
-
-    level: str = "info"  # debug, info, warning, error, silent
-
-
-@dataclass
-class Config:
-    """Main configuration."""
-
-    onedata: OnedataConfig = field(default_factory=OnedataConfig)
-    tokens: TokensConfig = field(default_factory=TokensConfig)
-    storage: StorageConfig = field(default_factory=StorageConfig)
-    output: OutputConfig = field(default_factory=OutputConfig)
-    logging: LoggingConfig = field(default_factory=LoggingConfig)
-
-
-def load_config(
-    config_file: Path | None = None,
-    cli_overrides: dict | None = None,
-) -> Config:
-    """
-    Load configuration with hierarchy: env vars < config file < CLI args.
-
-    Args:
-        config_file: Path to YAML config file (optional)
-        cli_overrides: Dictionary of CLI overrides (optional)
-
-    Returns:
-        Merged Config object
-    """
-    # Layer 1: Environment variables
-    merged = _load_from_env()
-
-    # Layer 2: Config file
-    if config_file:
-        file_config = _load_from_file(config_file)
-        merged = _deep_merge(merged, file_config)
-
-    # Layer 3: CLI overrides
-    if cli_overrides:
-        merged = _deep_merge(merged, cli_overrides)
-
-    return _dict_to_config(merged)
-
-
-def config_to_dict(config: Config) -> dict:
-    """Convert Config dataclass to dictionary."""
-    return {
-        "onedata": {
-            "onezone_domain": config.onedata.onezone_domain,
-            "oneprovider_domain": config.onedata.oneprovider_domain,
-            "panel_port": config.onedata.panel_port,
-            "verify_ssl": config.onedata.verify_ssl,
-        },
-        "tokens": {
-            "admin_token": _mask_token(config.tokens.admin_token),
-            "space_owner_token": _mask_token(config.tokens.space_owner_token),
-            "handle_service_id": config.tokens.handle_service_id or "(not set)",
-        },
-        "storage": {
-            "default_size": config.storage.default_size,
-        },
-        "output": {
-            "dir": config.output.dir,
-            "log_file": config.output.log_file,
-        },
-        "logging": {
-            "level": config.logging.level,
-        },
-    }
-
-
-def _mask_token(token: str) -> str:
-    """Mask token for display, showing only first/last 4 chars."""
-    if not token:
-        return "(not set)"
-    if len(token) <= _MASKED_TOKEN_MAX_LENGTH:
-        return "****"
-    return f"{token[:4]}...{token[-4:]}"
-
-
-def _load_from_env() -> dict:
-    """Load configuration from environment variables."""
-    config: dict[str, dict[str, Any]] = {}
-
-    if onedata_env := _load_onedata_env():
-        config["onedata"] = onedata_env
-    if tokens_env := _load_tokens_env():
-        config["tokens"] = tokens_env
-    if storage_env := _load_storage_env():
-        config["storage"] = storage_env
-    if output_env := _load_output_env():
-        config["output"] = output_env
-    if logging_env := _load_logging_env():
-        config["logging"] = logging_env
-
-    return config
-
-
-def _load_onedata_env() -> dict[str, Any]:
-    """Load onedata settings from environment variables."""
-    onedata: dict[str, Any] = {}
-    if onezone_domain := _get_env("ONEZONE_DOMAIN"):
-        onedata["onezone_domain"] = onezone_domain
-    if oneprovider_domain := _get_env("ONEPROVIDER_DOMAIN"):
-        onedata["oneprovider_domain"] = oneprovider_domain
-    if panel_port := _get_env("PANEL_PORT"):
-        onedata["panel_port"] = int(panel_port)
-    if verify_ssl := _get_env("VERIFY_SSL"):
-        onedata["verify_ssl"] = verify_ssl.lower() in ("true", "1", "yes")
-    return onedata
-
-
-def _load_tokens_env() -> dict[str, Any]:
-    """Load tokens from environment variables."""
-    tokens: dict[str, Any] = {}
-    if admin_token := _get_env("ADMIN_TOKEN"):
-        tokens["admin_token"] = admin_token
-    if space_owner_token := _get_env("SPACE_OWNER_TOKEN"):
-        tokens["space_owner_token"] = space_owner_token
-    if handle_service_id := _get_env("HANDLE_SERVICE_ID"):
-        tokens["handle_service_id"] = handle_service_id
-    return tokens
-
-
-def _load_storage_env() -> dict[str, Any]:
-    """Load storage settings from environment variables."""
-    storage: dict[str, Any] = {}
-    if default_size := _get_env("DEFAULT_STORAGE_SIZE"):
-        storage["default_size"] = int(default_size)
-    return storage
-
-
-def _load_output_env() -> dict[str, Any]:
-    """Load output settings from environment variables."""
-    output: dict[str, Any] = {}
-    if output_dir := _get_env("OUTPUT_DIR"):
-        output["dir"] = output_dir
-    if log_file := _get_env("LOG_FILE"):
-        output["log_file"] = log_file
-    return output
-
-
-def _load_logging_env() -> dict[str, Any]:
-    """Load logging settings from environment variables."""
-    logging: dict[str, Any] = {}
-    if log_level := _get_env("LOG_LEVEL"):
-        logging["level"] = log_level.lower()
-    return logging
-
-
-def _get_env(key: str, default: str | None = None) -> str | None:
-    """Get environment variable with REGISTRAR_ prefix."""
-    return os.environ.get(f"REGISTRAR_{key}", default)
-
-
-def _load_from_file(config_path: Path) -> dict:
-    """Load configuration from YAML file."""
-    if not config_path.exists():
-        return {}
-
-    with open(config_path, encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    """Deep merge two dictionaries."""
-    result = base.copy()
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
-def _dict_to_config(data: dict) -> Config:
-    """Convert dictionary to Config dataclass."""
-    onedata_data = data.get("onedata", {})
-    tokens_data = data.get("tokens", {})
-    storage_data = data.get("storage", {})
-    output_data = data.get("output", {})
-    logging_data = data.get("logging", {})
-
-    onedata = OnedataConfig(**onedata_data) if onedata_data else OnedataConfig()
-    tokens = TokensConfig(**tokens_data) if tokens_data else TokensConfig()
-    storage = StorageConfig(**storage_data) if storage_data else StorageConfig()
-    output = OutputConfig(**output_data) if output_data else OutputConfig()
-    logging = LoggingConfig(**logging_data) if logging_data else LoggingConfig()
-
-    return Config(
-        onedata=onedata,
-        tokens=tokens,
-        storage=storage,
-        output=output,
-        logging=logging,
+    onezone_domain: str = opt(
+        "demo.onedata.org",
+        description="Onezone domain used for space and public-data-record operations.",
     )
+    oneprovider_domain: str = opt(
+        "provider.demo.onedata.org",
+        description=(
+            "Oneprovider that registers crawled files via a remote, read-only HTTP storage."
+        ),
+    )
+    oneprovider_panel_port: int = opt(
+        443,
+        description="Onepanel HTTPS API port on the selected Oneprovider.",
+    )
+    verify_ssl: bool = opt(
+        False,
+        description="Verify TLS certificates when talking to Onedata services.",
+    )
+    timeout: int = opt(
+        30,
+        description=(
+            "HTTP request timeout in seconds for Onezone, Oneprovider, and Onepanel API calls."
+        ),
+    )
+
+
+class Tokens(ConfigBase):
+    """Authentication tokens for Onedata APIs."""
+
+    admin_token: str = opt(
+        "",
+        description="Onepanel admin token (storage/support operations).",
+        secret=True,
+    )
+    space_owner_token: str = opt(
+        "",
+        description="Onezone/Oneprovider user token (spaces, files, shares, handles).",
+        secret=True,
+    )
+
+
+class Output(ConfigBase):
+    """Output and report destinations for `register`."""
+
+    dir: Path = opt(
+        Path("./data"),
+        description="Directory for run artifacts (logs, config dump, summary).",
+    )
+
+
+class Logging(ConfigBase):
+    """Logging verbosity. `quiet` and `verbose` are convenience overrides of `level`."""
+
+    level: Literal["debug", "info", "warning", "error", "silent"] = opt(
+        "info",
+        description="Explicit logging level.",
+    )
+    quiet: bool = opt(
+        False,
+        description="Show warnings, errors, and the final summary only.",
+    )
+    verbose: bool = opt(
+        False,
+        description="Show debug-level output.",
+    )
+
+
+class CommonConfig(ConfigBase):
+    """Settings shared by every command."""
+
+    onedata: OnedataConnection = opt(default_factory=OnedataConnection)
+    tokens: Tokens = opt(default_factory=Tokens)
+    logging: Logging = opt(default_factory=Logging)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mutex groups for register
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class SpaceSelection(MutuallyExclusiveGroup, required=False):
+    """Pick the destination space — by name (use-or-create) or by ID (use-existing)."""
+
+    name: str = opt(
+        "",
+        description=(
+            "Use or create a space with this exact name. When both `name` and "
+            "`id` are empty, infer the name from the first file URL in the input."
+        ),
+    )
+    id: str = opt(
+        "",
+        description="Use a specific existing space by its ID.",
+    )
+
+
+class StorageSelection(MutuallyExclusiveGroup, required=False):
+    """Pick the storage backing the space — by name or by ID."""
+
+    name: str = opt(
+        "",
+        description=(
+            "Use or create an HTTP readonly storage with this exact name. "
+            "When empty, reuse the sole compatible storage or create one."
+        ),
+    )
+    id: str = opt(
+        "",
+        description="Use a specific existing storage by its ID.",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Storage parameters (create-time defaults + per-run validation policy)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class StorageOptions(ConfigBase):
+    """HTTP storage parameters used at create time and validated against an existing storage.
+
+    `default_size` is consumed by `support_space`; the `emulate_range_read`
+    pair maps to the Onepanel `add_storage` payload and is also checked
+    against the chosen pre-existing storage during planning.
+    """
+
+    default_size: int = opt(
+        1099511627776,  # 1 TiB
+        description=(
+            "Default support size in bytes used when this run adds storage "
+            "support for the resolved space."
+        ),
+    )
+    emulate_range_read: bool = opt(
+        False,
+        description=(
+            "Emulate HTTP Range requests for servers that lack native Range "
+            "support. Significant performance hit — every read downloads the "
+            "whole file."
+        ),
+    )
+    max_emulated_range_read_file_size: int | None = opt(
+        None,
+        description=(
+            "Maximum file size in bytes accessible from servers without Range "
+            "support. Active only when `emulate_range_read` is true. Leave "
+            "unset to defer to the storage's own value (or the Onepanel "
+            "default at create time)."
+        ),
+    )
+
+    @model_validator
+    def _max_size_requires_emulate(self):
+        if self.max_emulated_range_read_file_size is not None and not self.emulate_range_read:
+            raise ValueError(
+                "storage_options.max_emulated_range_read_file_size requires "
+                "storage_options.emulate_range_read=true.",
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public-data-records / sharing
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PublicDataRecords(ConfigBase):
+    """Sharing and public-data-record policy applied to every dataset."""
+
+    enabled: bool = opt(
+        True,
+        description=(
+            "Create a public data record per dataset share (metadata + PID). "
+            "Set false to create only basic Onedata shares."
+        ),
+    )
+    handle_service_id: str = opt(
+        "",
+        description=(
+            "Onedata handle service ID for public data records. Required when `enabled` is true."
+        ),
+    )
+    record_identifier_type: Literal["onedata-url", "pid"] = opt(
+        "onedata-url",
+        description=(
+            "Identifier kind to mint: `onedata-url` reuses the share URL; "
+            "`pid` requests a handle from the configured handle service."
+        ),
+    )
+    identifier_policy: Literal[
+        "always-generate-new",
+        "always-reuse-existing",
+        "generate-new-if-missing",
+    ] = opt(
+        "generate-new-if-missing",
+        description=(
+            "How to treat per-dataset `pid` values from the input: "
+            "`always-generate-new` ignores them; "
+            "`always-reuse-existing` requires every dataset to provide one; "
+            "`generate-new-if-missing` reuses when present, mints otherwise."
+        ),
+    )
+
+    @model_validator
+    def _handle_service_requires_id(self):
+        if self.enabled and not self.handle_service_id:
+            raise ValueError(
+                "enabled=true requires public_data_records.handle_service_id.",
+            )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-command configs
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class RegisterConfig(CommonConfig):
+    """Configuration for `registrar register`."""
+
+    output: Output = opt(default_factory=Output)
+    datasets_file: Annotated[Path, CliPositional] = opt(
+        description="Path to the JSON or JSONL file with the datasets to register.",
+    )
+    space: SpaceSelection = opt(default_factory=SpaceSelection)
+    storage: StorageSelection = opt(default_factory=StorageSelection)
+    storage_options: StorageOptions = opt(default_factory=StorageOptions)
+    dataset_root: str = opt(
+        "",
+        description=(
+            "Relative path inside the space where dataset directories will be created. "
+            "Empty means each dataset's `target_dir` is the top-level directory."
+        ),
+    )
+    public_data_records: PublicDataRecords = opt(default_factory=PublicDataRecords)
+
+
+class ListSpacesConfig(CommonConfig):
+    """Configuration for `registrar list-spaces`."""
+
+
+class ListStoragesConfig(CommonConfig):
+    """Configuration for `registrar list-storages`."""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def effective_log_level(logging: Logging) -> str:
+    """Resolve `quiet` / `verbose` convenience flags into a concrete level.
+
+    `verbose` wins over `quiet` (matches the legacy CLI). When neither is
+    set, the explicit `level` field is returned unchanged.
+    """
+    if logging.verbose:
+        return "debug"
+    if logging.quiet:
+        return "warning"
+    return logging.level

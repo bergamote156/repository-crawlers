@@ -5,6 +5,8 @@ description = "CLI for discovering public scientific datasets."
 requires-python = ">=3.12"
 dependencies = [
     "aiohttp>=3.8",
+    "confline",
+    "onedata-dataset",
     "PyYAML>=6.0",
     "rich>=13.0",
 ]

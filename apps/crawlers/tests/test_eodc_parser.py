@@ -35,12 +35,13 @@ def test_parse_eodc_item_returns_parsed_record():
     parsed = parse_eodc_item(item, collection_meta)
 
     assert parsed is not None
-    assert parsed.identifier == "item-123"
-    assert parsed.title == "Sample EODC item"
-    assert parsed.metadata.publisher == "EODC Host"
-    assert parsed.metadata.publication_year == 2024
-    assert any("example" == subject for subject in parsed.metadata.subjects)
+    assert parsed.name == "Sample EODC item"
     assert parsed.files[0].url == "https://example.com/data.tiff"
+    assert parsed.metadata_xml is not None
+    assert "item-123" in parsed.metadata_xml
+    assert "EODC Host" in parsed.metadata_xml
+    assert "publicationYear>2024<" in parsed.metadata_xml
+    assert "example" in parsed.metadata_xml
 
 
 def test_parse_eodc_item_skips_items_without_id():
@@ -69,8 +70,9 @@ def test_parse_eodc_collection_parses_bbox_and_dates():
     parsed = parse_eodc_collection(collection)
 
     assert parsed is not None
-    assert parsed.identifier == "collection-123"
-    assert parsed.title == "Collection title"
-    assert parsed.metadata.publication_year == 2024
+    assert parsed.name == "Collection title"
     assert parsed.files[0].url == "https://example.com/collection.json"
-    assert parsed.metadata.geo_locations[0].points[0] == (10.0, 20.0)
+    assert parsed.metadata_xml is not None
+    assert "publicationYear>2024<" in parsed.metadata_xml
+    assert "10.0" in parsed.metadata_xml
+    assert "20.0" in parsed.metadata_xml

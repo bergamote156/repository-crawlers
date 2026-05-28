@@ -1,16 +1,11 @@
 """
-Dataset Registrar entry point.
-
-Usage:
-    python -m registrar <command> [options]
-
-Example:
-    python -m registrar register datasets.json
-    python -m registrar list-spaces
-    python -m registrar show-config
+`python -m registrar` entry point.
 """
+
+__author__ = "Bartosz Walkowicz"
+__copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
+__license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
 from registrar.cli import main
 
-if __name__ == "__main__":
-    main()
+raise SystemExit(main())

@@ -13,23 +13,26 @@ __license__ = "This software is released under the MIT license cited in LICENSE.
 
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Annotated, Any
 
 from rich.table import Table
 
 from crawlers.core import (
+    CliPositional,
     CrawlConfig,
     CrawlerPlugin,
     Err,
     HttpClient,
     HttpConfig,
     JsonObject,
+    Ok,
     Result,
     RunContext,
     command,
+    model_validator,
     opt,
 )
-from crawlers.model.dataset import OnedataDataset, OnedataFile
+from crawlers.core.dataset import OnedataDataset
 from crawlers.plugins.vip.api import VipClient
 from crawlers.plugins.vip.parser import parse_vip_record
 from crawlers.ui import console
@@ -51,21 +54,17 @@ class VipApiConfig(HttpConfig):
 class VipCrawlConfig(VipApiConfig, CrawlConfig, kw_only=True):
     """Configuration for VIP Girder collection crawling."""
 
-    collection: str = opt(
-        ...,
-        # Explicit CLI is needed for positional args to be detected correctly
-        # (otherwise '--' will be prepended)
-        cli="collection",
+    collection: Annotated[str, CliPositional] = opt(
         description="Name of the VIP collection to crawl",
     )
 
     page_size: int = opt(100, description="Items per API page")
 
-    def __post_init__(self):
+    @model_validator
+    def _normalize_collection(self) -> None:
         if not self.collection or self.collection.isspace():
             raise ValueError("Collection name cannot be empty")
-
-        self.collection = self.collection.strip()
+        object.__setattr__(self, "collection", self.collection.strip())
 
 
 class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
@@ -81,7 +80,6 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
     config_class = VipCrawlConfig
 
     _api_client: VipClient
-    _validation_http: HttpClient | None
 
     # --- Banner / context plumbing ---
 
@@ -94,7 +92,6 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
         """Open the shared HttpClient and build the API façade."""
         http = await self._open_http(ctx.config, stack)
         self._api_client = VipClient(http)
-        self._validation_http = None if ctx.config.no_url_validation else http
 
     # --- Iteration & parse ---
 
@@ -108,21 +105,14 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
             yield folder
 
     async def process(self, folder: JsonObject, /) -> Result[OnedataDataset, Any] | None:
-        """Resolve a folder's files and build an `OnedataDataset`."""
+        """Resolve a folder's files and map them to an `OnedataDataset`."""
         files = await self._api_client.resolve_dataset_files(folder)
 
-        parsed = parse_vip_record(folder, files)
-        if parsed is None:
+        dataset = parse_vip_record(folder, files)
+        if dataset is None:
             return None
 
-        return await OnedataDataset.build(
-            pid=parsed.identifier,
-            name=parsed.title,
-            location=parsed.title.replace("/", "-"),
-            metadata=parsed.metadata,
-            files=[OnedataFile(path=f.path, url=f.url) for f in parsed.files],
-            http=self._validation_http,
-        )
+        return Ok(dataset)
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Auxiliary commands
