@@ -1,6 +1,6 @@
-SRC_FILES  := $(shell find apps packages -maxdepth 3 -type d \( -name src -o -name tests \) | grep -v '\.venv' | sort)
-SRC_TYPED  := $(shell find apps packages -maxdepth 3 -type d -name src | grep -v '\.venv' | sort)
-TEST_PATHS := $(shell find apps packages -maxdepth 3 -type d -name tests | grep -v '\.venv' | sort)
+SRC_FILES  := $(shell find apps packages -type d \( -name src -o -name tests \) | grep -v '\.venv' | sort)
+SRC_TYPED  := $(shell find apps packages -type d -name src | grep -v '\.venv' | sort)
+TEST_PATHS := $(shell find apps packages -type d -name tests | grep -v '\.venv' | sort)
 UV_RUN := uv run --group dev
 
 .PHONY: sync format format-check static-analysis type-check lint test
