@@ -1,15 +1,10 @@
 ---
-title: "Building a Multi-Command App"
-description: >
-  Build a CLI tool with multiple subcommands using CommandApp and
-  @command — per-command configs, naming conventions, aliases, async
-  dispatch, source chain customization, and meta-flag hooks.
-audience: app-author
+audience: integrator
 source_modules:
   - packages/confline/examples/demo_app.py
   - packages/confline/src/confline/commands.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Building a Multi-Command App

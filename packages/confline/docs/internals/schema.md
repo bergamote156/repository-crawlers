@@ -1,17 +1,12 @@
 ---
-title: Schema Authoring
-description: >
-  How to declare config fields — ConfigBase, opt(), field types, MRO-based
-  groups, MutuallyExclusiveGroup, nested configs, and validators. Everything
-  that happens at class-creation time.
-audience: app-author
+audience: maintainer
 source_modules:
   - packages/confline/src/confline/config/base.py
   - packages/confline/src/confline/config/schema.py
   - packages/confline/src/confline/config/types.py
   - packages/confline/src/confline/config/validators.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Schema Authoring
@@ -22,7 +17,7 @@ framework handles the rest — no `@dataclass` decorator needed, no
 runtime build cost after import.
 
 ## ConfigBase and opt()
-<sub>source: `config/base.py:200–304`, `config/schema.py:108–164`</sub>
+<sub>source: `packages/confline/src/confline/config/base.py#ConfigBase` · `packages/confline/src/confline/config/schema.py#opt`</sub>
 
 `ConfigBase` and `opt()` form a single gesture — every schema uses both:
 
@@ -61,7 +56,7 @@ Mutable defaults (`list`, `dict`, `set`) are auto-wrapped in a
 empty list default.
 
 ## Field Types
-<sub>source: `config/base.py:128–168`, `resolution/coerce.py:200–226`</sub>
+<sub>source: `packages/confline/src/confline/config/base.py#_build_field_info` · `packages/confline/src/confline/resolution/coerce.py#coerce`</sub>
 
 The type annotation drives coercion from raw strings and the `--help`
 type description. Built-in types:
@@ -95,7 +90,7 @@ api_token: Annotated[str, EnvAlias("MYAPP_API_TOKEN")] = opt(
 ```
 
 ### Custom type coercion
-<sub>source: `resolution/coerce.py:42–73`, `resolution/coerce.py:157–193`</sub>
+<sub>source: `packages/confline/src/confline/resolution/coerce.py#TypeSpec` · `packages/confline/src/confline/resolution/coerce.py#register_type`</sub>
 
 For types the app owns, add a `__confline_convert__` classmethod — it
 receives a raw string and returns the parsed value, no registration
@@ -104,7 +99,7 @@ parser (must accept already-typed values as passthrough), a `description`
 for error messages, and an `example` for `Try one of` hints.
 
 ## MRO-Based Groups
-<sub>source: `config/base.py:45–93`</sub>
+<sub>source: `packages/confline/src/confline/config/base.py#_build_schema`</sub>
 
 Inherited fields automatically group under the class that declared them
 in `--help` — each class in the inheritance chain that contributes
@@ -131,7 +126,7 @@ When a subclass overrides a field, the most-derived version takes precedence and
 skipped.
 
 ## Mutually Exclusive Groups
-<sub>source: `config/base.py:307–322`, `resolution/mutex.py:32–44`</sub>
+<sub>source: `packages/confline/src/confline/config/base.py#MutuallyExclusiveGroup` · `packages/confline/src/confline/resolution/mutex.py#enforce_mutex_groups`</sub>
 
 Argparse's built-in mutex only sees CLI flags. A YAML file setting both
 `port` and `unix_socket` slips through unnoticed. `MutuallyExclusiveGroup`
@@ -160,7 +155,7 @@ argparse misses: `MYAPP_BIND__UNIX_SOCKET=/tmp/x myapp serve --bind.port 9090`
 raises `MutexViolationError` naming each conflicting source.
 
 ## Nested Configs
-<sub>source: `config/base.py:147–148`</sub>
+<sub>source: `packages/confline/src/confline/config/base.py#is_config_class`</sub>
 
 When a field's type is a `ConfigBase` subclass, the resolver handles it
 recursively. Nested fields surface differently per source:
@@ -182,7 +177,7 @@ in each subcommand's `--help`.
 > objects — they report `supports_field = False` and skip the field.
 
 ## Validators
-<sub>source: `config/validators.py:31–57`</sub>
+<sub>source: `packages/confline/src/confline/config/validators.py#field_validator` · `packages/confline/src/confline/config/validators.py#model_validator`</sub>
 
 Three validation layers, each scoped to a different resolution moment:
 

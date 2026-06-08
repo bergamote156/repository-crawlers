@@ -1,16 +1,11 @@
 ---
-title: "Getting Started with confline"
-description: >
-  Build a single-config CLI app from scratch — declare fields with
-  ConfigBase and opt(), assemble a source chain, and load config with
-  operator-friendly error handling.
-audience: app-author
+audience: integrator
 source_modules:
   - packages/confline/examples/single_config_app.py
   - packages/confline/examples/demo_app.py
   - packages/confline/src/confline/__init__.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Getting Started with confline
@@ -41,7 +36,7 @@ for argument parsing, type coercion, and error messages.
 ## Define Your Config
 
 A confline config is a plain Python class that subclasses
-[`ConfigBase`](../design/schema.md#configbase-and-opt). You declare
+[`ConfigBase`](../internals/schema.md#configbase-and-opt). You declare
 fields with type annotations and use `opt()` to attach metadata --
 default value, description, whether the field is secret, and so on. No
 `@dataclass` decorator needed; `ConfigBase` applies it automatically
@@ -63,7 +58,7 @@ without a default are required -- resolution fails if no source
 provides them. The `description` feeds into `--help` automatically.
 
 > [!TIP]
-> **Source:** `packages/confline/examples/single_config_app.py:55-61`
+> **Source:** `packages/confline/examples/single_config_app.py#AppConfig`
 
 
 ## Assemble Sources
@@ -93,7 +88,7 @@ precedence: env vars set by an orchestrator override everything else,
 CLI flags serve as ad-hoc overrides during debugging, and `opt()`
 defaults are the floor. If you want CLI flags to win instead, put
 `CliSource` first -- or use `load_default()`, which does exactly that.
-See [Sources and Resolution](../design/sources-and-resolution.md#the-source-chain)
+See [Sources and Resolution](../internals/sources-and-resolution.md#the-source-chain)
 for the full picture on chain ordering.
 
 `EnvSource` maps field names to env vars by uppercasing and prepending
@@ -101,7 +96,7 @@ the prefix: `port` becomes `MYAPP_PORT`, `workers` becomes
 `MYAPP_WORKERS`.
 
 > [!TIP]
-> **Source:** `packages/confline/examples/single_config_app.py:64-71`
+> **Source:** `packages/confline/examples/single_config_app.py#main`
 
 
 ## Load and Use
@@ -129,7 +124,7 @@ needed for the common case.
 which source provided each value.
 
 > [!TIP]
-> **Source:** `packages/confline/src/confline/resolution/api.py:68-92`
+> **Source:** `packages/confline/src/confline/resolution/api.py#load_or_exit`
 
 
 ## See It Work
@@ -196,7 +191,7 @@ diagnostics without reading Python tracebacks.
   mutex groups, async dispatch, and custom source chains.
 - **Add field types** -- `Literal`, `Path`, `list[str]`, and nested
   `ConfigBase` subclasses all work as field types with
-  [automatic coercion](../design/schema.md#field-types).
+  [automatic coercion](../internals/schema.md#field-types).
 - **Add validation** --
-  [`@field_validator` and `@model_validator`](../design/schema.md#validators)
+  [`@field_validator` and `@model_validator`](../internals/schema.md#validators)
   decorators run custom checks after coercion.

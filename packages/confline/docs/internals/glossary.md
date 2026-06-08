@@ -1,17 +1,9 @@
 ---
-title: Glossary
-description: >
-  Key terms used across the confline documentation — grouped by concept
-  area with definitions and links to detail docs.
-topic: confline/design/glossary
-audience: app-author
-type: design-glossary
-generated: 2026-05-09
-last_reviewed: 2026-05-10
+audience: maintainer
 source_modules:
   - packages/confline/src/confline/__init__.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Glossary
@@ -57,7 +49,7 @@ mindmap
 |------|------------|
 | **`Source`** | ABC for value providers — the contract for built-in and custom backends. [→ Source Protocol](sources-and-resolution.md#source-protocol) |
 | **source chain** | Ordered list of `Source` objects. Position determines precedence — first source to return a value for a field wins. [→ The Source Chain](sources-and-resolution.md#the-source-chain) |
-| **`NO_VALUE`** | Singleton sentinel meaning "I have nothing for this field." Distinct from `None` (a legitimate value) and `MISSING` (no declared default). [→ The NO_VALUE Sentinel](sources-and-resolution.md#the-no_value-sentinel) |
+| **`NO_VALUE`** | Singleton sentinel meaning "I have nothing for this field." Distinct from `None` (a legitimate value) and `MISSING` (no declared default). [→ The No-Value Sentinel](sources-and-resolution.md#the-no-value-sentinel) |
 | **`CliSource`** | Wraps an `argparse.Namespace`. `from_argv` convenience constructor auto-derives and parses a CLI. [→ CliSource](sources-and-resolution.md#clisource) |
 | **`EnvSource`** | Reads from a string-keyed mapping (typically `os.environ`). Key derivation: `prefix + uppercased path` with `__` nesting. [→ EnvSource](sources-and-resolution.md#envsource) |
 | **`YamlSource`** | Resolves from parsed YAML dicts. Supports multi-scope layering and `list[ConfigBase]` shapes. [→ YamlSource](sources-and-resolution.md#yamlsource) |

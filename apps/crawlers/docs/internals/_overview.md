@@ -1,25 +1,16 @@
 ---
-title: Crawlers Architecture Overview
-description: >
-  High-level architecture of the crawlers framework — a system for
-  harvesting scientific dataset metadata from external APIs and
-  producing Onedata-compatible registration records. Covers the
-  two-layer design, data flow, and key design decisions.
-audience: internal-developer-onboarding
+audience: maintainer
 source_modules:
-  - apps/crawlers/src/crawlers/core/config.py
-  - apps/crawlers/src/crawlers/core/dataset.py
-  - apps/crawlers/src/crawlers/core/http.py
-  - apps/crawlers/src/crawlers/core/jsonl.py
   - apps/crawlers/src/crawlers/core/plugin.py
-  - apps/crawlers/src/crawlers/core/result.py
   - apps/crawlers/src/crawlers/core/runner.py
-  - apps/crawlers/src/crawlers/core/workspace.py
+  - apps/crawlers/src/crawlers/core/result.py
+  - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/dataset.py
   - apps/crawlers/src/crawlers/metadata/datacite.py
   - apps/crawlers/src/crawlers/metadata/openaire.py
-  - packages/onedata-dataset/src/onedata_dataset/
+  - packages/onedata-dataset/src/onedata_dataset/dataset.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Crawlers Architecture Overview
@@ -36,20 +27,20 @@ serialization.
 ```mermaid
 graph TB
     subgraph Plugins["🔌 Plugins · crawlers/plugins/"]
-        P["Source-specific logic\nAPI client, parser, config, plugin class"]
+        P["Source-specific logic<br/>API client, parser, config, plugin class"]
     end
 
     subgraph Core["🏗️ Core · crawlers/core/"]
-        C["Framework primitives\nCrawlerPlugin, HttpClient, Result,\nrunner, workspace"]
+        C["Framework primitives<br/>CrawlerPlugin, HttpClient, Result,<br/>runner, workspace"]
     end
 
     subgraph Packages["📦 Packages"]
-        CF["⚙️ confline\nconfig framework"]
-        DS["📦 onedata-dataset\nOnedataDataset, OnedataFile"]
+        CF["⚙️ confline<br/>config framework"]
+        DS["📦 onedata-dataset<br/>OnedataDataset, OnedataFile"]
     end
 
     subgraph Meta["🏷️ Metadata · crawlers/metadata/"]
-        M["XML record types\nDataCiteRecord, OpenAIRERecord"]
+        M["XML record types<br/>DataCiteRecord, OpenAIRERecord"]
     end
 
     Plugins -->|extends| Core
@@ -109,7 +100,7 @@ graph LR
     Q["📬 asyncio.Queue"]
 
     subgraph Workers["⚙️ N Workers · concurrent"]
-        PROC["🔄 process·item·\nfetch → parse → build"]
+        PROC["🔄 process·item·<br/>fetch → parse → build"]
     end
 
     subgraph RunDir["📁 run directory"]
