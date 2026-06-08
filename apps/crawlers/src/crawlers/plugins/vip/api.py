@@ -125,7 +125,7 @@ class VipClient:
 
     # --- Dataset resolution ---
 
-    async def resolve_dataset_files(self, folder: JsonObject) -> list[VipFile]:
+    async def resolve_dataset_files(self, folder: JsonObject) -> tuple[list[VipFile], dict[str, JsonObject]]:
         """
         Recursively collect all downloadable files under a Girder folder.
 
@@ -136,9 +136,9 @@ class VipClient:
         folder_name = folder.get("name", folder_id)
 
         console.debug(f"Resolving files for dataset: {folder_name}")
-        files = await self._collect_files(folder_id, path_prefix="")
+        files, folders_meta = await self._collect_files(folder_id, path_prefix="")
         console.info(f"Resolved {folder_name}: {len(files)} file(s)")
-        return files
+        return files, folders_meta
 
     # --- Internal helpers ---
 
@@ -215,10 +215,11 @@ class VipClient:
                 assert_never(other)
 
     async def _collect_files(
-        self, folder_id: str, path_prefix: str, page_size: int = 100
+        self, folder_id: str, path_prefix: str, page_size: int = 100, folders_meta: dict[str, JsonObject] | None = None
     ) -> list[VipFile]:
         """Recursively collect all downloadable files under a folder."""
         files: list[VipFile] = []
+        folders_meta = folders_meta or {}
         n_folders, n_items = await self._get_folder_details(folder_id)
 
         if n_items > 0:
@@ -234,6 +235,8 @@ class VipClient:
                     base = (self._http.base_url or "").rstrip("/")
                     item_url = f"{base}/item/{item_id}/download"
                     files.append(VipFile(path=file_path, url=item_url))
+                    file_details = await self._http.get_json_object(f"/item/{item_id}")
+                    folders_meta[file_path] = file_details.value
                 offset += len(items)
                 if offset >= n_items:
                     break
@@ -247,13 +250,16 @@ class VipClient:
                 for subfolder in subfolders:
                     sub_id = str(subfolder.get("_id", "") or "")
                     sub_name = str(subfolder.get("name", sub_id) or sub_id)
+                    folders_meta[f"{path_prefix}/{sub_name}"] = subfolder
                     sub_prefix = f"{path_prefix}/{sub_name}" if path_prefix else sub_name
-                    files.extend(await self._collect_files(sub_id, sub_prefix, page_size))
+                    files_layer, folders_meta_layer = await self._collect_files(sub_id, sub_prefix, page_size, folders_meta)
+                    files.extend(files_layer)
+                    folders_meta.update(folders_meta_layer)
                 offset += len(subfolders)
                 if offset >= n_folders:
                     break
 
-        return files
+        return files, folders_meta
 
 
 def _as_girder_object_list(value: object) -> list[JsonObject]:

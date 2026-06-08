@@ -106,9 +106,9 @@ class VipPlugin(CrawlerPlugin[JsonObject, VipCrawlConfig]):
 
     async def process(self, folder: JsonObject, /) -> Result[OnedataDataset, Any] | None:
         """Resolve a folder's files and map them to an `OnedataDataset`."""
-        files = await self._api_client.resolve_dataset_files(folder)
+        files, folders_meta = await self._api_client.resolve_dataset_files(folder)
 
-        dataset = parse_vip_record(folder, files)
+        dataset = parse_vip_record(folder, files, folders_meta)
         if dataset is None:
             return None
 
