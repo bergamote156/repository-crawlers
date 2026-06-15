@@ -370,7 +370,8 @@ def _emit_flag(
         )
     kwargs["dest"] = dest
     kwargs["default"] = argparse.SUPPRESS
-    return target.add_argument(*flag_names, **kwargs)
+    action: argparse.Action = target.add_argument(*flag_names, **kwargs)
+    return action
 
 
 def _emit_positional(
@@ -386,7 +387,8 @@ def _emit_positional(
     kwargs["default"] = argparse.SUPPRESS
     if field.has_default:
         kwargs.setdefault("nargs", "?")
-    return target.add_argument(name, **kwargs)
+    action: argparse.Action = target.add_argument(name, **kwargs)
+    return action
 
 
 def _stamp_field_metadata(
@@ -556,9 +558,9 @@ def _scalar_type_callable(target: type) -> Callable[[str], Any] | None:
     # Last-resort hook: classes opt in to custom parsing by defining
     # `__confline_convert__` as a classmethod or staticmethod.
     if isinstance(target, type):
-        convert = getattr(target, "__confline_convert__", None)
+        convert: Callable[[str], Any] | None = getattr(target, "__confline_convert__", None)
         if convert is not None:
-            return convert  # type: ignore[return-value]
+            return convert
 
     return None
 
@@ -576,7 +578,7 @@ def _literal_type_callable(target: type) -> Callable[[str], Any]:
     if len(inner_types) == 1:
         inner = inner_types.pop()
         if inner in (int, float):
-            return inner  # type: ignore[return-value]
+            return inner
     return str
 
 

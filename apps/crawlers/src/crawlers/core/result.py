@@ -81,7 +81,8 @@ def failure_to_json(failure: Any) -> dict:
     if isinstance(failure, dict):
         return failure
     if hasattr(failure, "to_json"):
-        return failure.to_json()
+        as_json: dict = failure.to_json()
+        return as_json
     if is_dataclass(failure) and not isinstance(failure, type):
         return asdict(failure)
 

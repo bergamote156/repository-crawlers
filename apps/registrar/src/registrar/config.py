@@ -184,7 +184,7 @@ class StorageOptions(ConfigBase):
     )
 
     @model_validator
-    def _max_size_requires_emulate(self):
+    def _max_size_requires_emulate(self) -> None:
         if self.max_emulated_range_read_file_size is not None and not self.emulate_range_read:
             raise ValueError(
                 "storage_options.max_emulated_range_read_file_size requires "
@@ -235,7 +235,7 @@ class PublicDataRecords(ConfigBase):
     )
 
     @model_validator
-    def _handle_service_requires_id(self):
+    def _handle_service_requires_id(self) -> None:
         if self.enabled and not self.handle_service_id:
             raise ValueError(
                 "enabled=true requires public_data_records.handle_service_id.",

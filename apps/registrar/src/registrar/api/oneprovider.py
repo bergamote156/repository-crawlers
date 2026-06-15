@@ -80,7 +80,8 @@ class OneproviderClient:
             timeout=self.timeout,
         )
         if response.ok and "fileId" in response.text:
-            return response.json().get("fileId")
+            file_id: str | None = response.json().get("fileId")
+            return file_id
 
         return None
 
@@ -94,7 +95,8 @@ class OneproviderClient:
             timeout=self.timeout,
         )
         if response.ok:
-            return response.json()
+            attrs: dict | None = response.json()
+            return attrs
 
         return None
 
@@ -134,7 +136,7 @@ class OneproviderClient:
         )
         handle_error(response, service=SERVICE_NAME)
 
-        file_id = response.json().get("fileId")
+        file_id: str = response.json().get("fileId")
         logger.debug("Registered file: %s -> %s", dest_path, file_id)
         return file_id
 
@@ -154,7 +156,7 @@ class OneproviderClient:
         )
         handle_error(response, service=SERVICE_NAME)
 
-        share_id = response.json().get("shareId")
+        share_id: str = response.json().get("shareId")
         logger.info("Created share '%s' with ID: %s", name, share_id)
         return share_id
 
@@ -168,5 +170,6 @@ class OneproviderClient:
             timeout=self.timeout,
         )
         if response.ok:
-            return response.json()
+            details: dict | None = response.json()
+            return details
         return None

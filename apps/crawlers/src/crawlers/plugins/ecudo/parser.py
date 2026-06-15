@@ -192,7 +192,8 @@ def _parse_publisher(publisher_data: Any, identifier: str) -> str:
         return "Unknown Publisher"
 
     if isinstance(publisher_data, dict):
-        return publisher_data.get("name", "Unknown Publisher")
+        name: str = publisher_data.get("name", "Unknown Publisher")
+        return name
 
     if isinstance(publisher_data, str):
         return publisher_data

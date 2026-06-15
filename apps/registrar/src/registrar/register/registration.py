@@ -206,7 +206,8 @@ def _find_or_create_share(
     for share_id in file_attrs.get("shares") or ():
         details = oneprovider.get_share_details(share_id) or {}
         if details.get("name") == name and details.get("description") == description:
-            return share_id
+            matched_share_id: str = share_id
+            return matched_share_id
 
     return oneprovider.create_share(file_id=file_id, name=name, description=description)
 
@@ -231,7 +232,7 @@ def _ensure_public_record(
         )
 
     details = oneprovider.get_share_details(share_id) or {}
-    existing = details.get("handleId")
+    existing: str | None = details.get("handleId")
     if existing:
         return existing
 

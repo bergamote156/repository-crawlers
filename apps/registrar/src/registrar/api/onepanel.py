@@ -108,7 +108,8 @@ class OnepanelClient:
             timeout=self.timeout,
         )
         handle_error(response, service=SERVICE_NAME)
-        return response.json().get("ids", [])
+        ids: list[str] = response.json().get("ids", [])
+        return ids
 
     def get_storage_details(self, storage_id: str) -> StorageDetails:
         """Return the full configuration object for `storage_id`."""
@@ -120,7 +121,8 @@ class OnepanelClient:
             timeout=self.timeout,
         )
         handle_error(response, service=SERVICE_NAME)
-        return response.json()
+        details: StorageDetails = response.json()
+        return details
 
     def add_storage(
         self,
@@ -179,7 +181,8 @@ class OnepanelClient:
             timeout=self.timeout,
         )
         handle_error(response, service=SERVICE_NAME)
-        return response.json().get("ids", [])
+        ids: list[str] = response.json().get("ids", [])
+        return ids
 
     def get_space_details(self, space_id: str) -> SpaceDetails:
         """Return the full support details for `space_id`."""
@@ -191,7 +194,8 @@ class OnepanelClient:
             timeout=self.timeout,
         )
         handle_error(response, service=SERVICE_NAME)
-        return response.json()
+        details: SpaceDetails = response.json()
+        return details
 
     def support_space(
         self,
@@ -216,6 +220,6 @@ class OnepanelClient:
         )
         handle_error(response, service=SERVICE_NAME)
 
-        space_id = response.json().get("id")
+        space_id: str = response.json().get("id")
         logger.info("Supported space %s with storage %s", space_id, storage_id)
         return space_id
