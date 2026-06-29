@@ -125,7 +125,10 @@ class VipClient:
 
     # --- Dataset resolution ---
 
-    async def resolve_dataset_files(self, folder: JsonObject) -> tuple[list[VipFile], dict[str, JsonObject]]:
+    async def resolve_dataset_files(
+        self,
+        folder: JsonObject,
+    ) -> tuple[list[VipFile], dict[str, JsonObject]]:
         """
         Recursively collect all downloadable files under a Girder folder.
 
@@ -215,8 +218,12 @@ class VipClient:
                 assert_never(other)
 
     async def _collect_files(
-        self, folder_id: str, path_prefix: str, page_size: int = 100, folders_meta: dict[str, JsonObject] | None = None
-    ) -> list[VipFile]:
+        self,
+        folder_id: str,
+        path_prefix: str,
+        page_size: int = 100,
+        folders_meta: dict[str, JsonObject] | None = None,
+    ) -> tuple[list[VipFile], dict[str, JsonObject]]:
         """Recursively collect all downloadable files under a folder."""
         files: list[VipFile] = []
         folders_meta = folders_meta or {}
@@ -235,8 +242,11 @@ class VipClient:
                     base = (self._http.base_url or "").rstrip("/")
                     item_url = f"{base}/item/{item_id}/download"
                     files.append(VipFile(path=file_path, url=item_url))
-                    file_details = await self._http.get_json_object(f"/item/{item_id}")
-                    folders_meta[file_path] = file_details.value
+                    match await self._http.get_json_object(f"/item/{item_id}"):
+                        case Ok(value=data):
+                            folders_meta[file_path] = data
+                        case Err(value=err):
+                            console.warning(f"Failed to get collection details: {err}")
                 offset += len(items)
                 if offset >= n_items:
                     break
@@ -252,7 +262,9 @@ class VipClient:
                     sub_name = str(subfolder.get("name", sub_id) or sub_id)
                     folders_meta[f"{path_prefix}/{sub_name}"] = subfolder
                     sub_prefix = f"{path_prefix}/{sub_name}" if path_prefix else sub_name
-                    files_layer, folders_meta_layer = await self._collect_files(sub_id, sub_prefix, page_size, folders_meta)
+                    files_layer, folders_meta_layer = await self._collect_files(
+                        sub_id, sub_prefix, page_size, folders_meta
+                    )
                     files.extend(files_layer)
                     folders_meta.update(folders_meta_layer)
                 offset += len(subfolders)

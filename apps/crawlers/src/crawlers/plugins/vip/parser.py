@@ -51,7 +51,11 @@ _SUBJECT_META_KEYS = (
 )
 
 
-def parse_vip_record(folder: JsonObject, files: Sequence[VipFile], folders_meta: dict[str, JsonObject]) -> OnedataDataset | None:
+def parse_vip_record(
+    folder: JsonObject,
+    files: Sequence[VipFile],
+    folders_meta: dict[str, JsonObject],
+) -> OnedataDataset | None:
     """
     Map a Girder folder dict (with pre-collected files) into an `OnedataDataset`.
 
@@ -71,54 +75,57 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile], folders_meta:
     meta: dict = folder.get("meta", {})
 
     # Prefer TITLE from meta when available (e.g. "Parameter List, ...")
-    gender = meta.get("SUBJECT_gender") or 'unknown'
-    weight = meta.get("SUBJECT_study_weight") or 'unknown'
-    dateofbirth = meta.get("SUBJECT_study_dbirth") or 'unknown'
-    manufacturer = meta.get("ORIGIN") or 'unknown'
+    gender = meta.get("SUBJECT_gender") or "unknown"
+    weight = meta.get("SUBJECT_study_weight") or "unknown"
+    dateofbirth = meta.get("SUBJECT_study_dbirth") or "unknown"
+    manufacturer = meta.get("ORIGIN") or "unknown"
 
-    description = f'\ngender:{gender}\nweight:{weight}\ndateofbirth:{dateofbirth}\nmanufacturer:{manufacturer}\n'
-    days = [key for key in folders_meta.keys() if key.startswith("/day")]
+    description = (
+        f"\ngender:{gender}\n"
+        f"weight:{weight}\n"
+        f"dateofbirth:{dateofbirth}\n"
+        f"manufacturer:{manufacturer}\n"
+    )
+    days = [key for key in folders_meta if key.startswith("/day")]
 
-    species = 'unknown'
-    organ = 'unknown'
+    species = "unknown"
+    organ = "unknown"
 
     for day in days:
         day_meta = folders_meta[day].get("meta", {})
         if day_meta.get("species") is not None:
-            species = f'{day_meta.get("species")}'
+            species = f"{day_meta.get('species')}"
         if day_meta.get("organe") is not None:
-            organ = f'{day_meta.get("organe")}'
+            organ = f"{day_meta.get('organe')}"
 
-    description += f'species:{species}\norgan:{organ}\n'
+    description += f"species:{species}\norgan:{organ}\n"
 
-    working_carrier_frequency = 'unknown'
-    nucleus = 'unknown'
+    working_carrier_frequency = "unknown"
+    nucleus = "unknown"
 
-    method = [
-        key
-        for key in folders_meta.keys()
-        if re.search(r'STEAM[^/]*/headers/method$', key)
-    ]
+    method = [key for key in folders_meta if re.search(r"STEAM[^/]*/headers/method$", key)]
 
     for key in method:
         day_meta = folders_meta[key].get("meta", {})
-        if day_meta.get("PVM_FrqRef") is not None and working_carrier_frequency == 'unknown':
-            working_carrier_frequency = f'{day_meta.get("PVM_FrqRef").split(" ")[0]}MHz'
-        if day_meta.get("PVM_NucleiPpmWork") is not None and nucleus == 'unknown':
-            nucleus = f'{day_meta.get("PVM_NucleiPpmWork").split()[0].split("<")[1].split(">")[0]}'
+        if day_meta.get("PVM_FrqRef") is not None and working_carrier_frequency == "unknown":
+            working_carrier_frequency = f"{day_meta.get('PVM_FrqRef').split(' ')[0]}MHz"
+        if day_meta.get("PVM_NucleiPpmWork") is not None and nucleus == "unknown":
+            nucleus = f"{day_meta.get('PVM_NucleiPpmWork').split()[0].split('<')[1].split('>')[0]}"
 
     steam_press_last = [
-        key
-        for key in folders_meta.keys()
-        if re.search(r'(STEAM[^/]*|PRESS[^/]*)/headers/method$', key)
+        key for key in folders_meta if re.search(r"(STEAM[^/]*|PRESS[^/]*)/headers/method$", key)
     ]
-    acquisition_sequence = 'unknown'
+    acquisition_sequence = "unknown"
     for key in steam_press_last:
         day_meta = folders_meta[key].get("meta", {})
         if day_meta.get("Method") is not None:
-            acquisition_sequence = f'{day_meta.get("Method")}'
+            acquisition_sequence = f"{day_meta.get('Method')}"
 
-    description += f'acquisition_sequence:{acquisition_sequence}\nworking_carrier_frequency:{working_carrier_frequency}\nnucleus:{nucleus}\n'
+    description += (
+        f"acquisition_sequence:{acquisition_sequence}\n"
+        f"working_carrier_frequency:{working_carrier_frequency}\n"
+        f"nucleus:{nucleus}\n"
+    )
 
     # Use the most recent timestamp available
     datetime_val = folder.get("updated") or folder.get("created") or None

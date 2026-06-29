@@ -111,14 +111,17 @@ def _stac_root_collections(root: JsonObject) -> list[JsonObject]:
     return [c for c in raw if isinstance(c, dict)]
 
 
-def _find_next_link(links: object) -> tuple[str | None, JsonObject | None]:
+def _find_next_link(links: object) -> tuple[str | None, JsonObject]:
     if not isinstance(links, list):
-        return None, None
+        return None, {}
     for link in links:
         if not isinstance(link, dict):
             continue
         if link.get("rel") == "next":
             href = link.get("href")
-            body = link.get("body") if "body" in link else None
-            return str(href), body if href is not None else None, body
-    return None, None
+            body = link.get("body")
+            return (
+                str(href) if href is not None else None,
+                body if isinstance(body, dict) else {},
+            )
+    return None, {}
