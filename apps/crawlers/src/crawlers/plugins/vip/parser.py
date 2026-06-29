@@ -37,19 +37,6 @@ _VIP_PUBLISHER = "VIP (Virtual Imaging Platform)"
 _VIP_RESOURCE_TYPE_VALUE = "Medical imaging data"
 _VIP_RIGHTS = Rights(text="Contact data owner for usage terms")
 
-# Meta keys whose values are emitted as DataCite subjects, in this order.
-_SUBJECT_META_KEYS = (
-    "SUBJECT_study_modalities",
-    "SUBJECT_type",
-    "SUBJECT_gender",
-    "SUBJECT_id",
-    "SUBJECT_name_string",
-    "SUBJECT_study_instrument_position",
-    "SUBJECT_study_operator",
-    "ORIGIN",
-    "DATATYPE",
-)
-
 
 def parse_vip_record(
     folder: JsonObject,
@@ -74,16 +61,53 @@ def parse_vip_record(
     title = folder.get("name") or folder_id
     meta: dict = folder.get("meta", {})
 
-    # Prefer TITLE from meta when available (e.g. "Parameter List, ...")
+    description = _description_from_meta(meta, folders_meta)
+
+    # Use the most recent timestamp available
+    datetime_val = folder.get("updated") or folder.get("created") or None
+
+    subject = meta.get("SUBJECT_study_modalities") or None
+
+    metadata = DataCiteRecord(
+        identifier=folder_id,
+        identifier_type=IdentifierType.OTHER,
+        creators=[
+            Creator(
+                name=meta.get("OWNER") or _VIP_DEFAULT_CREATOR_NAME,
+                name_type=NameType.PERSONAL,
+            )
+        ],
+        title=title,
+        publisher=_VIP_PUBLISHER,
+        publication_year=year_from_iso(datetime_val),
+        resource_type_general="Dataset",
+        resource_type_value=_VIP_RESOURCE_TYPE_VALUE,
+        subjects=[subject] if subject else [],
+        dates=([Date(value=datetime_val, date_type=DateType.UPDATED)] if datetime_val else []),
+        descriptions=([Description(value=description)] if description else []),
+        rights_list=[_VIP_RIGHTS],
+    )
+
+    return OnedataDataset(
+        name=title,
+        target_dir=title.replace("/", "-"),
+        # This repository doesn't provide Persistent Identifiers for its datasets
+        pid=None,
+        metadata_xml=metadata.to_xml(),
+        files=tuple(OnedataFile(path=f.path, url=f.url) for f in files),
+    )
+
+
+def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]) -> str:
     gender = meta.get("SUBJECT_gender") or "unknown"
     weight = meta.get("SUBJECT_study_weight") or "unknown"
-    dateofbirth = meta.get("SUBJECT_study_dbirth") or "unknown"
+    date_of_birth = meta.get("SUBJECT_study_dbirth") or "unknown"
     manufacturer = meta.get("ORIGIN") or "unknown"
 
     description = (
         f"\ngender:{gender}\n"
         f"weight:{weight}\n"
-        f"dateofbirth:{dateofbirth}\n"
+        f"dateofbirth:{date_of_birth}\n"
         f"manufacturer:{manufacturer}\n"
     )
     days = [key for key in folders_meta if key.startswith("/day")]
@@ -127,48 +151,4 @@ def parse_vip_record(
         f"nucleus:{nucleus}\n"
     )
 
-    # Use the most recent timestamp available
-    datetime_val = folder.get("updated") or folder.get("created") or None
-
-    subject = meta.get("SUBJECT_study_modalities") or None
-
-    metadata = DataCiteRecord(
-        identifier=folder_id,
-        identifier_type=IdentifierType.OTHER,
-        creators=[
-            Creator(
-                name=meta.get("OWNER") or _VIP_DEFAULT_CREATOR_NAME,
-                name_type=NameType.PERSONAL,
-            )
-        ],
-        title=title,
-        publisher=_VIP_PUBLISHER,
-        publication_year=year_from_iso(datetime_val),
-        resource_type_general="Dataset",
-        resource_type_value=_VIP_RESOURCE_TYPE_VALUE,
-        subjects=[subject] if subject else [],
-        dates=([Date(value=datetime_val, date_type=DateType.UPDATED)] if datetime_val else []),
-        descriptions=([Description(value=description)] if description else []),
-        rights_list=[_VIP_RIGHTS],
-    )
-
-    return OnedataDataset(
-        name=title,
-        target_dir=title.replace("/", "-"),
-        # This repository doesn't provide Persistent Identifiers for its datasets
-        pid=None,
-        metadata_xml=metadata.to_xml(),
-        files=tuple(OnedataFile(path=f.path, url=f.url) for f in files),
-    )
-
-
-def _subjects_from_meta(meta: dict) -> list[str]:
-    """Pick the subject-relevant values from the Girder folder meta dict."""
-    seen: set[str] = set()
-    subjects: list[str] = []
-    for key in _SUBJECT_META_KEYS:
-        value = meta.get(key)
-        if value and value not in seen:
-            seen.add(value)
-            subjects.append(value)
-    return subjects
+    return description

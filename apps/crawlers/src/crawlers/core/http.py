@@ -169,7 +169,7 @@ class HttpClient:
         Returns `Ok(None)` on a 2xx response, `Err(HttpFailure)` on any non-2xx,
         `Err(TimeoutFailure)` after exhausting retries on network errors.
         """
-        return await self._request("GET", url, lambda _: _noop(), **kwargs)
+        return await self._request("HEAD", url, lambda _: _noop(), **kwargs)
 
     async def get_bytes(self, url: str, **kwargs) -> Result[bytes, HttpFailure]:
         """GET `url` and return the raw response body."""
