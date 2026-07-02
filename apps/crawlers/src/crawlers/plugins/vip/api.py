@@ -260,8 +260,8 @@ class VipClient:
                 for subfolder in subfolders:
                     sub_id = str(subfolder.get("_id", "") or "")
                     sub_name = str(subfolder.get("name", sub_id) or sub_id)
-                    folders_meta[f"{path_prefix}/{sub_name}"] = subfolder
                     sub_prefix = f"{path_prefix}/{sub_name}" if path_prefix else sub_name
+                    folders_meta[sub_prefix] = subfolder
                     files_layer, folders_meta_layer = await self._collect_files(
                         sub_id, sub_prefix, page_size, folders_meta
                     )

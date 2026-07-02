@@ -105,10 +105,10 @@ def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]
     manufacturer = meta.get("ORIGIN") or "unknown"
 
     description = (
-        f"\ngender:{gender}\n"
-        f"weight:{weight}\n"
-        f"dateofbirth:{date_of_birth}\n"
-        f"manufacturer:{manufacturer}\n"
+        f"\ngender: {gender}\n"
+        f"weight: {weight}\n"
+        f"dateofbirth: {date_of_birth}\n"
+        f"manufacturer: {manufacturer}\n"
     )
     days = [key for key in folders_meta if key.startswith("/day")]
 
@@ -122,7 +122,7 @@ def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]
         if day_meta.get("organe") is not None:
             organ = f"{day_meta.get('organe')}"
 
-    description += f"species:{species}\norgan:{organ}\n"
+    description += f"species: {species}\norgan: {organ}\n"
 
     working_carrier_frequency = "unknown"
     nucleus = "unknown"
@@ -146,9 +146,9 @@ def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]
             acquisition_sequence = f"{day_meta.get('Method')}"
 
     description += (
-        f"acquisition_sequence:{acquisition_sequence}\n"
-        f"working_carrier_frequency:{working_carrier_frequency}\n"
-        f"nucleus:{nucleus}\n"
+        f"acquisition_sequence: {acquisition_sequence}\n"
+        f"working_carrier_frequency: {working_carrier_frequency}\n"
+        f"nucleus: {nucleus}\n"
     )
 
     return description
