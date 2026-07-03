@@ -121,6 +121,8 @@ def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]
             species = f"{day_meta.get('species')}"
         if day_meta.get("organe") is not None:
             organ = f"{day_meta.get('organe')}"
+        if species != "unknown" and organ != "unknown":
+            break
 
     description += f"species: {species}\norgan: {organ}\n"
 
@@ -135,6 +137,8 @@ def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]
             working_carrier_frequency = f"{day_meta.get('PVM_FrqRef').split(' ')[0]}MHz"
         if day_meta.get("PVM_NucleiPpmWork") is not None and nucleus == "unknown":
             nucleus = f"{day_meta.get('PVM_NucleiPpmWork').split()[0].split('<')[1].split('>')[0]}"
+        if working_carrier_frequency != "unknown" and nucleus != "unknown":
+            break
 
     steam_press_last = [
         key for key in folders_meta if re.search(r"(STEAM[^/]*|PRESS[^/]*)/headers/method$", key)
@@ -144,6 +148,7 @@ def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]
         day_meta = folders_meta[key].get("meta", {})
         if day_meta.get("Method") is not None:
             acquisition_sequence = f"{day_meta.get('Method')}"
+            break
 
     description += (
         f"acquisition_sequence: {acquisition_sequence}\n"
