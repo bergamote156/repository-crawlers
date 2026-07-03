@@ -12,6 +12,7 @@ __author__ = "Bartosz Walkowicz"
 __copyright__ = "Copyright (C) 2026 Onedata (onedata.org)"
 __license__ = "This software is released under the MIT license cited in LICENSE.txt"
 
+import re
 from collections.abc import Sequence
 
 from crawlers.core import JsonObject
@@ -36,21 +37,12 @@ _VIP_PUBLISHER = "VIP (Virtual Imaging Platform)"
 _VIP_RESOURCE_TYPE_VALUE = "Medical imaging data"
 _VIP_RIGHTS = Rights(text="Contact data owner for usage terms")
 
-# Meta keys whose values are emitted as DataCite subjects, in this order.
-_SUBJECT_META_KEYS = (
-    "SUBJECT_study_modalities",
-    "SUBJECT_type",
-    "SUBJECT_gender",
-    "SUBJECT_id",
-    "SUBJECT_name_string",
-    "SUBJECT_study_instrument_position",
-    "SUBJECT_study_operator",
-    "ORIGIN",
-    "DATATYPE",
-)
 
-
-def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> OnedataDataset | None:
+def parse_vip_record(
+    folder: JsonObject,
+    files: Sequence[VipFile],
+    folders_meta: dict[str, JsonObject],
+) -> OnedataDataset | None:
     """
     Map a Girder folder dict (with pre-collected files) into an `OnedataDataset`.
 
@@ -69,11 +61,12 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> OnedataDat
     title = folder.get("name") or folder_id
     meta: dict = folder.get("meta", {})
 
-    # Prefer TITLE from meta when available (e.g. "Parameter List, ...")
-    description = meta.get("TITLE") or folder.get("description") or None
+    description = _description_from_meta(meta, folders_meta)
 
     # Use the most recent timestamp available
     datetime_val = folder.get("updated") or folder.get("created") or None
+
+    subject = meta.get("SUBJECT_study_modalities") or None
 
     metadata = DataCiteRecord(
         identifier=folder_id,
@@ -89,7 +82,7 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> OnedataDat
         publication_year=year_from_iso(datetime_val),
         resource_type_general="Dataset",
         resource_type_value=_VIP_RESOURCE_TYPE_VALUE,
-        subjects=_subjects_from_meta(meta),
+        subjects=[subject] if subject else [],
         dates=([Date(value=datetime_val, date_type=DateType.UPDATED)] if datetime_val else []),
         descriptions=([Description(value=description)] if description else []),
         rights_list=[_VIP_RIGHTS],
@@ -105,13 +98,62 @@ def parse_vip_record(folder: JsonObject, files: Sequence[VipFile]) -> OnedataDat
     )
 
 
-def _subjects_from_meta(meta: dict) -> list[str]:
-    """Pick the subject-relevant values from the Girder folder meta dict."""
-    seen: set[str] = set()
-    subjects: list[str] = []
-    for key in _SUBJECT_META_KEYS:
-        value = meta.get(key)
-        if value and value not in seen:
-            seen.add(value)
-            subjects.append(value)
-    return subjects
+def _description_from_meta(meta: JsonObject, folders_meta: dict[str, JsonObject]) -> str:
+    gender = meta.get("SUBJECT_gender") or "unknown"
+    weight = meta.get("SUBJECT_study_weight") or "unknown"
+    date_of_birth = meta.get("SUBJECT_study_dbirth") or "unknown"
+    manufacturer = meta.get("ORIGIN") or "unknown"
+
+    description = (
+        f"\ngender: {gender}\n"
+        f"weight: {weight}\n"
+        f"dateofbirth: {date_of_birth}\n"
+        f"manufacturer: {manufacturer}\n"
+    )
+    days = [key for key in folders_meta if key.startswith("/day")]
+
+    species = "unknown"
+    organ = "unknown"
+
+    for day in days:
+        day_meta = folders_meta[day].get("meta", {})
+        if day_meta.get("species") is not None:
+            species = f"{day_meta.get('species')}"
+        if day_meta.get("organe") is not None:
+            organ = f"{day_meta.get('organe')}"
+        if species != "unknown" and organ != "unknown":
+            break
+
+    description += f"species: {species}\norgan: {organ}\n"
+
+    working_carrier_frequency = "unknown"
+    nucleus = "unknown"
+
+    method = [key for key in folders_meta if re.search(r"STEAM[^/]*/headers/method$", key)]
+
+    for key in method:
+        day_meta = folders_meta[key].get("meta", {})
+        if day_meta.get("PVM_FrqRef") is not None and working_carrier_frequency == "unknown":
+            working_carrier_frequency = f"{day_meta.get('PVM_FrqRef').split(' ')[0]}MHz"
+        if day_meta.get("PVM_NucleiPpmWork") is not None and nucleus == "unknown":
+            nucleus = f"{day_meta.get('PVM_NucleiPpmWork').split()[0].split('<')[1].split('>')[0]}"
+        if working_carrier_frequency != "unknown" and nucleus != "unknown":
+            break
+
+    steam_press_last = [
+        key for key in folders_meta if re.search(r"(STEAM[^/]*|PRESS[^/]*)/headers/method$", key)
+    ]
+    acquisition_sequence = "unknown"
+    for key in steam_press_last:
+        day_meta = folders_meta[key].get("meta", {})
+        if day_meta.get("Method") is not None:
+            acquisition_sequence = f"{day_meta.get('Method')}"
+            break
+
+    description += (
+        f"acquisition_sequence: {acquisition_sequence}\n"
+        f"working_carrier_frequency: {working_carrier_frequency}\n"
+        f"nucleus: {nucleus}\n"
+    )
+
+    return description

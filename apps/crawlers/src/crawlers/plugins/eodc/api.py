@@ -86,7 +86,7 @@ class EODCClient:
                     page += 1
                     console.info(f"Page {page} | {yielded} items fetched")
 
-                    next_url = _find_next_link(data.get("links", []))
+                    next_url, body = _find_next_link(data.get("links", []))
 
                 case Err(value=err):
                     console.error(str(err))
@@ -111,13 +111,17 @@ def _stac_root_collections(root: JsonObject) -> list[JsonObject]:
     return [c for c in raw if isinstance(c, dict)]
 
 
-def _find_next_link(links: object) -> str | None:
+def _find_next_link(links: object) -> tuple[str | None, JsonObject]:
     if not isinstance(links, list):
-        return None
+        return None, {}
     for link in links:
         if not isinstance(link, dict):
             continue
         if link.get("rel") == "next":
             href = link.get("href")
-            return str(href) if href is not None else None
-    return None
+            body = link.get("body")
+            return (
+                str(href) if href is not None else None,
+                body if isinstance(body, dict) else {},
+            )
+    return None, {}
