@@ -1,23 +1,16 @@
 ---
-title: Glossary
-description: >
-  Quick-reference definitions for concepts in the crawlers
-  architecture. Each entry is 1-2 sentences with a "Learn more"
-  link to the detail doc.
-audience: internal-developer-onboarding
+audience: maintainer
 source_modules:
-  - apps/crawlers/src/crawlers/core/config.py
-  - apps/crawlers/src/crawlers/core/dataset.py
-  - apps/crawlers/src/crawlers/core/http.py
   - apps/crawlers/src/crawlers/core/plugin.py
-  - apps/crawlers/src/crawlers/core/result.py
   - apps/crawlers/src/crawlers/core/runner.py
-  - apps/crawlers/src/crawlers/core/workspace.py
+  - apps/crawlers/src/crawlers/core/result.py
+  - apps/crawlers/src/crawlers/core/http.py
+  - apps/crawlers/src/crawlers/core/dataset.py
   - apps/crawlers/src/crawlers/metadata/datacite.py
   - apps/crawlers/src/crawlers/metadata/openaire.py
-  - packages/onedata-dataset/src/onedata_dataset/
+  - packages/onedata-dataset/src/onedata_dataset/dataset.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Glossary

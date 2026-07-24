@@ -1,17 +1,12 @@
 ---
-title: CommandApp
-description: >
-  The higher-level orchestrator that wires subcommand dispatch, automatic
-  source chain assembly, help rendering, and error handling — so most
-  multi-command CLI tools don't touch sources or argparse directly.
-audience: app-author
+audience: maintainer
 source_modules:
   - packages/confline/src/confline/commands.py
   - packages/confline/src/confline/spec.py
   - packages/confline/src/confline/ui/argparse_builder.py
   - packages/confline/src/confline/ui/help_format.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # CommandApp
@@ -46,7 +41,8 @@ control `--help` headers. `env_prefix` feeds `EnvSource` key derivation
 YAML loading; set to `()` to disable it.
 
 ## The @command Decorator
-<sub>source: `confline/commands.py:58–178`</sub>
+
+<sub>source: `packages/confline/src/confline/commands.py#command`</sub>
 
 `@command` marks a method as a subcommand handler and records a frozen
 `Command` DTO: name, config class, aliases, description. The decorator
@@ -79,11 +75,11 @@ flowchart TD
 
     BuildSrc --> LoadConfig["⚙️ load_config"]
     LoadConfig --> MetaFlags{"Meta flags?"}
-    MetaFlags -->|proceed| Dispatch(["✅ dispatch_command\n→ user method"])
+    MetaFlags -->|proceed| Dispatch(["✅ dispatch_command<br/>→ user method"])
     MetaFlags -->|exit code| Exit(["⏹️ exit"])
 
-    ParseArgv -.->|invalid choice| UnknownErr(["❌ UnknownCommandError\ndid-you-mean..."])
-    LoadConfig -.->|ConfigError| RenderErr(["❌ render_for_cli\n→ stderr"])
+    ParseArgv -.->|invalid choice| UnknownErr(["❌ UnknownCommandError<br/>did-you-mean..."])
+    LoadConfig -.->|ConfigError| RenderErr(["❌ render_for_cli<br/>→ stderr"])
 
     classDef internal fill:#4ECDC4,stroke:#0B7285,color:#000
     classDef success fill:#95D5B2,stroke:#2D6A4F,color:#000
@@ -96,7 +92,8 @@ flowchart TD
 ```
 
 ## Dispatch Flow
-<sub>source: `confline/commands.py:235–270`</sub>
+
+<sub>source: `packages/confline/src/confline/commands.py#CommandApp.run`</sub>
 
 `run()` drives the pipeline shown in the diagram above. Each phase is
 a separate method so subclasses can override one step without
@@ -119,7 +116,8 @@ subcommands produce
 did-you-mean suggestions.
 
 ## Source Assembly
-<sub>source: `confline/commands.py:339–387`</sub>
+
+<sub>source: `packages/confline/src/confline/commands.py#CommandApp.build_sources` · `packages/confline/src/confline/commands.py#CommandApp._label_sources`</sub>
 
 `build_sources` assembles the default four-layer
 [source chain](sources-and-resolution.md#the-source-chain):
@@ -145,8 +143,8 @@ alongside defaults.
 > mismatch means `--help` advertises source keys the resolver never reads.
 
 ## Help Rendering
-<sub>source: `confline/ui/argparse_builder.py:75–253`,
-`confline/ui/help_format.py`</sub>
+
+<sub>source: `packages/confline/src/confline/ui/argparse_builder.py#build_command_app_parser` · `packages/confline/src/confline/ui/help_format.py#ConflineHelpFormatter`</sub>
 
 The help system walks the command metadata and produces a standard
 argparse parser. Each subparser is populated from its command's schema.
@@ -168,7 +166,8 @@ Color flows through `rich-argparse`; `NO_COLOR` and non-tty stderr
 degrade to plain text automatically.
 
 ## Meta-Flag Hooks
-<sub>source: `confline/commands.py:309–335`</sub>
+
+<sub>source: `packages/confline/src/confline/commands.py#CommandApp._handle_meta_flags`</sub>
 
 `_handle_meta_flags` runs after resolution, before dispatch. The base
 is a no-op. Override it for flags like `--show-config` or `--dry-run`

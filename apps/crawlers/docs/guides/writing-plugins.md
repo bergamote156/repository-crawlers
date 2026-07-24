@@ -1,11 +1,5 @@
 ---
-title: Writing Plugins
-description: >
-  Step-by-step guide to creating a new crawler plugin — configuration,
-  lifecycle hooks, iteration, processing, and registration. Covers
-  the plugin-author view of the config system (opt, source annotations,
-  inheritance, YAML scoping).
-audience: external-plugin-author
+audience: integrator
 source_modules:
   - apps/crawlers/src/crawlers/core/__init__.py
   - apps/crawlers/src/crawlers/core/config.py
@@ -15,7 +9,7 @@ source_modules:
   - apps/crawlers/src/crawlers/plugins/__init__.py
   - apps/crawlers/src/crawlers/plugins/ecudo/plugin.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Writing Plugins
@@ -60,7 +54,7 @@ separate `config.py` (if configs get large).
 ## Step 1: Configuration
 
 > [!TIP]
-> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py:38-51`
+> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py#EcudoCrawlConfig`
 > for a real-world example of this pattern.
 
 Plugin declares its config as a pair of dataclasses: an
@@ -141,7 +135,7 @@ ProcessingConfig:
 ### opt() — field declaration
 
 > [!TIP]
-> **Source:** `packages/confline/src/confline/config/schema.py:108-161`
+> **Source:** `packages/confline/src/confline/config/schema.py#opt`
 
 `opt()` replaces `dataclasses.field()`. It carries
 **source-agnostic** metadata — defaults, description, validation.
@@ -222,7 +216,7 @@ scopes aren't checked.
 ## Step 2: Plugin class
 
 > [!TIP]
-> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py`
+> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py#EcudoPlugin`
 
 ```python
 from collections.abc import AsyncIterator
@@ -305,7 +299,7 @@ minimum contract.
 
 > [!TIP]
 > **Source:** Ecudo uses all four hooks —
-> `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py:70-97`.
+> `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py#EcudoPlugin.before_crawl`.
 
 Resources opened in `setup` should be registered on the
 `AsyncExitStack` so they close automatically regardless of whether
@@ -336,7 +330,7 @@ method name with underscores replaced by dashes; override with
 `@command(name="ls")`.
 
 > [!TIP]
-> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py:121-148`
+> **Source:** `apps/crawlers/src/crawlers/plugins/ecudo/plugin.py#EcudoPlugin.list_organizations`
 
 
 ## Step 5: Register the plugin

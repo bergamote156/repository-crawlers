@@ -11,8 +11,8 @@ This project provides:
 
 ```mermaid
 graph LR
-    A["Data Source\n(eCUDO, EODC, Bgee, VIP, ...)"] --> B["Crawler"]
-    B --> C["processed.jsonl\n(with metadata)"]
+    A["Data Source<br/>(eCUDO, EODC, Bgee, VIP, ...)"] --> B["Crawler"]
+    B --> C["processed.jsonl<br/>(with metadata)"]
     C --> D["Registrar"]
     D --> E["Onedata"]
 ```
@@ -188,9 +188,9 @@ step-by-step instructions.
 
 ### Architecture
 
-- [Crawlers Architecture](apps/crawlers/docs/arch/_overview.md) — framework
+- [Crawlers Architecture](apps/crawlers/docs/internals/_overview.md) — framework
   design, data flow, and key decisions
-- [Registrar Design](apps/registrar/docs/design/_overview.md) — registration
+- [Registrar Design](apps/registrar/docs/internals/_overview.md) — registration
   pipeline, space/storage resolution, and identifier policies
 
 ### Linting and Tests

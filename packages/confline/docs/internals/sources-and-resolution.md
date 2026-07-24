@@ -1,12 +1,5 @@
 ---
-title: Sources and Resolution
-description: >
-  How config values move from external inputs (CLI flags, env vars,
-  YAML files, defaults) through an ordered source chain into typed
-  config instances — the Source protocol, built-in sources,
-  source-side annotations, resolution algorithm, coercion, and
-  provenance tracking.
-audience: app-author
+audience: maintainer
 source_modules:
   - packages/confline/src/confline/sources/base.py
   - packages/confline/src/confline/sources/cli_source.py
@@ -19,7 +12,7 @@ source_modules:
   - packages/confline/src/confline/resolution/mutex.py
   - packages/confline/src/confline/resolution/api.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Sources and Resolution
@@ -36,23 +29,23 @@ come from?"
 
 ```mermaid
 flowchart TD
-    Start(["📥 Resolve field"]) --> Next["📦 Next source\nin chain"]
-    Next --> Eligible{"Eligible?\nexcluded_from · supports_field"}
+    Start(["📥 Resolve field"]) --> Next["📦 Next source<br/>in chain"]
+    Next --> Eligible{"Eligible?<br/>excluded_from · supports_field"}
 
     Eligible -->|yes| Resolve["⚙️ source.resolve(field)"]
     Resolve --> Check{"NO_VALUE?"}
     Check -->|no| Coerce["🔄 coerce(raw, type)"]
     Eligible -->|no| Skip["⏭️ Skip"]
     Check -->|yes| Skip
-    Skip --> More{"More\nsources?"}
+    Skip --> More{"More<br/>sources?"}
     More -->|yes| Next
     More -->|no| Required{"Has default?"}
     Required -->|no| Missing(["❌ MissingRequiredError"])
-    Required -->|yes| Default["⚙️ DefaultSource\nvalue"]
+    Required -->|yes| Default["⚙️ DefaultSource<br/>value"]
     Coerce --> Validate["🛡️ opt validator"]
     Validate --> Stamp["🔍 Provenance(name, label)"]
     Default --> Stamp
-    Stamp --> Done(["✅ Typed value\n+ provenance"])
+    Stamp --> Done(["✅ Typed value<br/>+ provenance"])
 
     classDef internal fill:#4ECDC4,stroke:#0B7285,color:#000
     classDef success fill:#95D5B2,stroke:#2D6A4F,color:#000
@@ -65,7 +58,7 @@ flowchart TD
 ```
 
 ## The Source Chain
-<sub>source: `resolution/api.py:36-65`, `examples/single_config_app.py:63-78`</sub>
+<sub>source: `packages/confline/src/confline/resolution/api.py#load_default` · `packages/confline/examples/single_config_app.py#main`</sub>
 
 The source chain is a Python list. Position determines precedence --
 the first source to return a value for a given field wins. The
@@ -106,7 +99,7 @@ bad values). Applications needing custom error handling catch
 [`render_for_cli`](error-system.md#rendering) themselves.
 
 ## Source Protocol
-<sub>source: `sources/base.py`</sub>
+<sub>source: `packages/confline/src/confline/sources/base.py#Source`</sub>
 
 Most apps use the built-in sources and skip this section. Read on if
 you need a custom backend (Vault, Consul, test fixtures).
@@ -116,7 +109,7 @@ deliberately narrow -- one required method (`resolve`), a sentinel,
 and a few optional hooks -- so that adding a new backend requires
 minimal ceremony.
 
-### The NO_VALUE Sentinel
+### The No-Value Sentinel
 
 `NO_VALUE` is a singleton that means "I have nothing for this field."
 It is distinct from `None` (which is a legitimate resolved value for
@@ -174,7 +167,7 @@ segments for YAML).
 ## Built-in Sources
 
 ### CliSource
-<sub>source: `sources/cli_source.py`</sub>
+<sub>source: `packages/confline/src/confline/sources/cli_source.py#CliSource`</sub>
 
 Wraps an `argparse.Namespace`. The convenience constructor
 `CliSource.from_argv(config_class, argv)` auto-derives an argparse
@@ -189,7 +182,7 @@ semantics but noted because it means a hypothetical custom parser
 that sets explicit None would need its own source subclass. -->
 
 ### EnvSource
-<sub>source: `sources/env_source.py`</sub>
+<sub>source: `packages/confline/src/confline/sources/env_source.py#EnvSource`</sub>
 
 Reads from a string-keyed mapping (typically `os.environ`). Key
 derivation follows a `prefix + path` convention: for a field at
@@ -205,7 +198,7 @@ The `validate_schema` hook runs a collision check: if two fields
 derive the same env var name, resolution fails early with an
 `EnvKeyCollisionError`. 
 ### YamlSource
-<sub>source: `sources/yaml_source.py`</sub>
+<sub>source: `packages/confline/src/confline/sources/yaml_source.py#YamlSource`</sub>
 
 Resolves fields from a sequence of dict scopes. Each scope is a
 parsed YAML mapping; the first scope containing the field's path
@@ -231,7 +224,7 @@ value via `scope_origins`, so the operator sees `yaml /etc/app.yaml`
 rather than a generic "yaml" label.
 
 ### DefaultSource
-<sub>source: `sources/default_source.py`</sub>
+<sub>source: `packages/confline/src/confline/sources/default_source.py#DefaultSource`</sub>
 
 Returns the field's declared `default` or calls its
 `default_factory`. Fields without either get `NO_VALUE`. This source
@@ -243,7 +236,7 @@ both falling through to defaults is not a conflict.
 anchor at the end of any chain.
 
 ## Resolution Algorithm
-<sub>source: `resolution/resolver.py`, `resolution/context.py`</sub>
+<sub>source: `packages/confline/src/confline/resolution/resolver.py#load_config` · `packages/confline/src/confline/resolution/context.py#ResolutionContext`</sub>
 
 `load_config(config_class, sources=...)` orchestrates the full
 schema-to-instance pipeline in four phases:
@@ -269,7 +262,7 @@ with the field path and source identity, so the operator sees a
 contextual message rather than a bare traceback.
 
 ### Mutex Enforcement
-<sub>source: `resolution/mutex.py`</sub>
+<sub>source: `packages/confline/src/confline/resolution/mutex.py#enforce_mutex_groups`</sub>
 
 [Mutex groups](schema.md#mutually-exclusive-groups) declare that at
 most one (or exactly one) field in a group may be user-provided. The
@@ -287,7 +280,7 @@ setting both `json: true` and `yaml: true` registers no CLI flag, so
 argparse never sees the conflict.
 
 ## Provenance
-<sub>source: `config/types.py`, `config/base.py:241-281`</sub>
+<sub>source: `packages/confline/src/confline/config/types.py#Provenance` · `packages/confline/src/confline/config/base.py#ConfigBase.source_of`</sub>
 
 Every resolved field carries a `Provenance(name, label)` record.
 `name` is the source's stable wire-id (`"argparse"`, `"env"`,

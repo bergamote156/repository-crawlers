@@ -1,10 +1,5 @@
 ---
-title: Error System
-description: >
-  How confline turns config errors into operator-friendly diagnostics —
-  typed error hierarchy with exit codes, rich terminal rendering, secret
-  scrubbing, source-aware suggestions, and did-you-mean for commands.
-audience: app-author
+audience: maintainer
 source_modules:
   - packages/confline/src/confline/errors/base.py
   - packages/confline/src/confline/errors/resolution.py
@@ -14,7 +9,7 @@ source_modules:
   - packages/confline/src/confline/ui/errors.py
   - packages/confline/src/confline/resolution/error_records.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # Error System
@@ -31,29 +26,29 @@ re-deriving anything from the schema.
 
 ```mermaid
 graph LR
-    Root["⚠️ ConfigError\ndefault: EX_CONFIG · 78"]
+    Root["⚠️ ConfigError<br/>default: EX_CONFIG · 78"]
 
     subgraph Res ["Resolution"]
-        SVE["SourceValueError\nEX_DATAERR · 65"]
-        MRE["MissingRequiredError\nEX_USAGE · 64"]
-        MVE["MutexViolationError\nEX_USAGE · 64"]
+        SVE["SourceValueError<br/>EX_DATAERR · 65"]
+        MRE["MissingRequiredError<br/>EX_USAGE · 64"]
+        MVE["MutexViolationError<br/>EX_USAGE · 64"]
     end
 
     subgraph Cmd ["Commands"]
-        UCE["UnknownCommandError\nEX_USAGE · 64"]
-        CRE["CommandRegistrationError\nEX_CONFIG · 78"]
+        UCE["UnknownCommandError<br/>EX_USAGE · 64"]
+        CRE["CommandRegistrationError<br/>EX_CONFIG · 78"]
     end
 
     subgraph Yml ["YAML"]
-        CFN["ConfigFileNotFoundError\nEX_NOINPUT · 66"]
-        YPE["YamlParseError\nEX_DATAERR · 65"]
-        YSE["YamlSchemaError\nEX_DATAERR · 65"]
-        YSL["YamlSizeLimitError\nEX_DATAERR · 65"]
-        YPC["YamlPathCollisionError\nEX_CONFIG · 78"]
+        CFN["ConfigFileNotFoundError<br/>EX_NOINPUT · 66"]
+        YPE["YamlParseError<br/>EX_DATAERR · 65"]
+        YSE["YamlSchemaError<br/>EX_DATAERR · 65"]
+        YSL["YamlSizeLimitError<br/>EX_DATAERR · 65"]
+        YPC["YamlPathCollisionError<br/>EX_CONFIG · 78"]
     end
 
     subgraph EnvG ["Environment"]
-        EKC["EnvKeyCollisionError\nEX_CONFIG · 78"]
+        EKC["EnvKeyCollisionError<br/>EX_CONFIG · 78"]
     end
 
     Root --> SVE & MRE & MVE
@@ -80,7 +75,8 @@ graph LR
 | 78 EX_CONFIG | Schema/framework misconfig | `CommandRegistrationError`, `EnvKeyCollisionError`, `YamlPathCollisionError` |
 
 ## Integration
-<sub>source: `confline/ui/errors.py:41-55`</sub>
+
+<sub>source: `packages/confline/src/confline/ui/errors.py#render_for_cli`</sub>
 
 App authors interact with the error system at three levels, depending on
 how much control they need:
@@ -105,7 +101,8 @@ output. The error's structured data -- `field_record` on
 without parsing the rendered text.
 
 ## Error Hierarchy
-<sub>source: `confline/errors/base.py`, `confline/errors/resolution.py`, `confline/errors/commands.py`, `confline/errors/yaml.py`, `confline/errors/env.py`</sub>
+
+<sub>source: `packages/confline/src/confline/errors/base.py#ConfigError` · `packages/confline/src/confline/errors/resolution.py#SourceValueError` · `packages/confline/src/confline/errors/commands.py#UnknownCommandError` · `packages/confline/src/confline/errors/yaml.py#YamlParseError` · `packages/confline/src/confline/errors/env.py#EnvKeyCollisionError`</sub>
 
 `ConfigError` is the single base for every error confline raises. Each
 subclass carries an exit code drawn from BSD sysexits conventions (see
@@ -116,7 +113,8 @@ distinction between "the operator gave bad input" (64) and "a config
 file is missing" (66).
 
 ## Rendering
-<sub>source: `confline/ui/errors.py:41-82`</sub>
+
+<sub>source: `packages/confline/src/confline/ui/errors.py#render_for_cli`</sub>
 
 `render_for_cli` is the single rendering entry point. It takes a
 `ConfigError` and returns a `rich.text.Text` object styled for stderr
@@ -147,7 +145,8 @@ Each error type produces a distinct diagnostic:
   the full list of available commands.
 
 ## Secret Scrubbing
-<sub>source: `confline/resolution/resolver.py:363-398`, `confline/config/base.py:210-222`, `confline/config/types.py:19`</sub>
+
+<sub>source: `packages/confline/src/confline/resolution/resolver.py#_raise_source_value_error` · `packages/confline/src/confline/config/base.py#ConfigBase.__repr__` · `packages/confline/src/confline/config/types.py#SECRET_PLACEHOLDER`</sub>
 
 Fields marked [`secret=True`](schema.md#configbase-and-opt) in the
 schema receive three layers of redaction, each guarding a different

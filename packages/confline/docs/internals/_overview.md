@@ -1,11 +1,5 @@
 ---
-title: "confline: Declarative Configuration and CLI Framework"
-description: >
-  Architecture overview of confline — a framework that lets you declare
-  config fields once as annotated dataclass fields and resolve them from
-  an ordered chain of sources (CLI, env, YAML, defaults) with typed
-  coercion, provenance tracking, and operator-friendly error rendering.
-audience: app-author
+audience: maintainer
 source_modules:
   - packages/confline/src/confline/__init__.py
   - packages/confline/src/confline/config/base.py
@@ -13,7 +7,7 @@ source_modules:
   - packages/confline/src/confline/resolution/resolver.py
   - packages/confline/src/confline/sources/base.py
 source_commits:
-  public-data-crawlers: 3c68b70
+  public-data-crawlers: 7ce5a5e
 ---
 
 # confline
@@ -136,10 +130,10 @@ flowchart LR
 
     Cli & Env & Yaml & Def --> Resolver
 
-    Resolver["⚙️ load_config\nper field · first source wins\ncoerce → validate → mutex"]
+    Resolver["⚙️ load_config<br/>per field · first source wins<br/>coerce → validate → mutex"]
 
-    Resolver ==> Config(["✅ ConfigBase\n+ Provenance map"])
-    Resolver -.->|ConfigError| Error(["❌ render_for_cli\n→ stderr"])
+    Resolver ==> Config(["✅ ConfigBase<br/>+ Provenance map"])
+    Resolver -.->|ConfigError| Error(["❌ render_for_cli<br/>→ stderr"])
 
     classDef internal fill:#4ECDC4,stroke:#0B7285,color:#000
     classDef success fill:#95D5B2,stroke:#2D6A4F,color:#000
