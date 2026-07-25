@@ -41,4 +41,5 @@ class RegistrarApp(CommandApp):
 
 def main() -> int:
     """Console-script entry point — see `pyproject.toml` `[project.scripts]`."""
-    return RegistrarApp().run()
+    exit_code: int = RegistrarApp().run()
+    return exit_code

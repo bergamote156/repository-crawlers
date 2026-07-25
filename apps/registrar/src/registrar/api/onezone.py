@@ -97,7 +97,7 @@ class OnezoneClient:
         )
         handle_error(response, service=SERVICE_NAME)
 
-        token = response.json().get("token")
+        token: str = response.json().get("token")
         logger.debug("Created support token for space %s", space_id)
         return token
 

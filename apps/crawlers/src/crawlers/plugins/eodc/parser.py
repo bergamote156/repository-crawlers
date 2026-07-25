@@ -255,7 +255,8 @@ def _find_self_link(links: list) -> str | None:
     """Find the 'rel=self' link in STAC item links."""
     for link in links:
         if link.get("rel") == "self":
-            return link.get("href")
+            href: str | None = link.get("href")
+            return href
     return None
 
 
@@ -271,17 +272,17 @@ def _polygons_from_geojson(geom: dict | None) -> list[GeoLocationPolygon]:
     return [GeoLocationPolygon(points=[tuple(point) for point in coords[0]])]
 
 
-def _build_geo_locations(geometry: dict | None):
+def _build_geo_locations(geometry: dict | None) -> list[GeoLocationPolygon]:
     """Convert GeoJSON geometry to DataCite geo locations."""
     return _polygons_from_geojson(geometry)
 
 
-def _build_dates(props):
+def _build_dates(props: dict) -> list[Date]:
 
     dates: list[Date] = []
     seen: set[tuple[str, str]] = set()
 
-    def add_date(value: str | None, dtype: DateType):
+    def add_date(value: str | None, dtype: DateType) -> None:
         if not value:
             return
         key = (value, dtype.value)
@@ -319,7 +320,7 @@ def _build_dates(props):
     return dates
 
 
-def _build_related_identifiers(props, self_link):
+def _build_related_identifiers(props: dict, self_link: str | None) -> list[RelatedIdentifier]:
 
     related = []
 
@@ -366,7 +367,8 @@ def _build_publisher(collection_meta: dict | None) -> str:
         providers = collection_meta.get("providers", [])
         for p in providers:
             if "host" in p.get("roles", []):
-                return p.get("name")
+                name: str = p.get("name")
+                return name
 
     return "EODC"
 

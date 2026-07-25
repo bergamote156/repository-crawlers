@@ -2,6 +2,10 @@ __pycache__
 .idea
 .tox
 .coverage
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+*-tests-results.xml
 .local/
 .cache/
 .venv/

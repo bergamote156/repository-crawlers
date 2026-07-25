@@ -147,7 +147,7 @@ def _resolve_schema(
             sources_tried=tuple(s.name for s in context.sources),
         )
 
-    instance = schema.config_class(**init_kwargs)
+    instance: ConfigBase = schema.config_class(**init_kwargs)
     _run_validators(instance, schema, context)
     return instance
 

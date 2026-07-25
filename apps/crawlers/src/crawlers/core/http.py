@@ -9,10 +9,11 @@ from collections.abc import Awaitable, Callable
 from dataclasses import asdict, dataclass
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, version
-from typing import Protocol, Self
+from types import TracebackType
+from typing import Any, Protocol, Self
 from urllib.parse import urljoin
 
-import aiohttp  # type: ignore[import-not-found]
+import aiohttp
 
 from crawlers.core.result import Err, JsonObject, JsonValue, Ok, Result
 from crawlers.ui import console
@@ -118,7 +119,7 @@ class HttpClient:
         self._session: aiohttp.ClientSession | None = None
 
     @classmethod
-    def from_config(cls, config: HttpConfigLike, **overrides) -> Self:
+    def from_config(cls, config: HttpConfigLike, **overrides: Any) -> Self:
         """
         Build an `HttpClient` from a config object exposing HTTP settings.
 
@@ -147,7 +148,12 @@ class HttpClient:
         )
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """Close the underlying aiohttp session."""
         if self._session:
             await self._session.close()
@@ -162,7 +168,7 @@ class HttpClient:
             )
         return self._session
 
-    async def head(self, url: str, **kwargs) -> Result[None, HttpFailure]:
+    async def head(self, url: str, **kwargs: Any) -> Result[None, HttpFailure]:
         """
         HEAD `url` to check accessibility.
 
@@ -171,25 +177,25 @@ class HttpClient:
         """
         return await self._request("HEAD", url, lambda _: _noop(), **kwargs)
 
-    async def get_bytes(self, url: str, **kwargs) -> Result[bytes, HttpFailure]:
+    async def get_bytes(self, url: str, **kwargs: Any) -> Result[bytes, HttpFailure]:
         """GET `url` and return the raw response body."""
         return await self._request("GET", url, lambda r: r.read(), **kwargs)
 
-    async def get_text(self, url: str, **kwargs) -> Result[str, HttpFailure]:
+    async def get_text(self, url: str, **kwargs: Any) -> Result[str, HttpFailure]:
         """GET `url` and return the response body decoded as text."""
         return await self._request("GET", url, lambda r: r.text(), **kwargs)
 
-    async def get_json(self, url: str, **kwargs) -> Result[JsonValue, HttpFailure]:
+    async def get_json(self, url: str, **kwargs: Any) -> Result[JsonValue, HttpFailure]:
         """GET `url` and return the response body parsed as JSON."""
         return await self._request("GET", url, lambda r: r.json(), **kwargs)
 
     async def post_json(
-        self, url: str, body: JsonObject, **kwargs
+        self, url: str, body: JsonObject, **kwargs: Any
     ) -> Result[JsonValue, HttpFailure]:
         """POST `body` as JSON to `url` and return the response parsed as JSON."""
         return await self._request("POST", url, lambda r: r.json(), json=body, **kwargs)
 
-    async def get_json_object(self, url: str, **kwargs) -> Result[JsonObject, HttpFailure]:
+    async def get_json_object(self, url: str, **kwargs: Any) -> Result[JsonObject, HttpFailure]:
         """GET `url` and return the response body as a JSON object.
 
         Returns `Err(ResponseFailure)` if the response is valid JSON but not
@@ -198,7 +204,7 @@ class HttpClient:
         return await self._expect_object("GET", url, await self.get_json(url, **kwargs))
 
     async def post_json_object(
-        self, url: str, body: JsonObject, **kwargs
+        self, url: str, body: JsonObject, **kwargs: Any
     ) -> Result[JsonObject, HttpFailure]:
         """POST `body` as JSON and return the response as a JSON object.
 
@@ -234,7 +240,7 @@ class HttpClient:
         method: str,
         url: str,
         read: Callable[[aiohttp.ClientResponse], Awaitable[T]],
-        **kwargs,
+        **kwargs: Any,
     ) -> Result[T, HttpFailure]:
         """
         Execute an HTTP request with retries and read the body via `read`.
