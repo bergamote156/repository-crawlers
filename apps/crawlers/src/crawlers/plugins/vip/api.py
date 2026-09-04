@@ -141,8 +141,8 @@ class VipClient:
 
         console.debug(f"Resolving files for dataset: {folder_name}")
         files, folders_meta = await self._collect_files(folder_id, path_prefix="")
-        console.info(f"Resolved {folder_name}: {len(files)} file(s)"
-        console.debug(f"Resolving external config files for dataset: {folder_name}"))
+        console.info(f"Resolved {folder_name}: {len(files)} file(s)")
+        console.debug(f"Resolving external config files for dataset: {folder_name}")
         external_config_files = await self._collect_external_config_files(folders_meta)
         if external_config_files:
             console.info(f"Resolved {folder_name}: {len(external_config_files)} external file(s)")
@@ -284,7 +284,9 @@ class VipClient:
     ) -> list[VipFile]:
         """Collect external config directory files, specific to this dataset"""
         folders_meta = folders_meta or {}
-        steam_press: list[str] = [key for key in folders_meta if re.search(r"(PREFIX*)$", key)]
+        steam_press: list[str] = [
+            key for key in folders_meta if re.search(r"(STEAM[^/.]*|PRESS[^/.]*)$", key)
+        ]
         config_folder_id = None
         config_folder_path = None
         for key in steam_press:
